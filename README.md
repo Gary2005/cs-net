@@ -44,6 +44,9 @@ python -m examples.download_model
 
 Process a Counter-Strike demo file (.dem) into structured JSON format:
 
+`examples/test.dem` is intentionally NOT included in this repository because demo files are too large.
+You must download a `.dem` file yourself (for example from HLTV) and replace the input path.
+
 ```bash
 python -m data.process_demo \
   -path examples/test.dem \
@@ -163,6 +166,5 @@ Detailed explanation of each section:
 
 ## 🤝 Contributors
 
-<a href="https://github.com/Gary2005/cs-net/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Gary2005/cs-net" />
-</a>
+- [Gary2005](https://github.com/Gary2005)
+- [czdzx](https://github.com/czdzx)
