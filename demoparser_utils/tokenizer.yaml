@@ -1,0 +1,138 @@
+maps:
+  de_mirage:
+    center:
+    - -605.8900146484375
+    - -866.8900146484375
+    - -171.6199951171875
+  de_dust2:
+    center:
+    - -199.0
+    - 977.0
+    - 32.220001220703125
+  de_inferno:
+    center:
+    - 481.07000732421875
+    - 1396.47998046875
+    - 137.91000366210938
+  de_nuke:
+    center:
+    - 265.9599914550781
+    - -772.5
+    - -381.8999938964844
+  de_overpass:
+    center:
+    - -2027.3900146484375
+    - -812.9000244140625
+    - 324.95001220703125
+  de_ancient:
+    center:
+    - -435.5
+    - -348.0
+    - 43.650001525878906
+  de_anubis:
+    center:
+    - -77.38999938964844
+    - 618.9000244140625
+    - -6.800000190734863
+  de_train:
+    center:
+    - -118.25
+    - -2.0
+    - -128.52000427246094
+
+weapons:
+  - Desert Eagle
+  - Dual Berettas
+  - Five-SeveN
+  - Glock-18
+  - AK-47
+  - AUG
+  - AWP
+  - FAMAS
+  - G3SG1
+  - Galil AR
+  - M249
+  - M4A4
+  - MAC-10
+  - P90
+  - MP5-SD
+  - UMP-45
+  - XM1014
+  - PP-Bizon
+  - MAG-7
+  - Negev
+  - Sawed-Off
+  - Tec-9
+  - Zeus x27
+  - P2000
+  - MP7
+  - MP9
+  - Nova
+  - P250
+  - SCAR-20
+  - SG 553
+  - SSG 08
+  - knife
+  - Flashbang
+  - High Explosive Grenade
+  - Smoke Grenade
+  - Molotov
+  - Decoy Grenade
+  - Incendiary Grenade
+  - C4 Explosive
+  - Kevlar Vest
+  - Kevlar & Helmet
+  - Heavy Assault Suit
+  - item_nvg
+  - Defuse Kit
+  - Rescue Kit
+  - Medi-Shot
+  - M4A1-S
+  - USP-S
+  - Trade Up Contract
+  - CZ75-Auto
+  - R8 Revolver
+
+projectiles: # 落地后的状态
+  - smokegrenade
+  - inferno
+
+entity_projectiles: # 飞行中的状态
+  - CHEGrenadeProjectile
+  - CSmokeGrenadeProjectile
+  - CMolotovProjectile
+  - CDecoyProjectile
+  - CFlashbangProjectile
+
+safe_mode: 0
+
+tokenizer:
+  position:
+    x:
+      range: [-5000, 5000]
+      grid: 1 # tokenizer离散化每个单位 = 1 个游戏单位
+    y:
+      range: [-5000, 5000]
+      grid: 1
+    z:
+      range: [-2000, 2000]
+      grid: 1
+
+  view_angle:
+    pitch:
+      range: [-90, 90]
+      grid: 1
+    yaw:
+      range: [-180, 180]
+      grid: 1
+
+  status:
+    health_grid: 1
+    time_grid: 1
+    max_time: 170
+    max_health: 100
+    n_players: 10
+
+  planted_duration:
+    range: [0, 40]
+    grid: 0.5

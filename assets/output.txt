@@ -1,0 +1,55 @@
+======================================================================
+Round: 4 | Time: 20.00s
+
+CT Win Rate:
+  0.1121
+
+Alive Prediction:
+  ztr             0.1372
+  nota            0.5957
+  xiELO           0.4869
+  Matheos         0.1589
+  zweih           0.5235
+  volt            0.2621
+  BELCHONOKK      0.4544
+  Jame            0.5232
+  Banjo           0.3307
+  Jorko           0.3546
+
+Next Killer Distribution:
+  ztr             0.0808
+  nota            0.1471
+  xiELO           0.1298
+  Matheos         0.1350
+  zweih           0.1449
+  volt            0.0737
+  BELCHONOKK      0.0723
+  Jame            0.0711
+  Banjo           0.0802
+  Jorko           0.0638
+  <NO KILL>       0.0012
+
+Next Death Distribution:
+  ztr             0.1537
+  nota            0.0676
+  xiELO           0.1113
+  Matheos         0.0912
+  zweih           0.1023
+  volt            0.1513
+  BELCHONOKK      0.0910
+  Jame            0.0704
+  Banjo           0.0621
+  Jorko           0.0981
+  <NO DEATH>      0.0009
+
+Duel Matrix (CT vs T)
+P[CT beats T]
+
+                     nota     xiELO     zweihBELCHONOKK      Jame
+ztr                 0.330     0.414     0.352     0.435     0.310
+Matheos             0.510     0.563     0.541     0.598     0.459
+volt                0.337     0.402     0.395     0.499     0.359
+Banjo               0.470     0.554     0.514     0.578     0.456
+Jorko               0.361     0.480     0.439     0.520     0.369
+
+======================================================================
