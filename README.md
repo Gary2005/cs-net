@@ -89,6 +89,8 @@ pip install -r requirements.txt
 
 Download all pre-trained models and tokenizers to `./cs-net-models/`:
 
+Model weights are also available here: https://huggingface.co/gary2oos/cs-net
+
 ```bash
 python -m examples.download_model
 ```

@@ -207,6 +207,8 @@ pip install -r requirements.txt
 
 运行以下命令，自动从 HuggingFace Hub 下载所有预训练模型和分词器配置文件：
 
+模型权重文件也可以在这里获取：https://huggingface.co/gary2oos/cs-net
+
 ```bash
 python -m examples.download_model
 ```
