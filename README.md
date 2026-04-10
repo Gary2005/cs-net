@@ -9,6 +9,10 @@
 </p>
 
 <p align="center">
+  <a href="README_CN.md">中文文档</a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/Framework-PyTorch-ee4c2c.svg" alt="PyTorch">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
