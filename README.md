@@ -22,7 +22,56 @@
 
 ## 📌 Project Overview
 
-TODO
+CS-NET is a **Transformer**-based deep learning framework for analyzing Counter-Strike 2 match replays (`.dem` demo files). It parses match recordings, converts game states into token sequences, and uses pre-trained Transformer models for multiple real-time predictions.
+
+In short: **given a match replay, the model tells you who will win, who will die, and who is most likely to get the next kill.**
+
+### Prediction Tasks
+
+| Task | Description | Output |
+|------|-------------|--------|
+| **CT Win Rate** | Probability of the CT side winning the current round | Scalar in [0, 1] |
+| **Alive Prediction** | Per-player probability of surviving to the end of the round | One probability per player |
+| **Next Kill Prediction** | Who is most likely to get the next kill / who is most likely to die | Probability distribution over 10+1 classes |
+| **Duel Prediction** | 1v1 win probability for any CT-T player pair | 5x5 probability matrix |
+
+### Model Architecture
+
+CS-NET uses a three-stage Transformer architecture:
+
+```
+Demo File (.dem)
+    │
+    ▼
+┌──────────────────┐
+│  State Extractor  │  Parse demo, extract game state at each sampled tick
+│  (demoparser2)    │  (player positions, HP, weapons, projectiles, etc.)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Tick Tokenizer   │  Discretize continuous game state into token sequences
+│  (TickTokenizer)  │  Vocabulary size: 979
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Embedder         │  Non-causal Transformer encoder (6 layers, 10 heads)
+│  (Single Frame)   │  Encode tokens from one tick into a vector
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Processor        │  Causal Transformer encoder (8 layers, 10 heads)
+│  (Temporal)       │  Model temporal dependencies across ticks (GPT-style)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Task Heads       │  Task-specific MLP prediction heads
+│  (Predictions)    │  Alive / Kill / Win Rate / Duel
+└──────────────────┘
+```
 
 ## 🚀 Quick Start
 
