@@ -44,32 +44,32 @@ Demo File (.dem)
     │
     ▼
 ┌──────────────────┐
-│  State Extractor  │  Parse demo, extract game state at each sampled tick
-│  (demoparser2)    │  (player positions, HP, weapons, projectiles, etc.)
+│  State Extractor │  Parse demo, extract game state at each sampled tick
+│  (demoparser2)   │  (player positions, HP, weapons, projectiles, etc.)
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│  Tick Tokenizer   │  Discretize continuous game state into token sequences
-│  (TickTokenizer)  │  Vocabulary size: 979
+│  Tick Tokenizer  │  Discretize continuous game state into token sequences
+│  (TickTokenizer) │  Vocabulary size: 979
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│  Embedder         │  Non-causal Transformer encoder (6 layers, 10 heads)
-│  (Single Frame)   │  Encode tokens from one tick into a vector
+│  Embedder        │  Non-causal Transformer encoder (6 layers, 10 heads)
+│  (Single Frame)  │  Encode tokens from one tick into a vector
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│  Processor        │  Causal Transformer encoder (8 layers, 10 heads)
-│  (Temporal)       │  Model temporal dependencies across ticks (GPT-style)
+│  Processor       │  Causal Transformer encoder (8 layers, 10 heads)
+│  (Temporal)      │  Model temporal dependencies across ticks (GPT-style)
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│  Task Heads       │  Task-specific MLP prediction heads
-│  (Predictions)    │  Alive / Kill / Win Rate / Duel
+│  Task Heads      │  Task-specific MLP prediction heads
+│  (Predictions)   │  Alive / Kill / Win Rate / Duel
 └──────────────────┘
 ```
 
