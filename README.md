@@ -208,6 +208,7 @@ Jorko               0.361     0.480     0.439     0.520     0.369
 Detailed explanation of each section:
 1. `Round: X | Time: Ys`
   Confirms which tick is actually matched after you input round/time.
+  Round indexing is zero-based (starts from 0).
 1. `CT Win Rate`
   A scalar in `[0, 1]`, where higher means CT side is more likely to win the round at this moment.
 1. `Alive Prediction`
