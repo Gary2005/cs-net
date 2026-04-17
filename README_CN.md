@@ -32,9 +32,8 @@
   - [获取 Demo 文件](#获取-demo-文件)
   - [将 Demo 转换为 JSON](#将-demo-转换为-json)
   - [运行案例分析与可视化](#运行案例分析与可视化)
-- [输出结果解读](#输出结果解读)
-- [项目结构](#项目结构)
-- [训练你自己的模型（进阶）](#训练你自己的模型进阶)
+- [Web App 使用方法](#web-app-使用方法)
+- [Web App 功能](#web-app-功能)
 - [常见问题 FAQ](#常见问题-faq)
 - [贡献者](#贡献者)
 
@@ -327,191 +326,47 @@ python -m examples.case_study \
 
 ---
 
-## 输出结果解读
+## Web App 使用方法
 
-运行 case study 后，终端会显示一个 ASCII 雷达图和多个预测信息块。
+现在项目内已经提供可交互的网页分析面板，可直接上传 demo 并完成模型分析和 LLM 复盘。
 
-### 雷达图对比
+### 1. 启动 Web App
 
-真实游戏内雷达截图：
+```bash
+python -m demo_analysis.web_app
+```
 
-![Ground Truth Radar](assets/radar.png)
-
-case_study 输出的 ASCII 雷达图：
-
-![Case Study Radar Output](assets/output.png)
-
-- 蓝色背景 = CT 阵营玩家
-- 黄色背景 = T 阵营玩家
-- 灰色背景 `x` = 已阵亡玩家
-- 箭头方向（`^` `v` `<` `>`）= 玩家面朝方向
-
-### 完整输出示例
+启动后打开：
 
 ```text
-======================================================================
-Round: 4 | Time: 20.00s
-
-CT Win Rate:
-  0.1121
-
-Alive Prediction:
-  ztr             0.1372
-  nota            0.5957
-  xiELO           0.4869
-  Matheos         0.1589
-  zweih           0.5235
-  volt            0.2621
-  BELCHONOKK      0.4544
-  Jame            0.5232
-  Banjo           0.3307
-  Jorko           0.3546
-
-Next Killer Distribution:
-  ztr             0.0808
-  nota            0.1471
-  xiELO           0.1298
-  Matheos         0.1350
-  zweih           0.1449
-  volt            0.0737
-  BELCHONOKK      0.0723
-  Jame            0.0711
-  Banjo           0.0802
-  Jorko           0.0638
-  <NO KILL>       0.0012
-
-Next Death Distribution:
-  ztr             0.1537
-  nota            0.0676
-  xiELO           0.1113
-  Matheos         0.0912
-  zweih           0.1023
-  volt            0.1513
-  BELCHONOKK      0.0910
-  Jame            0.0704
-  Banjo           0.0621
-  Jorko           0.0981
-  <NO DEATH>      0.0009
-
-Duel Matrix (CT vs T)
-P[CT beats T]
-
-                     nota     xiELO     zweihBELCHONOKK      Jame
-ztr                 0.330     0.414     0.352     0.435     0.310
-Matheos             0.510     0.563     0.541     0.598     0.459
-volt                0.337     0.402     0.395     0.499     0.359
-Banjo               0.470     0.554     0.514     0.578     0.456
-Jorko               0.361     0.480     0.439     0.520     0.369
-
-======================================================================
+http://127.0.0.1:7860
 ```
 
-### 各项输出含义
+### 2. 在页面中运行分析
 
-1. **`Round: X | Time: Ys`** — 确认实际匹配到的回合号和回合内时间
-  回合编号从 0 开始计数。
-2. **`CT Win Rate`** — CT 阵营赢下本回合的概率。范围 `[0, 1]`，越接近 1 表示 CT 优势越大
-3. **`Alive Prediction`** — 每位玩家在本回合结束时存活的概率。如果该玩家在当前时刻已死亡，会显示 `DEAD`
-4. **`Next Killer Distribution`** — 谁最可能拿到下一个击杀的概率分布。`<NO KILL>` 表示接下来不会发生击杀
-5. **`Next Death Distribution`** — 谁最可能是下一个被杀的概率分布。`<NO DEATH>` 表示接下来不会有人阵亡
-6. **`Duel Matrix (CT vs T)`** — CT 对 T 的 1v1 决斗胜率矩阵。每个值表示 `P[CT 赢 T]`，大于 0.5 表示 CT 方占优
+1. 上传 .dem 文件。
+2. 选择模型目录（通常是 cs-net-models/win_rate）。
+3. 选择推理设备（cpu / cuda / mps）。
+4. 点击开始分析。
 
----
+### 3. 生成语言模型复盘
 
-## 项目结构
+1. 填写 API Key、模型名、Base URL（OpenAI 兼容）。
+2. 选择界面语言（中文 / English）。
+3. 点击生成 AI 复盘。
 
-```
-cs-net/
-├── README.md                   # 英文文档
-├── README_CN.md                # 中文文档（本文件）
-├── requirements.txt            # Python 依赖列表
-├── assets/                     # 项目资源（logo、示例截图等）
-│
-├── config/                     # 训练配置文件（YAML 格式）
-│   ├── tfm_pretrain_config.yaml          # 预训练配置
-│   ├── tfm_alive_fine-tuning.yaml        # 存活预测微调配置
-│   ├── tfm_duel_fine-tuning.yaml         # 决斗预测微调配置
-│   ├── tfm_nxt_kill_fine-tuning.yaml     # 击杀预测微调配置
-│   ├── tfm_win_rate_fine-tuning.yaml     # 胜率预测微调配置
-│   └── demoparser_utils/
-│       └── tokenizer.yaml                # 分词器配置
-│
-├── models/                     # 模型实现
-│   ├── tfm_model.py            # 主模型（TickTransformerModel）
-│   └── tfm_model_rope.py       # RoPE 位置编码变体
-│
-├── demoparser_utils/           # Demo 解析工具
-│   ├── tick_tokenizer.py       # 游戏状态 → Token 序列
-│   ├── state_extract.py        # 从 demo 提取游戏状态
-│   └── tokenizer.yaml          # 分词器映射表（地图、武器等）
-│
-├── data/                       # 数据处理脚本
-│   ├── process_demo.py         # .dem → .json 转换
-│   └── create_training_data.py # .json → PyTorch 训练张量
-│
-├── dataset/                    # 数据集加载器
-│   ├── streaming_dataset_all_label.py       # 单 GPU 流式数据集
-│   └── ddp_streaming_dataset_all_label.py   # 多 GPU 分布式数据集
-│
-├── scripts/                    # 训练与推理脚本
-│   ├── pretrain.py             # 预训练（Next Tick Prediction）
-│   ├── alive_fine-tuning.py    # 存活预测微调
-│   ├── duel_fine-tuning.py     # 决斗预测微调
-│   ├── nxt_kill_fine-tuning.py # 击杀预测微调
-│   ├── win_rate_fine-tuning.py # 胜率预测微调
-│   └── inference.py            # 推理脚本
-│
-├── examples/                   # 示例代码
-│   ├── case_study.py           # 案例分析（加载模型 + 可视化预测）
-│   └── download_model.py       # 下载预训练模型
-│
-└── scraper/                    # 辅助工具
-    └── seafile_client.py       # Seafile 云存储客户端
-```
+## Web App 功能
 
----
-
-## 训练你自己的模型（进阶）
-
-如果你有大量 demo 数据，可以自己训练模型。训练流程分为两个阶段：
-
-### 阶段一：预训练（Next Tick Prediction）
-
-模型通过预测下一个时刻的游戏状态来学习 CS 游戏的通用表征。
-
-```bash
-# 1. 准备训练数据：将 demo 转为 JSON，再将 JSON 转为训练张量
-python -m data.process_demo -path your_demo.dem -interval 0.25 -out data.json
-python -m data.create_training_data  # 根据配置文件中的数据路径
-
-# 2. 开始预训练
-python -m scripts.pretrain --config config/tfm_pretrain_config.yaml
-```
-
-### 阶段二：微调（Task-specific Fine-tuning）
-
-在预训练模型基础上，针对特定预测任务进行微调：
-
-```bash
-# 存活预测
-python -m scripts.alive_fine-tuning --config config/tfm_alive_fine-tuning.yaml
-
-# 击杀预测
-python -m scripts.nxt_kill_fine-tuning --config config/tfm_nxt_kill_fine-tuning.yaml
-
-# 胜率预测
-python -m scripts.win_rate_fine-tuning --config config/tfm_win_rate_fine-tuning.yaml
-
-# 决斗预测
-python -m scripts.duel_fine-tuning --config config/tfm_duel_fine-tuning.yaml
-```
-
-训练支持：
-- **多 GPU 分布式训练**（DDP）
-- **梯度累积**（默认 32 步，等效更大 batch size）
-- **Cosine Annealing 学习率调度** + Warmup
-- **Weights & Biases** 实验追踪（可选）
-- **LoRA 微调**（参数高效微调，可选）
+- 中英文双语界面与双语 LLM 输出。
+- 回合胜率曲线 + 击杀事件标记。
+- 鼠标悬停时间线即可查看该时刻玩家贡献。
+- 当前回合最终贡献表 + 全场平均贡献表。
+- MVP / SVP 标记。
+- LLM 总结支持流式输出与 Markdown 渲染。
+- 自动记住用户输入（浏览器本地存储）：
+  API Key、模型名、Base URL、Temperature、设备、模型目录、Batch Size、语言。
+- 提供攻防上下文给 LLM，降低幻觉：
+  每回合攻防归属、上下半场 CT/T 归属与分半比分。
 
 ---
 

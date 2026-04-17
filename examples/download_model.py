@@ -6,20 +6,24 @@ REPO_ID = "gary2oos/cs-net"
 
 FILES = {
     "alive": [
-        "alive_fine-tuning.pth",
-        "tfm_alive_fine-tuning.yaml",
+        "model2_alive_latest_model.pt",
+        "model2_alive.yaml",
     ],
     "duel": [
-        "duel_fine-tuning.pth",
-        "tfm_duel_fine-tuning.yaml",
+        "model2_duel_latest_model.pt",
+        "model2_duel.yaml",
     ],
     "nxt_kill": [
-        "nxt_kill_fine-tuning.pth",
-        "tfm_nxt_kill_fine-tuning.yaml",
+        "model2_kill_latest_model.pt",
+        "model2_kill.yaml",
+    ],
+    "nxt_death": [
+        "model2_death_latest_model.pt",
+        "model2_death.yaml",
     ],
     "win_rate": [
-        "win_rate_fine-tuning.pth",
-        "tfm_win_rate_fine-tuning.yaml",
+        "model2_win_latest_model.pt",
+        "model2_win.yaml",
     ],
 }
 
@@ -43,6 +47,11 @@ def main():
 
     for folder, file_list in FILES.items():
         target_dir = os.path.join(OUTPUT_DIR, folder)
+
+        # delete existing folder if exists
+        if os.path.exists(target_dir):
+            shutil.rmtree(target_dir)
+
         os.makedirs(target_dir, exist_ok=True)
 
         # download & copy model/config files

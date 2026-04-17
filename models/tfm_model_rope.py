@@ -287,6 +287,11 @@ class TickTransformerModelRope(nn.Module):
         processed = self.processor(embedded)
         return processed
     
+    def get_tick_embeddings(self, x):
+        batch_size, seq_len = x.shape
+        embedded = self.embedder(x)
+        return embedded
+    
     def generate(self, x, num_ticks_to_generate):
         self.eval()
         with torch.no_grad():

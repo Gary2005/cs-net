@@ -18,6 +18,15 @@
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
 </p>
 
+## Quick Links
+
+- [Project Overview](#-project-overview)
+- [Prediction Tasks](#prediction-tasks)
+- [Quick Start](#-quick-start)
+- [Web App Usage](#-web-app-usage)
+- [Web App Features](#-web-app-features)
+- [Contributors](#-contributors)
+
 ---
 
 ## 📌 Project Overview
@@ -128,97 +137,47 @@ python -m examples.case_study \
 - Use `mps` for Apple Silicon (M1/M2/M3)
 - Use `cpu` for CPU-only inference
 
-### 5. How to Read Case Study Output
+## 🌐 Web App Usage
 
-The case study prints an ASCII radar and multiple prediction blocks in the terminal.
+CS-NET now includes an interactive web app for demo analysis and LLM-based post-game summary.
 
-Ground-truth radar frame (from demo):
+### 1. Start the web app
 
-![Ground Truth Radar](assets/radar.png)
-
-Radar view printed by case_study:
-
-![Case Study Radar Output](assets/output.png)
-
-Interpretation:
-- The first image is the real in-game radar frame at the selected round/time.
-- The second image is the radar view shown by case_study for the same moment.
-- You should compare these two views to confirm the selected tick and player layout are aligned before trusting the predictions.
-
-Console output (full example):
-
-```text
-======================================================================
-Round: 4 | Time: 20.00s
-
-CT Win Rate:
-  0.1121
-
-Alive Prediction:
-  ztr             0.1372
-  nota            0.5957
-  xiELO           0.4869
-  Matheos         0.1589
-  zweih           0.5235
-  volt            0.2621
-  BELCHONOKK      0.4544
-  Jame            0.5232
-  Banjo           0.3307
-  Jorko           0.3546
-
-Next Killer Distribution:
-  ztr             0.0808
-  nota            0.1471
-  xiELO           0.1298
-  Matheos         0.1350
-  zweih           0.1449
-  volt            0.0737
-  BELCHONOKK      0.0723
-  Jame            0.0711
-  Banjo           0.0802
-  Jorko           0.0638
-  <NO KILL>       0.0012
-
-Next Death Distribution:
-  ztr             0.1537
-  nota            0.0676
-  xiELO           0.1113
-  Matheos         0.0912
-  zweih           0.1023
-  volt            0.1513
-  BELCHONOKK      0.0910
-  Jame            0.0704
-  Banjo           0.0621
-  Jorko           0.0981
-  <NO DEATH>      0.0009
-
-Duel Matrix (CT vs T)
-P[CT beats T]
-
-                     nota     xiELO     zweihBELCHONOKK      Jame
-ztr                 0.330     0.414     0.352     0.435     0.310
-Matheos             0.510     0.563     0.541     0.598     0.459
-volt                0.337     0.402     0.395     0.499     0.359
-Banjo               0.470     0.554     0.514     0.578     0.456
-Jorko               0.361     0.480     0.439     0.520     0.369
-
-======================================================================
+```bash
+python -m demo_analysis.web_app
 ```
 
-Detailed explanation of each section:
-1. `Round: X | Time: Ys`
-  Confirms which tick is actually matched after you input round/time.
-  Round indexing is zero-based (starts from 0).
-1. `CT Win Rate`
-  A scalar in `[0, 1]`, where higher means CT side is more likely to win the round at this moment.
-1. `Alive Prediction`
-  Per-player survival probability. If a player is already dead in this tick, output shows `DEAD`.
-1. `Next Killer Distribution`
-  Probability distribution of who gets the next kill. `<NO KILL>` means no kill event is expected next.
-1. `Next Death Distribution`
-  Probability distribution of who dies next. `<NO DEATH>` means no death event is expected next.
-1. `Duel Matrix (CT vs T)`
-  Each cell is `P[CT beats T]` for a CT-T pair. Values above `0.5` indicate CT advantage in that duel.
+Then open:
+
+```text
+http://127.0.0.1:7860
+```
+
+### 2. Analyze a demo in UI
+
+1. Upload a .dem file.
+2. Select model directory (normally cs-net-models/win_rate).
+3. Select device (cpu / cuda / mps).
+4. Click Start Analysis.
+
+### 3. Generate LLM summary
+
+1. Fill API Key, model name, and Base URL (OpenAI-compatible).
+2. Choose app language (Chinese / English).
+3. Click Generate AI Review.
+
+## ✨ Web App Features
+
+- Bilingual UI and bilingual LLM output (Chinese / English).
+- Round-by-round win-rate curve with kill markers.
+- Hover-to-inspect player contribution at each timeline point.
+- Current round final contribution table + full match average contribution table.
+- MVP and SVP badges.
+- LLM summary supports streaming output and Markdown rendering.
+- Auto-save user settings in browser local storage:
+  API Key, model name, base URL, temperature, device, model path, batch size, language.
+- Team-side context for LLM:
+  per-round attack/defense roles, first-half/second-half side assignment and half scores.
 
 ## 🤝 Contributors
 

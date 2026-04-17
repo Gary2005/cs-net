@@ -23,6 +23,7 @@ import argparse
 import requests
 from pathlib import Path
 from tqdm import tqdm
+from collections import defaultdict
 
 from demoparser_utils.tick_tokenizer import TickTokenizer
 from scraper.seafile_client import SeafileClient
@@ -135,12 +136,12 @@ def process_json_bytes(json_bytes, tokenizer, valid_maps):
     json_data = json.loads(json_bytes)
 
     if not json_data:
-        return [], [], [], [], [], []
+        return [], [], [], [], [], [], []
 
     map_name = json_data[0]["map_name"]
 
     if map_name not in valid_maps:
-        return [], [], [], [], [], []
+        return [], [], [], [], [], [], []
 
     check_steamid_consistency(json_data)
 
@@ -150,6 +151,7 @@ def process_json_bytes(json_bytes, tokenizer, valid_maps):
     nxt_kill_tensors = []
     nxt_death_tensors = []
     alive_in_the_end_tensors = []
+    alive_now_tensors = []
 
     winners = []
     reasons = []
@@ -159,6 +161,7 @@ def process_json_bytes(json_bytes, tokenizer, valid_maps):
         tick_tokens = []
         nxt_kill = []
         nxt_death = []
+        alive_now = []
         alive_in_the_end = [None for _ in ticks[0]["players_info"]]
 
         times = []
@@ -212,10 +215,13 @@ def process_json_bytes(json_bytes, tokenizer, valid_maps):
                         victim_idx = steamid2num[victim_steamid]
                         alive_in_the_end[victim_idx] = 0
 
+            alive_now.append([p["is_alive"] for p in tick["players_info"]])
+
         round_tensors.append(torch.tensor(tick_tokens, dtype=torch.long))
         nxt_death_tensors.append(torch.tensor(nxt_death, dtype=torch.long))
         nxt_kill_tensors.append(torch.tensor(nxt_kill, dtype=torch.long))
         alive_in_the_end_tensors.append(torch.tensor(alive_in_the_end, dtype=torch.long))
+        alive_now_tensors.append(torch.tensor(alive_now, dtype=torch.long))
 
         winners.append(
             ticks[0]["round_label"]["round_info"]["winner"]
@@ -227,7 +233,7 @@ def process_json_bytes(json_bytes, tokenizer, valid_maps):
 
         
 
-    return round_tensors, nxt_kill_tensors, nxt_death_tensors, alive_in_the_end_tensors, winners, reasons
+    return round_tensors, nxt_kill_tensors, nxt_death_tensors, alive_in_the_end_tensors, alive_now_tensors, winners, reasons
 
 def debug():
     with open("demoparser_utils/tokenizer.yaml") as f:
@@ -238,7 +244,7 @@ def debug():
     json_path = "test/tricked-vs-wildcard-academy-united21-league-season-42-2388747+tricked-vs-wildcard-academy-m2-overpass.json"
     with open(json_path, "r") as f:
         json_bytes = f.read().encode("utf-8")
-    rounds, nxt_kill_tensors, nxt_death_tensors, alive_in_the_end_tensors, winners, reasons = process_json_bytes(
+    rounds, nxt_kill_tensors, nxt_death_tensors, alive_in_the_end_tensors, alive_now_tensors, winners, reasons = process_json_bytes(
         json_bytes,
         tokenizer,
         set(config["maps"].keys()),
@@ -269,6 +275,8 @@ def main():
 
     tokenizer = TickTokenizer(config)
 
+    print(f"✅ Tokenizer initialized, vocab size: {tokenizer.vocab_size()}, max_seq_len: {MAX_SEQ_LEN}, padding token id: {tokenizer.PAD}")
+
     valid_maps = set(config["maps"].keys())
 
     processed_jsons = load_processed_jsons()
@@ -283,6 +291,8 @@ def main():
 
     total_rounds = 0
 
+    rounds_per_map = defaultdict(int)
+
     for zip_name in tqdm(zip_files, desc="ZIPs"):
 
         zip_path = ZIP_DIR / zip_name
@@ -291,15 +301,16 @@ def main():
         archive_nxt_kill = []
         archive_nxt_death = []
         archive_alive_in_the_end = []
+        archive_alive_now = []
         archive_winners = []
         archive_reasons = []
 
         save_path = OUT_DIR / f"{Path(zip_name).stem}.pt"
         
         # 如果云端存在就跳过处理
-        # if remote_file_exists(save_path.name):
-        #     print(f"⚠️ Remote already has {save_path.name}, skipping {zip_name}")
-        #     continue
+        if remote_file_exists(save_path.name):
+            print(f"⚠️ Remote already has {save_path.name}, skipping {zip_name}")
+            continue
 
         try:
 
@@ -322,7 +333,10 @@ def main():
                         with zf.open(json_name) as f:
                             json_bytes = f.read()
 
-                        rounds, nxt_kill_tensors, nxt_death_tensors, alive_in_the_end_tensors, winners, reasons = process_json_bytes(
+                        json_data = json.loads(json_bytes)
+                        map_name = json_data[0]["map_name"]
+
+                        rounds, nxt_kill_tensors, nxt_death_tensors, alive_in_the_end_tensors, alive_now_tensors, winners, reasons = process_json_bytes(
                             json_bytes,
                             tokenizer,
                             valid_maps,
@@ -330,10 +344,13 @@ def main():
 
                         if rounds:
 
+                            rounds_per_map[map_name] += len(rounds)
+
                             archive_rounds.extend(rounds)
                             archive_nxt_kill.extend(nxt_kill_tensors)
                             archive_nxt_death.extend(nxt_death_tensors)
                             archive_alive_in_the_end.extend(alive_in_the_end_tensors)
+                            archive_alive_now.extend(alive_now_tensors)
                             archive_winners.extend(winners)
                             archive_reasons.extend(reasons)
 
@@ -356,6 +373,7 @@ def main():
                         "nxt_kill": archive_nxt_kill,
                         "nxt_death": archive_nxt_death,
                         "alive_in_the_end": archive_alive_in_the_end,
+                        "alive_now": archive_alive_now,
                         "winners": archive_winners,
                         "reasons": archive_reasons,
                         "vocab_size": tokenizer.vocab_size(),
@@ -364,22 +382,22 @@ def main():
                     save_path,
                 )
 
-                # print(f"📤 Uploading {filename}...")
+                print(f"📤 Uploading {filename}...")
 
-                # if remote_file_exists(filename):
+                if remote_file_exists(filename):
 
-                #     print(
-                #         f"⚠️ Remote already has {filename}, skipping upload"
-                #     )
+                    print(
+                        f"⚠️ Remote already has {filename}, skipping upload"
+                    )
 
-                # else:
+                else:
 
-                #     client.upload_file(
-                #         str(save_path),
-                #         REMOTE_SAVE_DIR,
-                #     )
+                    client.upload_file(
+                        str(save_path),
+                        REMOTE_SAVE_DIR,
+                    )
 
-                #     print(f"☁️ Uploaded {filename}")
+                    print(f"☁️ Uploaded {filename}")
 
                 print(f"💾 Saved locally: {filename}")
 
@@ -392,6 +410,8 @@ def main():
                 total_rounds += len(archive_rounds)
 
                 print(f"✅ Saved {len(archive_rounds)} rounds")
+                for map_name, count in rounds_per_map.items():
+                    print(f"   - {map_name}: {count} rounds")
 
             else:
 

@@ -4,9 +4,11 @@ import torch
 import torch.nn as nn
 import os
 import json
+import sys
 
-from models.tfm_model import TickTransformerModel
-from models.tfm_model_rope import TickTransformerModelRope
+# from models.tfm_model import TickTransformerModel
+# from models.tfm_model_rope import TickTransformerModelRope
+from models.model2 import Model2
 from demoparser_utils.tick_tokenizer import TickTokenizer
 from data.create_training_data import process_json_bytes, group_by_round
 
@@ -95,168 +97,29 @@ def find_yaml(folder):
 
 def load_checkpoint(folder):
     for f in os.listdir(folder):
-        if f.endswith(".pth"):
+        if f.endswith(".pth") or f.endswith(".pt"):
             return os.path.join(folder, f)
     raise RuntimeError(f"No checkpoint found in {folder}")
 
+def load_model(folder, device):
+    """Load win rate model from checkpoint folder."""
+    try:
+        yaml_path = find_yaml(folder)
+        config = load_config(yaml_path)
+        
+        model = Model2(config).to(device)
 
-# =========================================================
-# heads
-# =========================================================
+        ckpt = load_checkpoint(folder)
+        state = torch.load(ckpt, map_location=device)
+        model.load_state_dict(state["model_state_dict"])
+        model.eval()
 
-class AliveHead(nn.Module):
-    def __init__(self, dim, hidden, layers):
-        super().__init__()
-        net = []
-        for _ in range(layers):
-            net += [nn.Linear(dim, hidden), nn.GELU()]
-            dim = hidden
-        net.append(nn.Linear(dim, 10))
-        self.head = nn.Sequential(*net)
-
-    def forward(self, x):
-        return self.head(x)
-
-
-class KillHead(nn.Module):
-    def __init__(self, dim, hidden, layers):
-        super().__init__()
-        net = []
-        for _ in range(layers):
-            net += [nn.Linear(dim, hidden), nn.GELU()]
-            dim = hidden
-        net.append(nn.Linear(dim, 22))
-        self.head = nn.Sequential(*net)
-
-    def forward(self, x):
-        return self.head(x)
-
-
-class WinRateHead(nn.Module):
-    def __init__(self, dim, hidden, layers):
-        super().__init__()
-        net = []
-        for _ in range(layers):
-            net += [nn.Linear(dim, hidden), nn.GELU()]
-            dim = hidden
-        net.append(nn.Linear(dim, 1))
-        self.head = nn.Sequential(*net)
-
-    def forward(self, x):
-        return self.head(x).squeeze(-1)
-
-
-class DuelPredictionHead(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_hidden_layers, embedding_dim):
-        super().__init__()
-
-        layers = []
-        prev_dim = input_dim + embedding_dim * 2
-
-        for _ in range(num_hidden_layers):
-            layers.append(nn.Linear(prev_dim, hidden_dim))
-            layers.append(nn.GELU())
-            prev_dim = hidden_dim
-
-        layers.append(nn.Linear(prev_dim, 1))
-
-        self.head = nn.Sequential(*layers)
-        self.embedding = nn.Embedding(10, embedding_dim)
-
-    def forward(self, x, i, j):
-        B = x.size(0)
-
-        i = torch.full((B,), i, dtype=torch.long, device=x.device)
-        j = torch.full((B,), j, dtype=torch.long, device=x.device)
-
-        emb_i = self.embedding(i)
-        emb_j = self.embedding(j)
-
-        x = torch.cat([x, emb_i, emb_j], dim=-1)
-
-        return self.head(x).squeeze(-1)
-
-
-# =========================================================
-# wrappers
-# =========================================================
-
-class PredictionModel(nn.Module):
-    def __init__(self, base_model, head):
-        super().__init__()
-        self.base_model = base_model
-        self.prediction_head = head
-
-    def forward(self, x):
-        feat = self.base_model.get_intermediate_data(x)
-        last = feat[:, -1, :]
-        mean = feat.mean(dim=1)
-        tick_feat = torch.cat([last, mean], dim=-1)
-        return self.prediction_head(tick_feat)
-
-
-class DuelPredictionModel(nn.Module):
-    def __init__(self, base_model, head):
-        super().__init__()
-        self.base_model = base_model
-        self.prediction_head = head
-
-    def forward(self, x, i, j):
-        feat = self.base_model.get_intermediate_data(x)
-        last = feat[:, -1, :]
-        mean = feat.mean(dim=1)
-        tick_feat = torch.cat([last, mean], dim=-1)
-        return self.prediction_head(tick_feat, i, j)
-
-
-# =========================================================
-# load model
-# =========================================================
-
-def load_model(folder, head_type, device):
-    yaml_path = find_yaml(folder)
-    cfg = load_config(yaml_path)
-
-    if cfg["model"]["model_name"] == "TickTransformerModel":
-        base = TickTransformerModel(cfg["model"]).to(device)
-    else:
-        base = TickTransformerModelRope(cfg["model"]).to(device)
-
-    embed = cfg["model"]["embed_dim"]
-
-    if head_type == "alive":
-        head = AliveHead(embed * 2,
-                         cfg["model"]["alive_hidden_dim"],
-                         cfg["model"]["alive_hidden_layers"])
-        model = PredictionModel(base, head)
-
-    elif head_type == "kill":
-        head = KillHead(embed * 2,
-                        cfg["model"]["nxt_kill_hidden_dim"],
-                        cfg["model"]["nxt_kill_hidden_layers"])
-        model = PredictionModel(base, head)
-
-    elif head_type == "win":
-        head = WinRateHead(embed * 2,
-                           cfg["model"]["win_rate_hidden_dim"],
-                           cfg["model"]["win_rate_hidden_layers"])
-        model = PredictionModel(base, head)
-
-    else:
-        head = DuelPredictionHead(
-            embed * 2,
-            cfg["model"]["duel_hidden_dim"],
-            cfg["model"]["duel_hidden_layers"],
-            cfg["model"]["duel_player_embedding_dim"]
-        )
-        model = DuelPredictionModel(base, head)
-
-    ckpt = load_checkpoint(folder)
-    state = torch.load(ckpt, map_location=device)
-    model.load_state_dict(state["model_state_dict"])
-    model.eval()
-
-    return model.to(device), cfg
+        print(f"Loaded win rate model from {ckpt}")
+        return model, config
+    except Exception as e:
+        print(f"Error loading model from {folder}: {type(e).__name__}: {str(e)}")
+        print(f"Please try to run the download_model.py script to download the model files and ensure the folder structure is correct.")
+        sys.exit(1)
 
 
 # =========================================================
@@ -299,6 +162,7 @@ def main():
 
     parser.add_argument("--alive_ckpt_dir", required=True)
     parser.add_argument("--kill_ckpt_dir", required=True)
+    parser.add_argument("--death_ckpt_dir", required=True)
     parser.add_argument("--winrate_ckpt_dir", required=True)
     parser.add_argument("--duel_ckpt_dir", required=True)
 
@@ -315,10 +179,11 @@ def main():
 
     print("Loading models...")
 
-    alive_model, cfg = load_model(args.alive_ckpt_dir, "alive", device)
-    kill_model, _ = load_model(args.kill_ckpt_dir, "kill", device)
-    win_model, _ = load_model(args.winrate_ckpt_dir, "win", device)
-    duel_model, _ = load_model(args.duel_ckpt_dir, "duel", device)
+    alive_model, cfg = load_model(args.alive_ckpt_dir, device)
+    kill_model, _ = load_model(args.kill_ckpt_dir, device)
+    win_model, _ = load_model(args.winrate_ckpt_dir, device)
+    duel_model, _ = load_model(args.duel_ckpt_dir, device)
+    death_model, _ = load_model(args.death_ckpt_dir, device)
 
     print("Models loaded successfully.")
 
@@ -346,7 +211,7 @@ def main():
     round_id = int(input("Input round number: "))
     target_sec = float(input("Input round seconds: "))
 
-    round_tensors, _, _, _, _, _ = process_json_bytes(
+    round_tensors, _, _, _, _, _, _ = process_json_bytes(
         json.dumps(json_data).encode(),
         tokenizer,
         valid_maps
@@ -374,32 +239,54 @@ def main():
     inp = build_input_window(
         round_tensors[round_id],
         tick_idx,
-        cfg["data"]["ticks_per_sample"],
-        cfg["data"]["seq_len"],
-        cfg["data"]["pad_token"]
+        cfg["data"]["temporal_seq_len"],
+        cfg["data"]["tick_seq_len"],
+        cfg["model"]["pad_token_id"]
     ).unsqueeze(0).to(device)
 
     print("Running predictions...")
 
-    with torch.no_grad():
-        alive = torch.sigmoid(alive_model(inp))[0]
-        kill_logits = kill_model(inp)[0]
-        win_rate = torch.sigmoid(win_model(inp))[0]
+    player_i_is_alive = [0 for _ in range(10)]
+    for i, p in enumerate(matched_tick["players_info"]):
+        if p["is_alive"]:
+            player_i_is_alive[i] = 1
 
-        kill_prob = torch.softmax(kill_logits[:11], dim=0)
-        death_prob = torch.softmax(kill_logits[11:], dim=0)
+    alive_probs = []
+    with torch.no_grad():
+
+        print("Predicting alive probabilities...")
+
+        for i in range(10):
+            if player_i_is_alive[i] == 0:
+                alive_probs.append(0.0)
+            else:
+                cond = torch.tensor([[i]], device=device)
+                alive_logit = alive_model(inp, cond)
+                alive_prob = torch.sigmoid(alive_logit)[0][0].item()
+                alive_probs.append(alive_prob)
+
+        print("Predicting kill / death probabilities and win rate...")
+        kill_logits = kill_model(inp, None)[0]
+        death_logits = death_model(inp, None)[0]
+        kill_prob = torch.softmax(kill_logits, dim=0)
+        death_prob = torch.softmax(death_logits, dim=0)
+
+        print("Predicting win rate...")
+    
+        win_rate = torch.sigmoid(win_model(inp, None))[0][0]
+
+        print("Predicting duel probabilities...")
 
         duel = torch.zeros(10, 10)
 
         for i in range(10):
             for j in range(10):
-                if i == j:
+                if i == j or player_i_is_alive[i] == 0 or player_i_is_alive[j] == 0:
                     duel[i, j] = 0.5
                 else:
-                    duel[i, j] = torch.sigmoid(
-                        duel_model(inp, i, j)
-                    )[0]
-    
+                    cond = torch.tensor([[i, j]], device=device)
+                    duel[i, j] = torch.sigmoid(duel_model(inp, cond))[0][0]
+
     print("Predictions generated successfully.\n")
 
     players_info = matched_tick["players_info"]
@@ -436,7 +323,6 @@ def main():
     # Alive Prediction
     # --------------------------------------------------
     print("\nAlive Prediction:")
-    alive_probs = alive.cpu().tolist()
 
     for i, p in enumerate(players_info):
         if p["is_alive"]:

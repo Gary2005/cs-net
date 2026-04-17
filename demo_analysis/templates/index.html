@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CS-Net Round Win Rate Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+  <div class="noise"></div>
+  <main class="app-shell">
+    <header class="hero">
+      <a class="hero-brand" href="https://github.com/Gary2005/cs-net" target="_blank" rel="noopener noreferrer" aria-label="打开 CS-Net GitHub 仓库">
+        <img class="hero-logo" src="{{ url_for('asset_file', filename='logo.svg') }}" alt="CS-Net Logo" />
+        <span class="hero-brand-name">CS-NET</span>
+      </a>
+      <div class="hero-lang">
+        <label>
+          <span data-i18n="ui_language">界面语言 (language)</span>
+          <select id="app-language">
+            <option value="zh" selected>中文</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+      </div>
+      <p class="eyebrow">CS2 DEM INTELLIGENCE</p>
+      <h1>Round Win Rate Analyzer</h1>
+      <p class="subtitle" data-i18n="subtitle">上传 DEM 后自动计算每回合胜率、击杀影响和玩家贡献，并生成可交互复盘与 LLM 解读。</p>
+    </header>
+
+    <section class="panel controls">
+      <h2 data-i18n="section_run">1. 运行分析</h2>
+      <form id="analyze-form">
+        <div class="grid two-col">
+          <label>
+            <span data-i18n="dem_file">DEM 文件</span>
+            <input type="file" name="demo_file" id="demo-file" accept=".dem" required />
+          </label>
+          <label>
+            <span data-i18n="model_path">模型目录</span>
+            <input type="text" name="model_path" id="model-path" list="model-path-list" data-i18n-placeholder="model_path_placeholder" placeholder="请输入模型目录，例如 /Users/.../cs-net-models/win_rate" required />
+            <datalist id="model-path-list">
+              {% for p in model_options %}
+              <option value="{{ p }}"></option>
+              {% endfor %}
+            </datalist>
+          </label>
+          <label>
+            <span data-i18n="device">设备</span>
+            <select name="device" id="device">
+              <option value="mps" {% if default_device == "mps" %}selected{% endif %}>mps</option>
+              <option value="cuda" {% if default_device == "cuda" %}selected{% endif %}>cuda</option>
+              <option value="cpu" {% if default_device == "cpu" %}selected{% endif %}>cpu</option>
+            </select>
+          </label>
+          <label>
+            <span data-i18n="batch_size">Batch Size</span>
+            <input type="number" name="batch_size" id="batch-size" value="32" min="1" max="512" />
+          </label>
+        </div>
+        <p class="hint" data-i18n="analyze_hint">进度说明: 解析 demo 一般需要 30~60 秒，运行模型通常不到 1 分钟。分析中会显示当前阶段和正在处理的回合。</p>
+        <button id="analyze-btn" type="submit" data-i18n="analyze_btn">开始分析</button>
+      </form>
+      <pre id="status-log" class="status-log" data-i18n="status_waiting">等待上传 DEM...</pre>
+    </section>
+
+    <section class="panel round-view hidden" id="round-view">
+      <div class="panel-head">
+        <h2 data-i18n="section_round_trend">2. 回合走势</h2>
+        <div id="match-badge" class="match-badge"></div>
+      </div>
+      <div id="round-tabs" class="round-tabs"></div>
+      <div id="chart" class="chart"></div>
+      <div id="hover-player-stats" class="hover-player-stats"></div>
+    </section>
+
+    <section class="panel summary hidden" id="round-summary-view">
+      <h2 data-i18n="section_round_summary">3. 当前回合最终贡献</h2>
+      <div id="round-summary-table"></div>
+    </section>
+
+    <section class="panel summary hidden" id="overall-summary-view">
+      <h2 data-i18n="section_overall_summary">4. 全场平均贡献</h2>
+      <div id="overall-summary-table"></div>
+    </section>
+
+    <section class="panel llm hidden" id="llm-view">
+      <h2 data-i18n="section_llm">5. 语言模型总结</h2>
+      <div class="grid two-col">
+        <label>
+          <span data-i18n="api_key">API Key</span>
+          <input type="password" id="llm-api-key" placeholder="sk-..." />
+        </label>
+        <label>
+          <span data-i18n="model_name">模型名</span>
+          <input type="text" id="llm-model" data-i18n-placeholder="model_name_placeholder" placeholder="gpt-4.1 / deepseek-chat / qwen-max" />
+        </label>
+        <label>
+          <span data-i18n="base_url">Base URL (OpenAI 兼容)</span>
+          <input type="text" id="llm-base-url" value="https://api.openai.com/v1" />
+        </label>
+        <label>
+          <span data-i18n="temperature">Temperature</span>
+          <input type="number" id="llm-temperature" step="0.1" min="0" max="1.5" value="0.95" />
+        </label>
+      </div>
+      <button id="llm-btn" type="button" data-i18n="llm_btn">生成 AI 复盘</button>
+      <article id="llm-output" class="llm-output" data-i18n="llm_empty">暂无总结</article>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
