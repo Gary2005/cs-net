@@ -22,7 +22,7 @@ from demoparser2 import DemoParser
 
 
 def load_config(path):
-    with open(path) as f:
+    with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -373,7 +373,7 @@ def main():
         print(f"Error: tokenizer.yaml not found in {model_path}")
         return
     
-    with open(tokenizer_yaml) as f:
+    with open(tokenizer_yaml, "r", encoding="utf-8") as f:
         tokenizer_cfg = yaml.safe_load(f)
     
     tokenizer = TickTokenizer(tokenizer_cfg)
@@ -430,7 +430,7 @@ def main():
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
     results = to_jsonable(results)
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
     
     print(f"Results saved to {output_path}")

@@ -84,7 +84,7 @@ def render_ascii_radar(players_info, width=50, height=20):
 
 
 def load_config(path):
-    with open(path) as f:
+    with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -189,7 +189,7 @@ def main():
 
     print("Loading tokenizer...")
 
-    with open(os.path.join(args.alive_ckpt_dir, "tokenizer.yaml")) as f:
+    with open(os.path.join(args.alive_ckpt_dir, "tokenizer.yaml"), "r", encoding="utf-8") as f:
         tokenizer_cfg = yaml.safe_load(f)
 
     tokenizer = TickTokenizer(tokenizer_cfg)
@@ -198,7 +198,7 @@ def main():
 
     valid_maps = set(tokenizer_cfg["maps"].keys())
 
-    with open(args.json_path) as f:
+    with open(args.json_path, "r", encoding="utf-8") as f:
         json_data = json.load(f)
 
     if args.remove_projectiles:
