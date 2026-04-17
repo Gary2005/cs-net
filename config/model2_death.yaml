@@ -1,0 +1,59 @@
+# Model configuration
+model:
+  model_name: "model2"  # Name of the model architecture to use
+
+  vocab_size: 979  # Vocabulary size for token embeddings
+  embed_dim: 640     # Embedding dimension
+  num_heads: 10     # Number of attention heads
+  dropout: 0.1       # Dropout rate
+  
+  tick_num_layers: 8
+  temporal_num_layers: 8
+
+  pad_token_id: 978
+
+  num_cond: 0
+  cond_vocab_size: 0
+  n_logits: 11 # Number of logits to predict (e.g., 1 for win rate prediction)
+
+  pretrained_path: 'checkpoints_pretraining_v2/final.pth'
+
+pretrain:
+  model_name: "TickTransformerModelROPE"
+
+  vocab_size: 979  # Vocabulary size for token embeddings
+  embed_dim: 640     # Embedding dimension
+  seq_len: 512       # Sequence length per tick
+  dropout: 0.1       # Dropout rate
+  
+  # Embedder (non-causal transformer encoder)
+  embedder_heads: 10
+  embedder_layers: 6
+  
+  # Processor (GPT-style causal transformer for next token prediction)
+  processor_heads: 10
+  processor_layers: 8
+  
+  # Decoder (non-causal transformer to decode embeddings to sequences)
+  decoder_heads: 10
+  decoder_layers: 6
+
+data:
+  tick_seq_len: 512
+  temporal_seq_len: 32
+  num_workers: 4
+
+training:
+  batch_size: 32
+  grad_accum_steps: 1
+  lr: 0.00012
+  weight_decay: 0.05
+  num_epochs: 22
+  warmup_steps: 4500
+  max_grad_norm: 1.0
+  
+  checkpoint_dir: 'model2_death_ckpts'
+
+logging:
+  project_name: 'model2_death'
+  test: 1024

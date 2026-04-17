@@ -89,12 +89,12 @@ def load_processed_jsons():
     if not PROCESSED_JSON_LOG.exists():
         return set()
 
-    with open(PROCESSED_JSON_LOG, "r") as f:
+    with open(PROCESSED_JSON_LOG, "r", encoding="utf-8") as f:
         return set(line.strip() for line in f)
 
 
 def append_processed_json(json_name):
-    with open(PROCESSED_JSON_LOG, "a") as f:
+    with open(PROCESSED_JSON_LOG, "a", encoding="utf-8") as f:
         f.write(json_name + "\n")
 
 
@@ -236,13 +236,13 @@ def process_json_bytes(json_bytes, tokenizer, valid_maps):
     return round_tensors, nxt_kill_tensors, nxt_death_tensors, alive_in_the_end_tensors, alive_now_tensors, winners, reasons
 
 def debug():
-    with open("demoparser_utils/tokenizer.yaml") as f:
+    with open("demoparser_utils/tokenizer.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     tokenizer = TickTokenizer(config)
 
     json_path = "test/tricked-vs-wildcard-academy-united21-league-season-42-2388747+tricked-vs-wildcard-academy-m2-overpass.json"
-    with open(json_path, "r") as f:
+    with open(json_path, "r", encoding="utf-8") as f:
         json_bytes = f.read().encode("utf-8")
     rounds, nxt_kill_tensors, nxt_death_tensors, alive_in_the_end_tensors, alive_now_tensors, winners, reasons = process_json_bytes(
         json_bytes,
@@ -270,7 +270,7 @@ def main():
     ensure_remote_dir(REMOTE_SAVE_DIR)
 
     # tokenizer
-    with open("demoparser_utils/tokenizer.yaml") as f:
+    with open("demoparser_utils/tokenizer.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     tokenizer = TickTokenizer(config)

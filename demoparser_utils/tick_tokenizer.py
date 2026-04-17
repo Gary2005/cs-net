@@ -515,7 +515,7 @@ class TickTokenizer:
 
 
 if __name__ == "__main__":
-    with open("demoparser_utils/tokenizer.yaml", 'r') as f:
+    with open("demoparser_utils/tokenizer.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
     
     print(config)
@@ -525,7 +525,8 @@ if __name__ == "__main__":
     print(f"Pad token id: {tokenizer.PAD}")
 
     import json
-    test_json = json.load(open("test.json", "r"))
+    with open("test.json", "r", encoding="utf-8") as f:
+        test_json = json.load(f)
     print(len(test_json))
 
     tokens = tokenizer.tokenize(test_json[0])

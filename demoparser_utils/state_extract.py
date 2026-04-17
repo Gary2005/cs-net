@@ -794,7 +794,7 @@ def save_as_json(results, path, compression=False):
         with open(path, "wb") as f:
             f.write(compressed)
     else:
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(results_py, f, indent=4, ensure_ascii=False)
 
 
