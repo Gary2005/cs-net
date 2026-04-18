@@ -293,6 +293,7 @@ python -m examples.case_study \
   --json_path examples/test.json \
   --alive_ckpt_dir cs-net-models/alive \
   --kill_ckpt_dir cs-net-models/nxt_kill \
+  --death_ckpt_dir cs-net-models/nxt_death \
   --winrate_ckpt_dir cs-net-models/win_rate \
   --duel_ckpt_dir cs-net-models/duel \
   --device cpu
@@ -305,10 +306,11 @@ python -m examples.case_study \
 | `--json_path` | 上一步生成的 JSON 文件路径 |
 | `--alive_ckpt_dir` | 存活预测模型目录 |
 | `--kill_ckpt_dir` | 击杀预测模型目录 |
+| `--death_ckpt_dir` | 被击杀预测模型目录 |
 | `--winrate_ckpt_dir` | 胜率预测模型目录 |
 | `--duel_ckpt_dir` | 决斗预测模型目录 |
 | `--device` | 推理设备（见下方说明） |
-| `--remove_projectiles` | 可选，移除投掷物数据（减少噪声） |
+| `--remove_projectiles` | 可选，移除投掷物数据（做对比试验） |
 
 `--device` 参数选择指南：
 

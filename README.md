@@ -127,6 +127,7 @@ python -m examples.case_study \
   --json_path examples/test.json \
   --alive_ckpt_dir cs-net-models/alive \
   --kill_ckpt_dir cs-net-models/nxt_kill \
+  --death_ckpt_dir cs-net-models/nxt_death \
   --winrate_ckpt_dir cs-net-models/win_rate \
   --duel_ckpt_dir cs-net-models/duel \
   --device cpu
@@ -136,6 +137,9 @@ python -m examples.case_study \
 - Use `cuda` for NVIDIA GPUs
 - Use `mps` for Apple Silicon (M1/M2/M3)
 - Use `cpu` for CPU-only inference
+
+Optional flag:
+- `--remove_projectiles`: remove projectile and grenade entities from JSON before inference.
 
 ## 🌐 Web App Usage
 
