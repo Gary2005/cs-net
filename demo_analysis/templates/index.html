@@ -42,7 +42,7 @@
           </label>
           <label>
             <span data-i18n="model_path">模型目录</span>
-            <input type="text" name="model_path" id="model-path" list="model-path-list" data-i18n-placeholder="model_path_placeholder" placeholder="请输入模型目录，例如 /Users/.../cs-net-models/win_rate" required />
+            <input type="text" name="model_path" id="model-path" value="{{ default_model_path }}" list="model-path-list" autocomplete="off" data-i18n-placeholder="model_path_placeholder" placeholder="请输入模型目录，例如 /Users/.../cs-net-models/win_rate" required />
             <datalist id="model-path-list">
               {% for p in model_options %}
               <option value="{{ p }}"></option>

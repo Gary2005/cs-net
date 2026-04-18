@@ -22,6 +22,22 @@ from flask import (
 )
 
 
+os.environ["PYTHONUTF8"] = "1"
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ASSETS_DIR = ROOT_DIR / "assets"
 UPLOAD_DIR = ROOT_DIR / "demo_analysis" / "uploads"
@@ -51,15 +67,26 @@ def discover_model_paths() -> list[str]:
             continue
         if "win_rate" not in child.name.lower():
             continue
-        has_pth = any(p.suffix == ".pth" for p in child.iterdir())
+        has_model_file = any(p.suffix in {".pth", ".pt"} for p in child.iterdir())
         has_yaml = any(
             p.suffix == ".yaml" and "tokenizer" not in p.name.lower()
             for p in child.iterdir()
         )
-        if has_pth and has_yaml:
+        if has_model_file and has_yaml:
             options.append(str(child))
 
     return options
+
+
+def choose_default_model_path(model_options: list[str]) -> str:
+    if model_options:
+        return model_options[0]
+
+    fallback = MODEL_ROOT / "win_rate"
+    if fallback.exists() and fallback.is_dir():
+        return str(fallback)
+
+    return ""
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:
@@ -743,10 +770,12 @@ def _run_analysis_job(
 
 @app.route("/")
 def index():
+    model_options = discover_model_paths()
     return render_template(
         "index.html",
         default_device=choose_default_device(),
-        model_options=discover_model_paths(),
+        model_options=model_options,
+        default_model_path=choose_default_model_path(model_options),
     )
 
 
@@ -769,8 +798,12 @@ def analyze_demo():
         return jsonify({"error": "请先选择模型目录"}), 400
 
     model_dir = Path(model_path)
+    if not model_dir.is_absolute():
+        model_dir = (ROOT_DIR / model_dir).resolve()
     if not model_dir.exists() or not model_dir.is_dir():
         return jsonify({"error": f"模型目录不存在或不是文件夹: {model_path}"}), 400
+
+    model_path = str(model_dir)
 
     run_id = uuid.uuid4().hex
     upload_path = UPLOAD_DIR / f"{run_id}_{Path(dem_file.filename).name}"

@@ -222,6 +222,14 @@ function writeUserPrefs(prefs) {
   }
 }
 
+function getModelPathOptions() {
+  const list = document.getElementById("model-path-list");
+  if (!list) return [];
+  return Array.from(list.querySelectorAll("option"))
+    .map((opt) => (opt.value || "").trim())
+    .filter(Boolean);
+}
+
 function getCurrentUserPrefs() {
   return {
     app_language: refs.appLanguage?.value || "zh",
@@ -254,7 +262,13 @@ function restoreUserPrefs() {
   }
 
   if (typeof prefs.model_path === "string" && refs.modelPath) {
-    refs.modelPath.value = prefs.model_path;
+    const savedModelPath = prefs.model_path.trim();
+    const modelOptions = getModelPathOptions();
+
+    // Keep backend default unless the saved path is explicitly in current options.
+    if (savedModelPath && modelOptions.includes(savedModelPath)) {
+      refs.modelPath.value = savedModelPath;
+    }
   }
   if (typeof prefs.device === "string" && refs.device) {
     refs.device.value = prefs.device;
