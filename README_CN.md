@@ -35,6 +35,7 @@
 - [Web App 使用方法](#web-app-使用方法)
 - [Web App 功能](#web-app-功能)
 - [常见问题 FAQ](#常见问题-faq)
+- [致谢 / 第三方组件](#致谢--第三方组件)
 - [贡献者](#贡献者)
 
 ---
@@ -347,7 +348,9 @@ http://127.0.0.1:7860
 ### 2. 在页面中运行分析
 
 1. 上传 .dem 文件。
-2. 选择模型目录（通常是 cs-net-models/win_rate）。
+2. 选择 **模型根目录**（通常是 `cs-net-models/`）。网页会自动从根目录下加载
+   `alive / nxt_kill / nxt_death / win_rate / duel` 五个预测头，不用再分别
+   指定每个任务的子目录。
 3. 选择推理设备（cpu / cuda / mps）。
 4. 点击开始分析。
 
@@ -362,6 +365,18 @@ http://127.0.0.1:7860
 - 中英文双语界面与双语 LLM 输出。
 - 回合胜率曲线 + 击杀事件标记。
 - 鼠标悬停时间线即可查看该时刻玩家贡献。
+- **实时 2D 雷达**：随鼠标在胜率曲线上移动同步刷新，在真实地图 overview
+  上画出每个玩家的位置、阵营颜色、存活状态以及是否刚被闪。
+- **逐 tick 指标面板**：四个预测头的输出全都铺出来——5 秒内存活概率、
+  下一击杀者分布、下一阵亡者分布、以及 CT vs T 的 5×5 对决胜率矩阵。
+- **高级指标面板**（跨整场比赛聚合）：每个玩家的平均 kill / death /
+  survive 概率、硬仗胜率（模型本来觉得他要输的 1v1）、易仗胜率（本来占优
+  的 1v1）、highlight 率，以及按 |swing| 排序的关键击杀榜。
+- **一键打开 2D 回放器**：另开新标签页直接在同一段 demo 上播放，带有
+  烟雾 / 闪光 / 手雷弹道，并把 CS-NET 的胜率曲线叠在 viewer 的时间线上。
+  底层是开源项目
+  [`sparkoo/csgo-2d-demo-viewer`](https://github.com/sparkoo/csgo-2d-demo-viewer)
+  的定制构建，详见下面的 [致谢](#致谢--第三方组件) 部分。
 - 当前回合最终贡献表 + 全场平均贡献表。
 - MVP / SVP 标记。
 - LLM 总结支持流式输出与 Markdown 渲染。
@@ -425,6 +440,23 @@ conda activate cs-net
 ```bash
 pip install --upgrade demoparser2
 ```
+
+---
+
+## 致谢 / 第三方组件
+
+Web App 中的 2D 回放器（`demo_analysis/static/viewer/` 下的全部文件）来自
+**[sparkoo/csgo-2d-demo-viewer](https://github.com/sparkoo/csgo-2d-demo-viewer)**
+（作者 **Michal Vala**，MIT License，版权归 © 2023 Michal Vala 所有）。
+我们只是把它的静态资源路径改挂到 Flask 的 `/viewer/` 路由下、
+并把 CS-NET 模型输出的逐 tick 预测接进它的时间线，**回放器本身的
+demo 解析、地图渲染与交互都由上游作者实现，所有相关技术信誉均归上游。**
+非常感谢上游作者做出这样高质量、开箱即用的工具并以 MIT 协议开源给社区。
+
+该部分文件保留了原 MIT 许可证原文，见
+[`demo_analysis/static/viewer/LICENSE`](demo_analysis/static/viewer/LICENSE)。
+如果你要进一步转发或再分发这部分代码，请一并保留该 LICENSE 文件与版权声明，
+避免违反 MIT 协议。
 
 ---
 

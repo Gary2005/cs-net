@@ -25,6 +25,7 @@
 - [Quick Start](#-quick-start)
 - [Web App Usage](#-web-app-usage)
 - [Web App Features](#-web-app-features)
+- [Acknowledgements](#-acknowledgements)
 - [Contributors](#-contributors)
 
 ---
@@ -160,7 +161,9 @@ http://127.0.0.1:7860
 ### 2. Analyze a demo in UI
 
 1. Upload a .dem file.
-2. Select model directory (normally cs-net-models/win_rate).
+2. Select the **model root directory** (normally `cs-net-models/`). The web app
+   loads all five prediction heads (`alive`, `nxt_kill`, `nxt_death`,
+   `win_rate`, `duel`) from their subdirectories in one go.
 3. Select device (cpu / cuda / mps).
 4. Click Start Analysis.
 
@@ -175,6 +178,21 @@ http://127.0.0.1:7860
 - Bilingual UI and bilingual LLM output (Chinese / English).
 - Round-by-round win-rate curve with kill markers.
 - Hover-to-inspect player contribution at each timeline point.
+- **Live 2D radar** that syncs with the win-rate curve — player positions,
+  team colour, alive/dead state, and "recently flashed" flag are drawn on the
+  real minimap overview for every tick the cursor touches.
+- **Per-tick metric panels** driven by all four prediction heads:
+  5-second survival probability, next-kill distribution, next-death
+  distribution, and the full 5×5 CT-vs-T duel matrix.
+- **Advanced metrics table** aggregated across the whole match: per-player
+  average kill/death/survival probability, hard-duel win rate (fights the
+  model thought they would lose), easy-duel win rate (fights they were
+  favoured in), highlight rate, plus a |swing|-sorted ranking of the most
+  impactful kills.
+- **One-click 2D replay viewer** — launches a bundled build of
+  [`sparkoo/csgo-2d-demo-viewer`](https://github.com/sparkoo/csgo-2d-demo-viewer)
+  in a new tab with the same demo, adding smoke/flash/grenade trajectories
+  and an in-page timeline overlaid with CS-NET's predictions.
 - Current round final contribution table + full match average contribution table.
 - MVP and SVP badges.
 - LLM summary supports streaming output and Markdown rendering.
@@ -182,6 +200,22 @@ http://127.0.0.1:7860
   API Key, model name, base URL, temperature, device, model path, batch size, language.
 - Team-side context for LLM:
   per-round attack/defense roles, first-half/second-half side assignment and half scores.
+
+## 🙏 Acknowledgements
+
+The bundled 2D replay viewer under `demo_analysis/static/viewer/` is a lightly
+modified build of the excellent open-source project
+**[sparkoo/csgo-2d-demo-viewer](https://github.com/sparkoo/csgo-2d-demo-viewer)**
+by **Michal Vala**, distributed under the MIT License (© 2023 Michal Vala).
+All credit for the viewer's parsing, rendering, and UX belongs to the upstream
+authors — CS-NET only rewires its asset paths and feeds in the
+per-tick predictions from our models. Huge thanks to Michal and the upstream
+contributors for making such a polished tool available to the community.
+
+The original upstream license is reproduced verbatim at
+[`demo_analysis/static/viewer/LICENSE`](demo_analysis/static/viewer/LICENSE)
+and applies to every file in that directory. If you reuse or redistribute the
+viewer portion of this repository, please preserve that notice.
 
 ## 🤝 Contributors
 
