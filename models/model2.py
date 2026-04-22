@@ -221,7 +221,7 @@ class Model2(nn.Module):
         pretrained_path = config['pretrained_path']
 
         if os.path.exists(pretrained_path):
-            state_dict = torch.load(pretrained_path, map_location='cpu')
+            state_dict = torch.load(pretrained_path, map_location='cpu', weights_only=False)
             pretrained_model.load_state_dict(state_dict['model_state_dict'])
 
         self.tick_encoder = pretrained_model.embedder
