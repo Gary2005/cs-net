@@ -52,40 +52,76 @@ ANALYSIS_CACHE: dict[str, dict[str, Any]] = {}
 ANALYSIS_JOBS: dict[str, dict[str, Any]] = {}
 ANALYSIS_LOCK = threading.Lock()
 
+VIEWER_DIR = Path(__file__).resolve().parent / "static" / "viewer"
+
 
 def choose_default_device() -> str:
     return "cpu"
 
 
+ALL_HEAD_SUBDIRS = ("alive", "nxt_kill", "nxt_death", "win_rate", "duel")
+REQUIRED_HEAD_SUBDIRS = ("win_rate",)  # only win_rate is mandatory; other heads fall back
+
+
+def _has_ckpt_and_yaml(path: Path) -> bool:
+    """True if `path` directly contains a checkpoint (.pt/.pth) and a non-tokenizer yaml."""
+    if not path.is_dir():
+        return False
+    has_yaml = any(
+        p.suffix == ".yaml" and "tokenizer" not in p.name.lower()
+        for p in path.iterdir()
+    )
+    has_ckpt = any(p.suffix in {".pt", ".pth"} for p in path.iterdir())
+    return has_yaml and has_ckpt
+
+
+def _looks_like_model_root(path: Path) -> bool:
+    """A model root has (at minimum) a `win_rate/` subdir."""
+    if not path.exists() or not path.is_dir():
+        return False
+    return all((path / sub).is_dir() for sub in REQUIRED_HEAD_SUBDIRS)
+
+
+def normalize_model_root(path_str: str) -> Path | None:
+    """
+    Accept any of:
+      - A model root containing `win_rate/` (and optionally other heads).
+      - A bare legacy checkpoint dir (win_rate itself) — passed through as-is;
+        the inference script auto-detects it as a single-head legacy layout.
+      - A path *inside* a model root (e.g. `.../win_rate`) — normalize to its parent.
+    """
+    if not path_str:
+        return None
+    path = Path(path_str)
+    if not path.is_absolute():
+        path = (ROOT_DIR / path).resolve()
+    if _looks_like_model_root(path):
+        return path
+    parent = path.parent
+    if _looks_like_model_root(parent):
+        return parent
+    # Legacy: user points directly at a single-head checkpoint dir (e.g. win_rate/).
+    if _has_ckpt_and_yaml(path):
+        return path
+    return None
+
+
 def discover_model_paths() -> list[str]:
     options: list[str] = []
-    if not MODEL_ROOT.exists():
-        return options
-
-    for child in sorted(MODEL_ROOT.iterdir()):
-        if not child.is_dir():
-            continue
-        if "win_rate" not in child.name.lower():
-            continue
-        has_model_file = any(p.suffix in {".pth", ".pt"} for p in child.iterdir())
-        has_yaml = any(
-            p.suffix == ".yaml" and "tokenizer" not in p.name.lower()
-            for p in child.iterdir()
-        )
-        if has_model_file and has_yaml:
-            options.append(str(child))
-
+    if _looks_like_model_root(MODEL_ROOT):
+        options.append(str(MODEL_ROOT))
+    # Legacy fallback: surface MODEL_ROOT/win_rate if only that exists.
+    legacy = MODEL_ROOT / "win_rate"
+    if not options and _has_ckpt_and_yaml(legacy):
+        options.append(str(legacy))
     return options
 
 
 def choose_default_model_path(model_options: list[str]) -> str:
     if model_options:
         return model_options[0]
-
-    fallback = MODEL_ROOT / "win_rate"
-    if fallback.exists() and fallback.is_dir():
-        return str(fallback)
-
+    if MODEL_ROOT.exists() and MODEL_ROOT.is_dir():
+        return str(MODEL_ROOT)
     return ""
 
 
@@ -160,6 +196,150 @@ def build_team_swings(win_rate: list[dict[str, Any]], horizon: float = 5.0) -> d
     return {
         "largest_team1_drop_5s": largest_drop if largest_drop["start"] is not None else None,
         "largest_team1_rise_5s": largest_rise if largest_rise["start"] is not None else None,
+    }
+
+
+def build_advanced_metrics(rounds: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Aggregate per-player advanced metrics + a |swing|-sorted kill ranking.
+
+    player_stats per player:
+      avg_kill_opp        — mean of next_kill[idx]   across all ticks they were in
+      avg_death_opp       — mean of next_death[idx]
+      avg_survive_chance  — mean of alive_pred[idx]
+      hard_win_rate       — kills with difficulty > 1 / hard duels they were involved in
+      easy_win_rate       — kills with 0 < difficulty < 1 / easy duels they were involved in
+      highlight_rate      — fraction of rounds where their total contribution >= HIGHLIGHT_THR
+
+    A duel is "hard" for the attacker when difficulty > 1 (model thought they would lose)
+    and "easy" when difficulty < 1. The victim sees the inverse — losing a fight where they
+    were favored counts as a missed easy duel; losing a fight where they were the underdog
+    counts as a missed hard duel. We keep the convention symmetric so each player's
+    hard_win_rate + easy_win_rate is bounded in [0, 1] regardless of role.
+    """
+    HIGHLIGHT_THRESHOLD = 0.20
+
+    kill_ranking: list[dict[str, Any]] = []
+    agg: dict[str, dict[str, Any]] = {}
+
+    def ensure(name: str, team_hint: str) -> dict[str, Any]:
+        if name not in agg:
+            agg[name] = {
+                "team": team_hint,
+                "kill_sum": 0.0,
+                "death_sum": 0.0,
+                "survive_sum": 0.0,
+                "tick_n": 0,
+                "hard_kills": 0,
+                "hard_attempts": 0,
+                "easy_kills": 0,
+                "easy_attempts": 0,
+                "highlights": 0,
+                "rounds": 0,
+            }
+        elif agg[name]["team"] == "Unknown" and team_hint != "Unknown":
+            agg[name]["team"] = team_hint
+        return agg[name]
+
+    for rd in rounds:
+        ticks = rd.get("ticks") or []
+        first_tick = ticks[0] if ticks else {}
+        players_info = first_tick.get("players_info") or []
+        name_to_idx: dict[str, int] = {}
+        for i, p in enumerate(players_info):
+            name = p.get("name")
+            if name and i < 10:
+                name_to_idx[name] = i
+
+        team1_set = set(rd.get("team1_players") or [])
+        team2_set = set(rd.get("team2_players") or [])
+
+        def team_of(name: str) -> str:
+            if name in team1_set:
+                return "team1"
+            if name in team2_set:
+                return "team2"
+            return "Unknown"
+
+        for k in rd.get("kills") or []:
+            attacker = k.get("killer", "Unknown")
+            victim = k.get("victim", "Unknown")
+            kill_ranking.append(
+                {
+                    "round": rd.get("round_id"),
+                    "round_seconds": safe_float(k.get("round_seconds", 0.0)),
+                    "attacker": attacker,
+                    "victim": victim,
+                    "swing": safe_float(k.get("kill_impact", 0.0)),
+                    "difficulty": safe_float(k.get("difficulty", 0.0)),
+                }
+            )
+
+            difficulty = safe_float(k.get("difficulty", 0.0))
+            attacker_entry = ensure(attacker, team_of(attacker))
+            victim_entry = ensure(victim, team_of(victim))
+            if difficulty > 1.0:
+                attacker_entry["hard_attempts"] += 1
+                attacker_entry["hard_kills"] += 1
+                victim_entry["easy_attempts"] += 1  # victim was favored but lost
+            elif 0.0 < difficulty < 1.0:
+                attacker_entry["easy_attempts"] += 1
+                attacker_entry["easy_kills"] += 1
+                victim_entry["hard_attempts"] += 1  # victim was the underdog and still lost
+
+        for name, idx in name_to_idx.items():
+            entry = ensure(name, team_of(name))
+            entry["rounds"] += 1
+            for tk in ticks:
+                nk = tk.get("next_kill") or []
+                nd = tk.get("next_death") or []
+                ap = tk.get("alive_pred") or []
+                if idx < len(nk):
+                    entry["kill_sum"] += safe_float(nk[idx])
+                if idx < len(nd):
+                    entry["death_sum"] += safe_float(nd[idx])
+                if idx < len(ap):
+                    entry["survive_sum"] += safe_float(ap[idx])
+                entry["tick_n"] += 1
+
+        for item in rd.get("round_summary", {}).get("per_player", []):
+            name = item.get("player")
+            if not name:
+                continue
+            entry = ensure(name, team_of(name))
+            if safe_float(item.get("total_contribution", 0.0)) >= HIGHLIGHT_THRESHOLD:
+                entry["highlights"] += 1
+
+    player_stats: list[dict[str, Any]] = []
+    for name, a in agg.items():
+        ticks_n = max(1, a["tick_n"])
+        rounds_n = max(1, a["rounds"])
+        hard_n = a["hard_attempts"]
+        easy_n = a["easy_attempts"]
+        player_stats.append(
+            {
+                "player": name,
+                "team": a["team"],
+                "avg_kill_opp": a["kill_sum"] / ticks_n,
+                "avg_death_opp": a["death_sum"] / ticks_n,
+                "avg_survive_chance": a["survive_sum"] / ticks_n,
+                "hard_win_rate": (a["hard_kills"] / hard_n) if hard_n > 0 else 0.0,
+                "easy_win_rate": (a["easy_kills"] / easy_n) if easy_n > 0 else 0.0,
+                "highlight_rate": a["highlights"] / rounds_n,
+                "rounds": int(a["rounds"]),
+                "hard_attempts": int(hard_n),
+                "easy_attempts": int(easy_n),
+            }
+        )
+
+    player_stats.sort(
+        key=lambda x: (-x["hard_win_rate"], -x["avg_kill_opp"], -x["highlight_rate"])
+    )
+    kill_ranking.sort(key=lambda x: abs(safe_float(x.get("swing", 0.0))), reverse=True)
+
+    return {
+        "kill_ranking": kill_ranking,
+        "player_stats": player_stats,
     }
 
 
@@ -273,6 +453,8 @@ def build_dashboard_payload(raw_results: dict[str, Any]) -> dict[str, Any]:
                 "start_inventory": start_inventory,
                 "round_summary": round_summary,
                 "swings": swings,
+                "map_name": val.get("map_name"),
+                "ticks": val.get("ticks", []),
             }
         )
 
@@ -311,10 +493,13 @@ def build_dashboard_payload(raw_results: dict[str, Any]) -> dict[str, Any]:
     mvp = winners[0] if winners else None
     svp = losers[0] if losers else None
 
+    advanced = build_advanced_metrics(rounds)
+
     return {
         "rounds": rounds,
         "overall": overall,
         "errors": errors,
+        "advanced": advanced,
         "match": {
             "team1_round_wins": team1_round_wins,
             "team2_round_wins": team2_round_wins,
@@ -328,10 +513,20 @@ def build_dashboard_payload(raw_results: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+MAX_FEATURED_ROUNDS = 6
+MAX_KILLS_PER_FEATURED_ROUND = 5
+MAX_KILL_RANKING_ENTRIES = 10
+
+
 def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
+    """
+    Compact payload for the LLM. We only keep the most decisive per-round data and
+    rely on the caller's prompt + whitelist to block hallucinations. Large raw
+    arrays (win_rate curves, per-tick player states) are dropped.
+    """
+
     def signed_percent(value: float) -> str:
-        num = safe_float(value, 0.0) * 100.0
-        return f"{num:+.2f}%"
+        return f"{safe_float(value, 0.0) * 100.0:+.2f}%"
 
     def format_contrib_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         formatted = []
@@ -339,24 +534,20 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
             kill_contrib = safe_float(item.get("kill_contribution", item.get("avg_kill_contribution", 0.0)))
             tactical_contrib = safe_float(item.get("tactical_contribution", item.get("avg_tactical_contribution", 0.0)))
             total_contrib = safe_float(item.get("total_contribution", item.get("avg_total_contribution", 0.0)))
-
-            cloned = dict(item)
-            cloned["kill_contribution_pct"] = signed_percent(kill_contrib)
-            cloned["tactical_contribution_pct"] = signed_percent(tactical_contrib)
-            cloned["total_contribution_pct"] = signed_percent(total_contrib)
-            cloned["avg_kill_contribution_pct"] = signed_percent(
-                safe_float(item.get("avg_kill_contribution", kill_contrib))
-            )
-            cloned["avg_tactical_contribution_pct"] = signed_percent(
-                safe_float(item.get("avg_tactical_contribution", tactical_contrib))
-            )
-            cloned["avg_total_contribution_pct"] = signed_percent(
-                safe_float(item.get("avg_total_contribution", total_contrib))
-            )
-            formatted.append(cloned)
+            entry = {
+                "player": item.get("player"),
+                "kill_pct": signed_percent(kill_contrib),
+                "tactical_pct": signed_percent(tactical_contrib),
+                "total_pct": signed_percent(total_contrib),
+            }
+            if item.get("team") is not None:
+                entry["team"] = item["team"]
+            if item.get("rounds") is not None:
+                entry["rounds"] = item["rounds"]
+            formatted.append(entry)
         return formatted
 
-    def nearest_win_rate_at_time(win_rate_points: list[dict[str, Any]], t: float) -> float:
+    def nearest_wr(win_rate_points: list[dict[str, Any]], t: float) -> float:
         if not win_rate_points:
             return 0.0
         best = win_rate_points[0]
@@ -368,49 +559,45 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
                 best_gap = gap
         return safe_float(best.get("team1_win_rate", 0.0))
 
-    def kill_team_label(killer: str, team1_players: list[str], team2_players: list[str]) -> str:
-        if killer in team1_players:
+    def kill_team_label(killer: str, team1: list[str], team2: list[str]) -> str:
+        if killer in team1:
             return "team1"
-        if killer in team2_players:
+        if killer in team2:
             return "team2"
         return "unknown"
 
     def half_score(half_rounds: list[dict[str, Any]]) -> dict[str, int]:
-        team1 = 0
-        team2 = 0
+        t1 = t2 = 0
         for item in half_rounds:
             winner = item.get("winner")
             if winner == "team1":
-                team1 += 1
+                t1 += 1
             elif winner == "team2":
-                team2 += 1
-        return {"team1": team1, "team2": team2}
+                t2 += 1
+        return {"team1": t1, "team2": t2}
 
     def make_half_meta(name: str, half_rounds: list[dict[str, Any]]) -> dict[str, Any] | None:
         if not half_rounds:
             return None
-
         first = half_rounds[0]
         team1_on_ct = bool(first.get("team1_on_ct", False))
-        team1_side = "CT" if team1_on_ct else "T"
-        team2_side = "T" if team1_on_ct else "CT"
-        team1_role = "defense" if team1_on_ct else "attack"
-        team2_role = "attack" if team1_on_ct else "defense"
         round_ids = [int(x.get("round_id", 0)) for x in half_rounds if isinstance(x.get("round_id"), int)]
-
         return {
             "name": name,
-            "team1_side": team1_side,
-            "team2_side": team2_side,
-            "team1_role": team1_role,
-            "team2_role": team2_role,
+            "team1_side": "CT" if team1_on_ct else "T",
+            "team2_side": "T" if team1_on_ct else "CT",
+            "team1_role": "defense" if team1_on_ct else "attack",
+            "team2_role": "attack" if team1_on_ct else "defense",
             "round_start": min(round_ids) if round_ids else None,
             "round_end": max(round_ids) if round_ids else None,
             "score": half_score(half_rounds),
         }
 
-    rounds_data = []
     source_rounds = dashboard.get("rounds", [])
+
+    # Two-pass: build full per-round features (lean), then select top rounds and
+    # compact everyone else into a 1-line summary.
+    full_rounds: list[dict[str, Any]] = []
     for rd in source_rounds:
         win_rate = rd.get("win_rate", [])
         wr_values = [safe_float(x.get("team1_win_rate", 0.0)) for x in win_rate]
@@ -419,96 +606,92 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
         team1_on_ct = bool(rd.get("team1_on_ct", False))
         team1_side = "CT" if team1_on_ct else "T"
         team2_side = "T" if team1_on_ct else "CT"
-        team1_role = "defense" if team1_on_ct else "attack"
-        team2_role = "attack" if team1_on_ct else "defense"
-        round_start_inventory = rd.get("start_inventory", [])
-        kills = sorted(rd.get("kills", []), key=lambda x: safe_float(x.get("round_seconds", 0.0)))
 
-        if wr_values:
-            start_wr = wr_values[0]
-            end_wr = wr_values[-1]
-            max_wr = max(wr_values)
-            min_wr = min(wr_values)
-        else:
-            start_wr = end_wr = max_wr = min_wr = 0.0
+        start_wr = wr_values[0] if wr_values else 0.0
+        end_wr = wr_values[-1] if wr_values else 0.0
+        max_wr = max(wr_values) if wr_values else 0.0
+        min_wr = min(wr_values) if wr_values else 0.0
 
-        win_rate_timeline_text = [
-            f"本回合阵营: team1={team1_side}({team1_role}), team2={team2_side}({team2_role})",
-            f"回合开始 team1 胜率 {start_wr * 100:.1f}%",
-            f"回合结束 team1 胜率 {end_wr * 100:.1f}%",
-            f"回合内最高 {max_wr * 100:.1f}% / 最低 {min_wr * 100:.1f}%",
-        ]
-
-        kill_win_rate_transitions = []
-        for kill in kills:
+        kills_sorted = sorted(rd.get("kills", []), key=lambda x: safe_float(x.get("round_seconds", 0.0)))
+        transitions = []
+        for kill in kills_sorted:
             t = safe_float(kill.get("round_seconds", 0.0))
-            before = nearest_win_rate_at_time(win_rate, t - 0.12)
-            after = nearest_win_rate_at_time(win_rate, t + 0.12)
+            before = nearest_wr(win_rate, t - 0.12)
+            after = nearest_wr(win_rate, t + 0.12)
             delta = after - before
             killer = kill.get("killer", "Unknown")
-            assister = kill.get("assister")
-            assister_text = assister if assister else "None"
             victim = kill.get("victim", "Unknown")
-            weapon = kill.get("weapon", "Unknown")
-            headshot = bool(kill.get("headshot", False))
-            headshot_text = "Yes" if headshot else "No"
-            killer_team = kill_team_label(killer, team1_players, team2_players)
-
-            kill_win_rate_transitions.append(
+            transitions.append(
                 {
-                    "round_seconds": t,
+                    "t": round(t, 2),
                     "killer": killer,
-                    "assister": assister,
-                    "assister_text": assister_text,
+                    "killer_team": kill_team_label(killer, team1_players, team2_players),
                     "victim": victim,
-                    "weapon": weapon,
-                    "headshot": headshot,
-                    "headshot_text": headshot_text,
-                    "killer_team": killer_team,
-                    "team1_win_rate_before": before,
-                    "team1_win_rate_after": after,
-                    "team1_win_rate_delta": delta,
-                    "description": (
-                        f"{t:.2f}s {killer}({killer_team}) 击杀 {victim}({weapon}), "
-                        f"assister={assister_text}, headshot={headshot_text}, "
-                        f"team1 胜率 {before * 100:.1f}% -> {after * 100:.1f}% "
-                        f"(变化 {delta * 100:+.1f}%)"
-                    ),
+                    "weapon": kill.get("weapon", "Unknown"),
+                    "hs": bool(kill.get("headshot", False)),
+                    "assister": kill.get("assister"),
+                    "difficulty": round(safe_float(kill.get("difficulty", 0.0)), 3),
+                    "wr_delta_pct": round(delta * 100.0, 1),
                 }
             )
 
-        if kill_win_rate_transitions:
-            win_rate_timeline_text.extend(
-                [x["description"] for x in kill_win_rate_transitions]
-            )
+        # Interestingness = biggest absolute win-rate swing driven by a single kill.
+        peak_delta = max((abs(x["wr_delta_pct"]) for x in transitions), default=0.0)
 
-        rounds_data.append(
+        full_rounds.append(
             {
                 "round_id": rd.get("round_id"),
                 "winner": rd.get("winner"),
-                "winner_side": rd.get("winner_side"),
                 "team1_side": team1_side,
                 "team2_side": team2_side,
-                "team1_role": team1_role,
-                "team2_role": team2_role,
-                "team1_players": team1_players,
-                "team2_players": team2_players,
-                "round_start_inventory": round_start_inventory,
-                "win_rate_start": start_wr,
-                "win_rate_end": end_wr,
-                "win_rate_max": max_wr,
-                "win_rate_min": min_wr,
-                "swings": rd.get("swings", {}),
-                "kills": kills,
-                "kill_win_rate_transitions": kill_win_rate_transitions,
-                "win_rate_timeline_text": win_rate_timeline_text,
-                "round_final_player_contribution": format_contrib_items(
+                "wr_start_pct": round(start_wr * 100.0, 1),
+                "wr_end_pct": round(end_wr * 100.0, 1),
+                "wr_max_pct": round(max_wr * 100.0, 1),
+                "wr_min_pct": round(min_wr * 100.0, 1),
+                "peak_kill_delta_pct": peak_delta,
+                "kill_transitions": transitions,
+                "final_contrib": format_contrib_items(
                     rd.get("round_summary", {}).get("per_player", [])
                 ),
             }
         )
 
-    # Derive first/second half by side-switch boundaries to reduce LLM hallucination.
+    # Select the featured rounds (most decisive) and compact the rest.
+    sorted_by_interest = sorted(
+        full_rounds, key=lambda r: r["peak_kill_delta_pct"], reverse=True
+    )
+    featured_ids = {r["round_id"] for r in sorted_by_interest[:MAX_FEATURED_ROUNDS]}
+
+    featured_rounds: list[dict[str, Any]] = []
+    other_rounds: list[dict[str, Any]] = []
+    for r in full_rounds:
+        if r["round_id"] in featured_ids:
+            trimmed_transitions = sorted(
+                r["kill_transitions"],
+                key=lambda x: abs(x["wr_delta_pct"]),
+                reverse=True,
+            )[:MAX_KILLS_PER_FEATURED_ROUND]
+            trimmed_transitions.sort(key=lambda x: x["t"])
+            featured_rounds.append(
+                {**r, "kill_transitions": trimmed_transitions}
+            )
+        else:
+            other_rounds.append(
+                {
+                    "round_id": r["round_id"],
+                    "winner": r["winner"],
+                    "team1_side": r["team1_side"],
+                    "team2_side": r["team2_side"],
+                    "wr_start_pct": r["wr_start_pct"],
+                    "wr_end_pct": r["wr_end_pct"],
+                    "kill_count": len(r["kill_transitions"]),
+                }
+            )
+
+    featured_rounds.sort(key=lambda r: r["round_id"])
+    other_rounds.sort(key=lambda r: r["round_id"])
+
+    # Halves
     first_half_rounds: list[dict[str, Any]] = []
     second_half_rounds: list[dict[str, Any]] = []
     if source_rounds:
@@ -520,15 +703,9 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
                 boundaries.append(idx)
             prev_flag = curr_flag
         boundaries.append(len(source_rounds))
-
-        first_start = boundaries[0]
-        first_end = boundaries[1] if len(boundaries) > 1 else len(source_rounds)
-        first_half_rounds = source_rounds[first_start:first_end]
-
+        first_half_rounds = source_rounds[boundaries[0]:boundaries[1]]
         if len(boundaries) > 2:
-            second_start = boundaries[1]
-            second_end = boundaries[2]
-            second_half_rounds = source_rounds[second_start:second_end]
+            second_half_rounds = source_rounds[boundaries[1]:boundaries[2]]
         elif len(boundaries) > 1:
             second_half_rounds = source_rounds[boundaries[1]:]
 
@@ -537,11 +714,55 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
         "second_half": make_half_meta("second_half", second_half_rounds),
     }
 
+    # Advanced metrics summary — trimmed to keep the prompt compact.
+    advanced = dashboard.get("advanced", {}) or {}
+    adv_kill_ranking = [
+        {
+            "round": k.get("round"),
+            "t": round(safe_float(k.get("round_seconds", 0.0)), 2),
+            "attacker": k.get("attacker"),
+            "victim": k.get("victim"),
+            "swing_pct": signed_percent(k.get("swing", 0.0)),
+            "difficulty": round(safe_float(k.get("difficulty", 0.0)), 3),
+        }
+        for k in (advanced.get("kill_ranking") or [])[:MAX_KILL_RANKING_ENTRIES]
+    ]
+    adv_player_stats = [
+        {
+            "player": p.get("player"),
+            "team": p.get("team"),
+            "avg_kill_opp": round(safe_float(p.get("avg_kill_opp", 0.0)), 3),
+            "avg_death_opp": round(safe_float(p.get("avg_death_opp", 0.0)), 3),
+            "avg_survive_chance": round(safe_float(p.get("avg_survive_chance", 0.0)), 3),
+            "hard_win_rate": round(safe_float(p.get("hard_win_rate", 0.0)), 3),
+            "easy_win_rate": round(safe_float(p.get("easy_win_rate", 0.0)), 3),
+            "highlight_rate": round(safe_float(p.get("highlight_rate", 0.0)), 3),
+        }
+        for p in (advanced.get("player_stats") or [])
+    ]
+
+    match_info = dashboard.get("match", {}) or {}
+    whitelist = {
+        "team1_players": sorted(match_info.get("team1_players", []) or []),
+        "team2_players": sorted(match_info.get("team2_players", []) or []),
+        "valid_round_ids": sorted([r["round_id"] for r in full_rounds if r["round_id"] is not None]),
+    }
+
     return {
-        "match": dashboard.get("match", {}),
+        "match": {
+            "team1_round_wins": match_info.get("team1_round_wins"),
+            "team2_round_wins": match_info.get("team2_round_wins"),
+            "winner": match_info.get("winner"),
+            "mvp": (match_info.get("mvp") or {}).get("player"),
+            "svp": (match_info.get("svp") or {}).get("player"),
+        },
         "match_halves": match_halves,
+        "whitelist": whitelist,
         "overall_player_averages": format_contrib_items(dashboard.get("overall", [])),
-        "rounds": rounds_data,
+        "featured_rounds": featured_rounds,
+        "other_rounds": other_rounds,
+        "advanced_kill_ranking": adv_kill_ranking,
+        "advanced_player_stats": adv_player_stats,
     }
 
 
@@ -553,62 +774,76 @@ def build_chat_completion_url(base_url: str) -> str:
 
 
 def build_llm_prompts(llm_data: dict[str, Any], language: str) -> tuple[str, str]:
+    """
+    Two harness defenses to reduce hallucinations:
+      1. The system prompt lists the ONLY valid player names and round IDs. Anything
+         outside that set is forbidden.
+      2. The user prompt demands that every numeric claim be traceable to a JSON
+         field name the model must cite (e.g., featured_rounds[].kill_transitions[].wr_delta_pct).
+    """
     lang = (language or "zh").strip().lower()
     if lang not in {"zh", "en"}:
         lang = "zh"
 
+    whitelist = llm_data.get("whitelist", {}) or {}
+    team1_players = whitelist.get("team1_players", []) or []
+    team2_players = whitelist.get("team2_players", []) or []
+    valid_round_ids = whitelist.get("valid_round_ids", []) or []
+
+    all_players = sorted(set(team1_players) | set(team2_players))
+    data_json = json.dumps(llm_data, ensure_ascii=False)
+
     if lang == "en":
         system_prompt = (
-            "You are a professional CS2 tactical analyst. "
-            "Use round win-rate curves, kill events, and player contribution data "
-            "to produce an insightful and highly readable analysis in English. "
-            "Focus on key rounds, high-impact kills, clutch turnarounds, and team momentum shifts."
+            "You are a professional CS2 tactical analyst. Produce an insightful English review.\n\n"
+            "STRICT ANTI-HALLUCINATION RULES:\n"
+            f"- Valid player names (do NOT invent others): {all_players}\n"
+            f"- team1 roster: {team1_players}\n"
+            f"- team2 roster: {team2_players}\n"
+            f"- Valid round IDs: {valid_round_ids}\n"
+            "- Every numeric claim (win rate, swing, difficulty, contribution) MUST come directly "
+            "from the JSON data. Do not fabricate values, do not round aggressively.\n"
+            "- If a field is missing, say so instead of guessing.\n"
+            "- Do not invent kills, clutches, weapons, or round outcomes that are absent from the JSON.\n"
         )
         user_prompt = (
-            "Please complete the following tasks:\n"
-            "1) Summarize each player's performance (highlight rounds, weak rounds, key kills, tactical value).\n"
-            "2) Summarize each team (tempo, consistency, collapse points, comeback points).\n"
-            "3) First explicitly report first-half and second-half side assignment and score: who is CT/T and attack/defense, and the half score for each side.\n"
-            "   You MUST use match_halves.first_half and match_halves.second_half as the source of truth.\n"
-            "4) round_start_inventory is optional context: use it only when it helps explain key rounds (economy/loadout advantages).\n"
-            "5) Provide interesting stats (e.g., biggest 5-second drops, low-probability comebacks, high-probability throws).\n"
-            "6) Select ONLY the most interesting/key rounds (about 3-6 rounds), instead of covering every round.\n"
-            "   Prioritize rounds with major win-rate swings, high-impact kills, clutch/comeback moments, and tactical turning points.\n"
-            "7) For each selected round, explicitly state attack/defense side (team1/team2 and T/CT), opening/ending win rate, and key kill transitions.\n"
-            "   Prefer information from kill_win_rate_transitions and win_rate_timeline_text.\n"
-            "   When describing contribution numbers, prioritize *_pct fields (signed percentage strings).\n"
-            "   When describing kills, explicitly include assister_text and headshot_text (even when no assister).\n"
-            "8) Provide MVP/SVP rationale and verify consistency with statistics.\n"
-            "9) End with 3 actionable improvement suggestions.\n\n"
-            "Structured data (JSON):\n"
-            + json.dumps(llm_data, ensure_ascii=False)
+            "Deliver the following sections (concise, well-structured markdown):\n"
+            "1) Halves & score: cite match_halves.first_half / .second_half verbatim (sides and score).\n"
+            "2) Team narrative: tempo, consistency, collapse/comeback moments. Cite overall_player_averages + match.\n"
+            "3) Featured rounds: walk through each round in featured_rounds.\n"
+            "   For each, state team1_side/team2_side, wr_start_pct → wr_end_pct, and the 1-3 most decisive "
+            "   kill_transitions (use killer, victim, weapon, wr_delta_pct, difficulty).\n"
+            "4) Per-player review: cite advanced_player_stats (avg_kill_opp, avg_survive_chance, hard_win_rate) "
+            "   alongside overall_player_averages. Only comment on players in the whitelist.\n"
+            "5) Fun stats from advanced_kill_ranking (top swings and their difficulty).\n"
+            "6) MVP/SVP check: compare match.mvp / match.svp to advanced_player_stats; confirm or disagree with data.\n"
+            "7) Three actionable improvement suggestions.\n\n"
+            "Data (JSON):\n" + data_json
         )
         return system_prompt, user_prompt
 
     system_prompt = (
-        "你是专业的 CS2 战术分析师。"
-        "请根据每回合胜率曲线、击杀事件、玩家贡献数据，"
-        "输出有洞察力、可读性强的中文总结。"
-        "要重点指出关键回合、高影响力击杀、残局翻盘、以及团队波动。"
+        "你是专业的 CS2 战术分析师，请输出中文复盘。\n\n"
+        "严格防幻觉规则：\n"
+        f"- 合法玩家名（不得发明其它名字）：{all_players}\n"
+        f"- team1 阵容：{team1_players}\n"
+        f"- team2 阵容：{team2_players}\n"
+        f"- 合法回合 ID：{valid_round_ids}\n"
+        "- 任何数字（胜率、swing、难度、贡献）必须直接来自下方 JSON，不许编造或过度取整。\n"
+        "- 如果某字段缺失，直接说明“数据中未提供”，不要猜。\n"
+        "- 不要编造 JSON 里没有的击杀、残局、武器、回合结果。\n"
     )
     user_prompt = (
-        "请完成以下任务：\n"
-        "1) 按玩家逐个总结表现（亮点回合、低谷回合、关键击杀、战术价值）。\n"
-        "2) 按队伍总结（节奏、稳定性、崩盘时刻、翻盘时刻）。\n"
-        "3) 先明确写出上半场和下半场的阵营归属与比分：谁是 CT/T、谁是进攻/防守，以及上下半场分别比分。\n"
-        "   这部分必须以 match_halves.first_half 和 match_halves.second_half 为唯一依据。\n"
-        "4) round_start_inventory 仅作为辅助上下文：只在解释关键回合时按需引用（例如经济局/装备优势），不需要逐回合罗列。\n"
-        "5) 输出趣味数据（如5秒内胜率暴跌、低胜率翻盘、高胜率被翻盘）。\n"
-        "6) 不需要逐回合全覆盖，只挑最有趣/最关键的回合进行讲解（建议 3-6 个回合）。\n"
-        "   优先选择胜率波动大、关键击杀、残局翻盘、战术转折明显的回合。\n"
-        "7) 对于每个被选中的回合，明确写出攻防归属（team1/team2 及 T/CT），并说明开局/结尾胜率与关键击杀前后变化。\n"
-        "   优先使用 kill_win_rate_transitions 和 win_rate_timeline_text 中的信息。\n"
-        "   描述贡献数值时优先使用 *_pct 字段（已带正负号和百分号）。\n"
-        "   描述击杀时必须显式写出 assister_text 和 headshot_text（无助攻也要写出来）。\n"
-        "8) 给出 MVP/SVP 评价理由，并验证是否与统计结果一致。\n"
-        "9) 最后给出 3 条可执行改进建议。\n\n"
-        "以下是结构化数据(JSON)：\n"
-        + json.dumps(llm_data, ensure_ascii=False)
+        "请按如下结构输出（markdown，精炼）：\n"
+        "1) 上/下半场阵营与比分：严格以 match_halves.first_half / .second_half 为准。\n"
+        "2) 团队叙事：节奏、稳定性、崩盘/翻盘瞬间。引用 overall_player_averages 与 match。\n"
+        "3) 精选回合讲解：遍历 featured_rounds 列表。\n"
+        "   每一回合写出 team1_side / team2_side、wr_start_pct → wr_end_pct，并挑 1-3 个 kill_transitions 里 |wr_delta_pct| 最大的击杀展开（注明 killer、victim、weapon、wr_delta_pct、difficulty）。\n"
+        "4) 玩家点评：结合 advanced_player_stats（avg_kill_opp / avg_survive_chance / hard_win_rate）与 overall_player_averages，只评论白名单里的玩家。\n"
+        "5) 趣味数据：从 advanced_kill_ranking 里挑 top swing 的击杀，说明对应 difficulty。\n"
+        "6) MVP/SVP 复核：对照 advanced_player_stats 看 match.mvp / match.svp 是否合理，给出数据支持或反对。\n"
+        "7) 三条可执行改进建议。\n\n"
+        "以下是结构化数据(JSON)：\n" + data_json
     )
     return system_prompt, user_prompt
 
@@ -683,7 +918,7 @@ def _run_analysis_job(
         "demo_analysis.get_round_win_rate",
         "--demo_path",
         str(upload_path),
-        "--model_path",
+        "--model_root",
         model_path,
         "--device",
         device,
@@ -692,6 +927,8 @@ def _run_analysis_job(
         "--batch_size",
         batch_size,
     ]
+    if device == "cpu":
+        cmd.append("--skip_duel")
 
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
@@ -784,6 +1021,102 @@ def asset_file(filename: str):
     return send_from_directory(ASSETS_DIR, filename)
 
 
+# ---- third_party 2D replay viewer (built SPA mounted under /viewer/) ----
+
+@app.get("/viewer/")
+@app.get("/viewer/player")
+def viewer_index():
+    """Serve the SPA shell for the viewer's home and /player routes."""
+    return send_from_directory(VIEWER_DIR, "index.html")
+
+
+@app.get("/viewer/<path:filename>")
+def viewer_assets(filename: str):
+    """Serve any built asset (JS/CSS/PNG/wasm/worker.js) under /viewer/."""
+    target = (VIEWER_DIR / filename).resolve()
+    try:
+        target.relative_to(VIEWER_DIR.resolve())
+    except ValueError:
+        return jsonify({"error": "invalid path"}), 404
+    if not target.is_file():
+        # Unknown sub-route → fall back to SPA shell so client routing still works.
+        return send_from_directory(VIEWER_DIR, "index.html")
+    return send_from_directory(VIEWER_DIR, filename)
+
+
+def build_viewer_timeline(dashboard: dict[str, Any]) -> dict[str, Any]:
+    """Flatten per-tick predictions into the shape the 2D viewer's overlays expect.
+
+    The bundled viewer (`static/viewer/`) reads a `winrateurl` JSON and drives its
+    win-rate curve, next-kill / next-death bars, and duel matrix from the entry
+    that matches the current round + round_seconds. Fields consumed by the viewer:
+    round, seconds, ct_win_rate, alive_pred (10), next_kill (11), next_death (11),
+    duel (10x10), players_info[{name}]. See `winRateData.js:normalizeTimelineEntry`.
+    """
+    timeline: list[dict[str, Any]] = []
+    for rd in dashboard.get("rounds") or []:
+        round_id = rd.get("round_id")
+        for tick in rd.get("ticks") or []:
+            seconds = tick.get("round_seconds")
+            if seconds is None:
+                continue
+            players = [
+                {"name": p.get("name")}
+                for p in (tick.get("players_info") or [])
+                if p.get("name")
+            ]
+            timeline.append(
+                {
+                    "round": round_id,
+                    "seconds": seconds,
+                    "ct_win_rate": tick.get("ct_win_rate"),
+                    "alive_pred": tick.get("alive_pred"),
+                    "next_kill": tick.get("next_kill"),
+                    "next_death": tick.get("next_death"),
+                    "duel": tick.get("duel"),
+                    "players_info": players,
+                }
+            )
+    return {
+        "meta": {"roundBase": 1},
+        "timeline": timeline,
+    }
+
+
+@app.get("/api/winrate_timeline/<analysis_id>")
+def serve_winrate_timeline(analysis_id: str):
+    """Serve the per-tick prediction timeline consumed by the 2D viewer overlays."""
+    if not re.fullmatch(r"[0-9a-fA-F]{8,64}", analysis_id):
+        return jsonify({"error": "bad analysis_id"}), 400
+    entry = ANALYSIS_CACHE.get(analysis_id)
+    if not entry:
+        return jsonify({"error": "analysis not found"}), 404
+    return jsonify(build_viewer_timeline(entry["dashboard"]))
+
+
+@app.get("/api/demo_file/<run_id>")
+@app.get("/api/demo_file/<run_id>.dem")
+def serve_uploaded_demo(run_id: str):
+    """Stream the originally uploaded .dem file so the in-browser parser can fetch it.
+
+    Accepts both `<run_id>` and `<run_id>.dem` — the 2D viewer's WASM parser picks
+    demo format from the URL suffix, so we surface `.dem` by default.
+    """
+    if not re.fullmatch(r"[0-9a-fA-F]{8,64}", run_id):
+        return jsonify({"error": "bad run_id"}), 400
+    matches = sorted(UPLOAD_DIR.glob(f"{run_id}_*"))
+    if not matches:
+        return jsonify({"error": "demo not found"}), 404
+    target = matches[0]
+    return send_from_directory(
+        UPLOAD_DIR,
+        target.name,
+        as_attachment=False,
+        download_name=target.name.split("_", 1)[-1],
+        mimetype="application/octet-stream",
+    )
+
+
 @app.post("/api/analyze")
 def analyze_demo():
     dem_file = request.files.get("demo_file")
@@ -795,13 +1128,17 @@ def analyze_demo():
     batch_size = request.form.get("batch_size", "32").strip()
 
     if not model_path:
-        return jsonify({"error": "请先选择模型目录"}), 400
+        return jsonify({"error": "请先选择模型根目录"}), 400
 
-    model_dir = Path(model_path)
-    if not model_dir.is_absolute():
-        model_dir = (ROOT_DIR / model_dir).resolve()
-    if not model_dir.exists() or not model_dir.is_dir():
-        return jsonify({"error": f"模型目录不存在或不是文件夹: {model_path}"}), 400
+    model_dir = normalize_model_root(model_path)
+    if model_dir is None:
+        return jsonify({
+            "error": (
+                f"模型根目录无效: {model_path}\n"
+                f"至少需要 win_rate 子目录（或直接传入 win_rate 目录）；"
+                f"alive / nxt_kill / nxt_death / duel 缺失时会自动走 fallback。"
+            )
+        }), 400
 
     model_path = str(model_dir)
 
@@ -827,6 +1164,7 @@ def analyze_demo():
             "current_round": None,
             "analysis_id": None,
             "dashboard": None,
+            "run_id": run_id,
         }
 
     worker = threading.Thread(
@@ -858,6 +1196,7 @@ def analyze_status(job_id: str):
             "logs": "\n".join(logs[-120:]),
             "error": job.get("error", ""),
             "analysis_id": job.get("analysis_id"),
+            "run_id": job.get("run_id"),
         }
 
         if job.get("status") == "succeeded":

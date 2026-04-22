@@ -3,6 +3,8 @@ const state = {
   dashboard: null,
   selectedRoundIndex: 0,
   chart: null,
+  runId: null,
+  advancedExpanded: false,
 };
 
 const refs = {
@@ -29,6 +31,11 @@ const refs = {
   llmModel: document.getElementById("llm-model"),
   llmBaseUrl: document.getElementById("llm-base-url"),
   llmTemperature: document.getElementById("llm-temperature"),
+  viewerLaunchView: document.getElementById("viewer-launch-view"),
+  viewerOpen: document.getElementById("viewer-open"),
+  advancedView: document.getElementById("advanced-metrics-view"),
+  advancedBody: document.getElementById("advanced-metrics-body"),
+  advancedToggle: document.getElementById("advanced-toggle"),
 };
 
 const USER_PREFS_KEY = "csnet.user.preferences.v1";
@@ -39,17 +46,38 @@ const I18N = {
     subtitle: "上传 DEM 后自动计算每回合胜率、击杀影响和玩家贡献，并生成可交互复盘与 LLM 解读。",
     section_run: "1. 运行分析",
     dem_file: "DEM 文件",
-    model_path: "模型目录",
-    model_path_placeholder: "请输入模型目录，例如 /Users/.../cs-net-models/win_rate",
+    model_path: "模型根目录",
+    model_path_placeholder: "模型根目录（含 alive / nxt_kill / nxt_death / win_rate / duel 子目录）",
     device: "设备",
     batch_size: "Batch Size",
     analyze_hint: "进度说明: 解析 demo 一般需要 30~60 秒，运行模型通常不到 1 分钟。分析中会显示当前阶段和正在处理的回合。",
     analyze_btn: "开始分析",
     status_waiting: "等待上传 DEM...",
     section_round_trend: "2. 回合走势",
-    section_round_summary: "3. 当前回合最终贡献",
-    section_overall_summary: "4. 全场平均贡献",
-    section_llm: "5. 语言模型总结",
+    section_viewer: "3. 2D 回放器",
+    viewer_open: "在新标签页打开 2D 回放",
+    viewer_hint: "在新标签页打开同一 demo 的 2D 回放（基于 third_party/csgo-2d-demo-viewer-dev，包含烟雾/闪光/手雷弹道）。",
+    section_tick_state: "4. 回合实时态势",
+    section_round_summary: "5. 当前回合最终贡献",
+    section_overall_summary: "6. 全场平均贡献",
+    section_advanced: "7. 高级指标",
+    advanced_toggle: "展开/收起",
+    advanced_kill_rank: "击杀难度 / 影响排行",
+    advanced_player_table: "玩家高级指标",
+    advanced_kill_rank_hint: "按 |swing| 降序；难度 difficulty>1 表示在被预测劣势下完成击杀。",
+    col_attacker: "击杀者",
+    col_victim: "被杀",
+    col_swing: "Swing",
+    col_difficulty: "难度",
+    col_round: "回合",
+    col_second: "时刻(s)",
+    col_avg_kill_opp: "平均击杀机会",
+    col_avg_death_opp: "平均阵亡威胁",
+    col_avg_survive: "平均存活率",
+    col_hard_win: "硬仗胜率",
+    col_easy_win: "轻松局胜率",
+    col_highlight: "高光回合占比",
+    section_llm: "8. 语言模型总结",
     api_key: "API Key",
     model_name: "模型名",
     model_name_placeholder: "gpt-4.1 / deepseek-chat / qwen-max",
@@ -101,17 +129,38 @@ const I18N = {
     subtitle: "Upload a DEM to compute round win rates, kill impact, and player contribution with interactive replay and LLM insights.",
     section_run: "1. Run Analysis",
     dem_file: "DEM File",
-    model_path: "Model Path",
-    model_path_placeholder: "Enter model path, e.g. /Users/.../cs-net-models/win_rate",
+    model_path: "Model Root",
+    model_path_placeholder: "Model root dir containing alive / nxt_kill / nxt_death / win_rate / duel",
     device: "Device",
     batch_size: "Batch Size",
     analyze_hint: "Progress note: demo parsing usually takes 30-60s, and model inference is usually under 1 minute.",
     analyze_btn: "Start Analysis",
     status_waiting: "Waiting for DEM upload...",
     section_round_trend: "2. Round Trend",
-    section_round_summary: "3. Final Contribution (Current Round)",
-    section_overall_summary: "4. Overall Average Contribution",
-    section_llm: "5. LLM Summary",
+    section_viewer: "3. 2D Replay Viewer",
+    viewer_open: "Open 2D Replay in New Tab",
+    viewer_hint: "Open the same demo in the bundled 2D replay viewer (from third_party/csgo-2d-demo-viewer-dev, includes smoke/flash/grenade trajectories).",
+    section_tick_state: "4. Round Live State",
+    section_round_summary: "5. Final Contribution (Current Round)",
+    section_overall_summary: "6. Overall Average Contribution",
+    section_advanced: "7. Advanced Metrics",
+    advanced_toggle: "Expand/Collapse",
+    advanced_kill_rank: "Kill Difficulty / Impact Ranking",
+    advanced_player_table: "Per-Player Advanced Metrics",
+    advanced_kill_rank_hint: "Sorted by |swing|. difficulty>1 means the kill happened against a model-predicted disadvantage.",
+    col_attacker: "Attacker",
+    col_victim: "Victim",
+    col_swing: "Swing",
+    col_difficulty: "Difficulty",
+    col_round: "Round",
+    col_second: "Time(s)",
+    col_avg_kill_opp: "Avg Kill Opportunity",
+    col_avg_death_opp: "Avg Death Threat",
+    col_avg_survive: "Avg Survival",
+    col_hard_win: "Hard-Duel Win",
+    col_easy_win: "Easy-Duel Win",
+    col_highlight: "Highlight Rate",
+    section_llm: "8. LLM Summary",
     api_key: "API Key",
     model_name: "Model Name",
     model_name_placeholder: "gpt-4.1 / deepseek-chat / qwen-max",
@@ -373,6 +422,40 @@ function contributionCell(value) {
   const color = contributionTextColor(value);
   const percent = `${(Number(value || 0) * 100).toFixed(2)}%`;
   return `<span class="mono contribution-cell" style="color:${color}">${percent}</span>`;
+}
+
+function signedColor(signed, scale = 0.2) {
+  const v = Number(signed || 0);
+  const t = clamp(Math.abs(v) / scale, 0, 1);
+  if (v >= 0) {
+    const r = Math.round(lerp(255, 34, t));
+    const g = Math.round(lerp(255, 139, t));
+    const b = Math.round(lerp(255, 34, t));
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  const r = Math.round(lerp(255, 220, t));
+  const g = Math.round(lerp(255, 40, t));
+  const b = Math.round(lerp(255, 40, t));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function difficultyCell(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) {
+    return `<span class="mono contribution-cell table-meta-text">-</span>`;
+  }
+  const color = signedColor(num - 1, 1.5);
+  return `<span class="mono contribution-cell" style="color:${color}">${num.toFixed(3)}</span>`;
+}
+
+function rateCell(value, { center = 0.5, scale = 0.5, invert = false } = {}) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return `<span class="mono contribution-cell table-meta-text">-</span>`;
+  }
+  const signed = invert ? center - num : num - center;
+  const color = signedColor(signed, scale);
+  return `<span class="mono contribution-cell" style="color:${color}">${(num * 100).toFixed(2)}%</span>`;
 }
 
 function playerCell(player, row) {
@@ -680,15 +763,98 @@ function renderCurrentRound() {
   renderHoverContrib(round, 0);
 }
 
+function renderViewerLink() {
+  if (!refs.viewerOpen) return;
+  if (!state.runId) {
+    refs.viewerOpen.classList.add("disabled");
+    refs.viewerOpen.removeAttribute("href");
+    return;
+  }
+  refs.viewerOpen.classList.remove("disabled");
+  const demoUrl = `${window.location.origin}/api/demo_file/${encodeURIComponent(state.runId)}.dem`;
+  const params = [
+    `demourl=${encodeURIComponent(demoUrl)}`,
+    "directfetch=1",
+  ];
+  if (state.analysisId) {
+    const timelineUrl = `${window.location.origin}/api/winrate_timeline/${encodeURIComponent(state.analysisId)}`;
+    params.push(`winrateurl=${encodeURIComponent(timelineUrl)}`);
+  }
+  refs.viewerOpen.setAttribute("href", `/viewer/player?${params.join("&")}`);
+}
+
+function fmtPercent2(v) {
+  const num = Number(v);
+  if (!Number.isFinite(num)) return "-";
+  return `${(num * 100).toFixed(2)}%`;
+}
+
+function fmtFloat3(v) {
+  const num = Number(v);
+  if (!Number.isFinite(num)) return "-";
+  return num.toFixed(3);
+}
+
+function renderAdvancedMetrics() {
+  if (!refs.advancedBody) return;
+  const adv = state.dashboard?.advanced || {};
+  const killRanking = adv.kill_ranking || [];
+  const playerStats = adv.player_stats || [];
+
+  if (!killRanking.length && !playerStats.length) {
+    refs.advancedBody.innerHTML = `<p>${t("no_data")}</p>`;
+    return;
+  }
+
+  const killCols = [
+    { key: "round", label: t("col_round"), render: (v) => `<span class="mono table-meta-text">${v}</span>` },
+    { key: "round_seconds", label: t("col_second"), render: (v) => `<span class="mono table-meta-text">${fmtFloat3(v)}</span>` },
+    { key: "attacker", label: t("col_attacker"), render: (v) => `<span class="table-meta-text">${v}</span>` },
+    { key: "victim", label: t("col_victim"), render: (v) => `<span class="table-meta-text">${v}</span>` },
+    { key: "swing", label: t("col_swing"), render: (v) => contributionCell(v) },
+    { key: "difficulty", label: t("col_difficulty"), render: (v) => difficultyCell(v) },
+  ];
+
+  const playerCols = [
+    { key: "player", label: t("col_player"), render: (v) => `<span class="table-meta-text">${v}</span>` },
+    { key: "team", label: t("col_team"), render: (v) => `<span class="table-meta-text">${v}</span>` },
+    { key: "avg_kill_opp", label: t("col_avg_kill_opp"), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
+    { key: "avg_death_opp", label: t("col_avg_death_opp"), render: (v) => rateCell(v, { center: 0.5, scale: 0.5, invert: true }) },
+    { key: "avg_survive_chance", label: t("col_avg_survive"), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
+    { key: "hard_win_rate", label: t("col_hard_win"), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
+    { key: "easy_win_rate", label: t("col_easy_win"), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
+    { key: "highlight_rate", label: t("col_highlight"), render: (v) => rateCell(v, { center: 0.1, scale: 0.2 }) },
+  ];
+
+  const collapsed = !state.advancedExpanded;
+  const ranking = collapsed ? killRanking.slice(0, 8) : killRanking;
+  const ranking_more = killRanking.length > ranking.length
+    ? `<p class="hint">+${killRanking.length - ranking.length} more — ${t("advanced_toggle")}</p>`
+    : "";
+
+  refs.advancedBody.innerHTML = [
+    `<h3>${t("advanced_kill_rank")}</h3>`,
+    `<p class="hint">${t("advanced_kill_rank_hint")}</p>`,
+    buildTableHtml(ranking, killCols),
+    ranking_more,
+    `<h3>${t("advanced_player_table")}</h3>`,
+    buildTableHtml(playerStats, playerCols),
+  ].join("");
+}
+
 function renderDashboard() {
   refs.roundView.classList.remove("hidden");
   refs.roundSummaryView.classList.remove("hidden");
   refs.overallSummaryView.classList.remove("hidden");
   refs.llmView.classList.remove("hidden");
+  if (refs.viewerLaunchView) refs.viewerLaunchView.classList.remove("hidden");
+  if (refs.advancedView) refs.advancedView.classList.remove("hidden");
 
   renderRoundTabs();
   renderCurrentRound();
   renderOverallSummary();
+  renderViewerLink();
+  renderAdvancedMetrics();
 
   const errors = state.dashboard?.errors || {};
   if (Object.keys(errors).length > 0) {
@@ -762,6 +928,13 @@ async function waitAnalyzeDone(jobId) {
   }
 }
 
+if (refs.advancedToggle) {
+  refs.advancedToggle.addEventListener("click", () => {
+    state.advancedExpanded = !state.advancedExpanded;
+    renderAdvancedMetrics();
+  });
+}
+
 restoreUserPrefs();
 bindUserPrefsPersistence();
 applyLanguage();
@@ -787,6 +960,7 @@ refs.analyzeForm.addEventListener("submit", async (event) => {
     state.analysisId = done.analysis_id;
     state.dashboard = done.dashboard;
     state.selectedRoundIndex = 0;
+    state.runId = done.run_id || null;
 
     renderDashboard();
     renderProgress(done);

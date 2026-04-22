@@ -41,8 +41,8 @@
             <input type="file" name="demo_file" id="demo-file" accept=".dem" required />
           </label>
           <label>
-            <span data-i18n="model_path">模型目录</span>
-            <input type="text" name="model_path" id="model-path" value="{{ default_model_path }}" list="model-path-list" autocomplete="off" data-i18n-placeholder="model_path_placeholder" placeholder="请输入模型目录，例如 /Users/.../cs-net-models/win_rate" required />
+            <span data-i18n="model_path">模型根目录</span>
+            <input type="text" name="model_path" id="model-path" value="{{ default_model_path }}" list="model-path-list" autocomplete="off" data-i18n-placeholder="model_path_placeholder" placeholder="请输入模型根目录，例如 /Users/.../cs-net-models (需包含 alive / nxt_kill / nxt_death / win_rate / duel 子目录)" required />
             <datalist id="model-path-list">
               {% for p in model_options %}
               <option value="{{ p }}"></option>
@@ -75,21 +75,73 @@
       </div>
       <div id="round-tabs" class="round-tabs"></div>
       <div id="chart" class="chart"></div>
+      <p class="hint" data-i18n="radar_hint">悬停胜率曲线的某个时刻，下方雷达与指标面板会同步刷新。</p>
       <div id="hover-player-stats" class="hover-player-stats"></div>
     </section>
 
+    <section class="panel viewer-launch hidden" id="viewer-launch-view">
+      <div class="panel-head">
+        <h2 data-i18n="section_viewer">3. 2D 回放器</h2>
+        <a id="viewer-open" class="viewer-link" href="#" target="_blank" rel="noopener noreferrer" data-i18n="viewer_open">打开 2D 回放</a>
+      </div>
+      <p class="hint" data-i18n="viewer_hint">在新标签页打开同一 demo 的 2D 回放（基于 third_party/csgo-2d-demo-viewer-dev，包含烟雾/闪光/手雷弹道）。</p>
+    </section>
+
+    <section class="panel tick-view hidden" id="tick-view">
+      <div class="panel-head">
+        <h2 data-i18n="section_tick_state">4. 回合实时态势</h2>
+        <div id="tick-time-badge" class="match-badge"></div>
+      </div>
+      <div class="tick-grid">
+        <div class="radar-card">
+          <h3 data-i18n="radar_title">2D 雷达</h3>
+          <div class="radar-wrapper" id="radar-wrapper"></div>
+          <div class="radar-legend">
+            <span class="legend-item"><span class="swatch team1"></span><span data-i18n="team1">team1</span></span>
+            <span class="legend-item"><span class="swatch team2"></span><span data-i18n="team2">team2</span></span>
+            <span class="legend-item"><span class="swatch dead"></span><span data-i18n="legend_dead">已阵亡</span></span>
+            <span class="legend-item"><span class="swatch flashed"></span><span data-i18n="legend_flashed">被闪</span></span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <h3 data-i18n="metric_alive">存活概率 (5s 内仍存活)</h3>
+          <div id="metric-alive" class="metric-container"></div>
+        </div>
+        <div class="metric-card">
+          <h3 data-i18n="metric_next_kill">下一击杀者分布</h3>
+          <div id="metric-next-kill" class="metric-container"></div>
+        </div>
+        <div class="metric-card">
+          <h3 data-i18n="metric_next_death">下一阵亡者分布</h3>
+          <div id="metric-next-death" class="metric-container"></div>
+        </div>
+        <div class="metric-card duel-card">
+          <h3 data-i18n="metric_duel">对决矩阵 (CT vs T)</h3>
+          <div id="metric-duel" class="metric-container"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="panel summary hidden" id="round-summary-view">
-      <h2 data-i18n="section_round_summary">3. 当前回合最终贡献</h2>
+      <h2 data-i18n="section_round_summary">5. 当前回合最终贡献</h2>
       <div id="round-summary-table"></div>
     </section>
 
     <section class="panel summary hidden" id="overall-summary-view">
-      <h2 data-i18n="section_overall_summary">4. 全场平均贡献</h2>
+      <h2 data-i18n="section_overall_summary">6. 全场平均贡献</h2>
       <div id="overall-summary-table"></div>
     </section>
 
+    <section class="panel summary hidden" id="advanced-metrics-view">
+      <div class="panel-head">
+        <h2 data-i18n="section_advanced">7. 高级指标</h2>
+        <button id="advanced-toggle" type="button" class="ghost-btn" data-i18n="advanced_toggle">展开/收起</button>
+      </div>
+      <div id="advanced-metrics-body" class="advanced-body"></div>
+    </section>
+
     <section class="panel llm hidden" id="llm-view">
-      <h2 data-i18n="section_llm">5. 语言模型总结</h2>
+      <h2 data-i18n="section_llm">8. 语言模型总结</h2>
       <div class="grid two-col">
         <label>
           <span data-i18n="api_key">API Key</span>
