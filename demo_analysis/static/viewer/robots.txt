@@ -1,0 +1,14 @@
+# https://www.robotstxt.org/robotstxt.html
+# CS2 2D Demo Viewer - robots.txt
+
+# Allow all crawlers by default
+User-agent: *
+
+# Allow indexing of homepage and static assets
+Allow: /
+
+# Disallow dynamic player page (requires demo URL parameter)
+Disallow: /player
+
+# Disallow API endpoints
+Disallow: /download
