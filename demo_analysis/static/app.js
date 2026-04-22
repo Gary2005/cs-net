@@ -74,9 +74,20 @@ const I18N = {
     col_avg_kill_opp: "平均击杀机会",
     col_avg_death_opp: "平均阵亡威胁",
     col_avg_survive: "平均存活率",
-    col_hard_win: "硬仗胜率",
-    col_easy_win: "轻松局胜率",
+    col_hard_win: "困难对枪胜率",
+    col_easy_win: "简单对枪胜率",
     col_highlight: "高光回合占比",
+    term_swing_help: "Swing：该次击杀对局势（胜率曲线）的影响幅度。绝对值越大，代表越关键。",
+    term_difficulty_help: "难度：对枪难度系数。>1 通常表示在模型看来更难的对枪，<1 表示相对更容易。",
+    term_avg_kill_opp_help: "平均击杀机会：该玩家在各个 tick 成为“下一击杀者”的平均概率。",
+    term_avg_death_opp_help: "平均阵亡威胁：该玩家在各个 tick 成为“下一阵亡者”的平均概率。",
+    term_avg_survive_help: "平均存活率：该玩家在各个 tick 下，未来短时间内保持存活的平均概率。",
+    term_hard_win_help: "困难对枪胜率：在高难度对枪（difficulty>1）中的获胜比例。",
+    term_easy_win_help: "简单对枪胜率：在低难度对枪（0<difficulty<1）中的获胜比例。",
+    term_highlight_help: "高光回合占比：该玩家在回合总结中 total_contribution 达到阈值的回合占比。当前阈值为 total_contribution >= 0.20（20%）。",
+    term_avg_kill_help: "平均 Kill：该玩家跨回合的平均击杀贡献（kill_contribution）。",
+    term_avg_tactical_help: "平均 Tactical：该玩家跨回合的平均战术贡献（tactical_contribution）。",
+    term_avg_total_help: "平均 Total：该玩家跨回合的平均总贡献（kill+tactical）。",
     section_llm: "8. 语言模型总结",
     api_key: "API Key",
     model_name: "模型名",
@@ -160,6 +171,17 @@ const I18N = {
     col_hard_win: "Hard-Duel Win",
     col_easy_win: "Easy-Duel Win",
     col_highlight: "Highlight Rate",
+    term_swing_help: "Swing: impact magnitude of a kill on the win-rate trajectory. Larger absolute value means more decisive.",
+    term_difficulty_help: "Difficulty: duel difficulty coefficient. >1 is typically harder in model expectation, <1 is easier.",
+    term_avg_kill_opp_help: "Avg Kill Opportunity: mean probability that this player gets the next kill across ticks.",
+    term_avg_death_opp_help: "Avg Death Threat: mean probability that this player dies next across ticks.",
+    term_avg_survive_help: "Avg Survival: mean short-horizon survival probability across ticks.",
+    term_hard_win_help: "Hard-Duel Win: win rate in hard duels (difficulty>1).",
+    term_easy_win_help: "Easy-Duel Win: win rate in easy duels (0<difficulty<1).",
+    term_highlight_help: "Highlight Rate: fraction of rounds where total_contribution reaches the threshold. Current threshold: total_contribution >= 0.20 (20%).",
+    term_avg_kill_help: "Avg Kill: cross-round average kill contribution (kill_contribution).",
+    term_avg_tactical_help: "Avg Tactical: cross-round average tactical contribution (tactical_contribution).",
+    term_avg_total_help: "Avg Total: cross-round average total contribution (kill + tactical).",
     section_llm: "8. LLM Summary",
     api_key: "API Key",
     model_name: "Model Name",
@@ -444,7 +466,7 @@ function difficultyCell(value) {
   if (!Number.isFinite(num)) {
     return `<span class="mono contribution-cell table-meta-text">-</span>`;
   }
-  const color = signedColor(num - 1, 1.5);
+  const color = signedColor(1 - num, 1.5);
   return `<span class="mono contribution-cell" style="color:${color}">${num.toFixed(3)}</span>`;
 }
 
@@ -456,6 +478,31 @@ function rateCell(value, { center = 0.5, scale = 0.5, invert = false } = {}) {
   const signed = invert ? center - num : num - center;
   const color = signedColor(signed, scale);
   return `<span class="mono contribution-cell" style="color:${color}">${(num * 100).toFixed(2)}%</span>`;
+}
+
+function magnitudeCell(value, { scale = 0.5, polarity = "good" } = {}) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return `<span class="mono contribution-cell table-meta-text">-</span>`;
+  }
+  const signed = polarity === "good" ? num : -num;
+  const color = signedColor(signed, scale);
+  return `<span class="mono contribution-cell" style="color:${color}">${(num * 100).toFixed(2)}%</span>`;
+}
+
+function escapeAttr(text) {
+  return String(text || "").replace(/[&<>\"']/g, (ch) => {
+    if (ch === "&") return "&amp;";
+    if (ch === "<") return "&lt;";
+    if (ch === ">") return "&gt;";
+    if (ch === '"') return "&quot;";
+    return "&#39;";
+  });
+}
+
+function withTermHelp(label, helpText) {
+  const safeHelp = escapeAttr(helpText);
+  return `<span class="th-label">${label}<span class="term-help" data-tooltip="${safeHelp}" title="${safeHelp}" aria-label="${safeHelp}">?</span></span>`;
 }
 
 function playerCell(player, row) {
@@ -800,6 +847,8 @@ function renderAdvancedMetrics() {
   const adv = state.dashboard?.advanced || {};
   const killRanking = adv.kill_ranking || [];
   const playerStats = adv.player_stats || [];
+  const overall = state.dashboard?.overall || [];
+  const overallByPlayer = new Map(overall.map((row) => [row.player, row]));
 
   if (!killRanking.length && !playerStats.length) {
     refs.advancedBody.innerHTML = `<p>${t("no_data")}</p>`;
@@ -811,19 +860,30 @@ function renderAdvancedMetrics() {
     { key: "round_seconds", label: t("col_second"), render: (v) => `<span class="mono table-meta-text">${fmtFloat3(v)}</span>` },
     { key: "attacker", label: t("col_attacker"), render: (v) => `<span class="table-meta-text">${v}</span>` },
     { key: "victim", label: t("col_victim"), render: (v) => `<span class="table-meta-text">${v}</span>` },
-    { key: "swing", label: t("col_swing"), render: (v) => contributionCell(v) },
-    { key: "difficulty", label: t("col_difficulty"), render: (v) => difficultyCell(v) },
+    { key: "swing", label: withTermHelp(t("col_swing"), t("term_swing_help")), render: (v) => contributionCell(v) },
+    { key: "difficulty", label: withTermHelp(t("col_difficulty"), t("term_difficulty_help")), render: (v) => difficultyCell(v) },
   ];
+
+  const playerRows = playerStats.map((row) => {
+    const overallRow = overallByPlayer.get(row.player) || {};
+    return {
+      ...row,
+      avg_kill_contribution: overallRow.avg_kill_contribution,
+      avg_tactical_contribution: overallRow.avg_tactical_contribution,
+      avg_total_contribution: overallRow.avg_total_contribution,
+    };
+  });
 
   const playerCols = [
     { key: "player", label: t("col_player"), render: (v) => `<span class="table-meta-text">${v}</span>` },
     { key: "team", label: t("col_team"), render: (v) => `<span class="table-meta-text">${v}</span>` },
-    { key: "avg_kill_opp", label: t("col_avg_kill_opp"), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
-    { key: "avg_death_opp", label: t("col_avg_death_opp"), render: (v) => rateCell(v, { center: 0.5, scale: 0.5, invert: true }) },
-    { key: "avg_survive_chance", label: t("col_avg_survive"), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
-    { key: "hard_win_rate", label: t("col_hard_win"), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
-    { key: "easy_win_rate", label: t("col_easy_win"), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
-    { key: "highlight_rate", label: t("col_highlight"), render: (v) => rateCell(v, { center: 0.1, scale: 0.2 }) },
+    { key: "avg_survive_chance", label: withTermHelp(t("col_avg_survive"), t("term_avg_survive_help")), render: (v) => magnitudeCell(v, { scale: 0.5, polarity: "good" }) },
+    { key: "hard_win_rate", label: withTermHelp(t("col_hard_win"), t("term_hard_win_help")), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
+    { key: "easy_win_rate", label: withTermHelp(t("col_easy_win"), t("term_easy_win_help")), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
+    { key: "highlight_rate", label: withTermHelp(t("col_highlight"), t("term_highlight_help")), render: (v) => rateCell(v, { center: 0.1, scale: 0.2 }) },
+    { key: "avg_kill_contribution", label: withTermHelp(t("col_avg_kill"), t("term_avg_kill_help")), render: (v) => contributionCell(v) },
+    { key: "avg_tactical_contribution", label: withTermHelp(t("col_avg_tactical"), t("term_avg_tactical_help")), render: (v) => contributionCell(v) },
+    { key: "avg_total_contribution", label: withTermHelp(t("col_avg_total"), t("term_avg_total_help")), render: (v) => contributionCell(v) },
   ];
 
   const collapsed = !state.advancedExpanded;
@@ -838,7 +898,7 @@ function renderAdvancedMetrics() {
     buildTableHtml(ranking, killCols),
     ranking_more,
     `<h3>${t("advanced_player_table")}</h3>`,
-    buildTableHtml(playerStats, playerCols),
+    buildTableHtml(playerRows, playerCols),
   ].join("");
 }
 

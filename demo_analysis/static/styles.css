@@ -298,6 +298,62 @@ th {
   font-weight: 500;
 }
 
+.th-label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.term-help {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(169, 201, 229, 0.8);
+  color: #a9c9e5;
+  font-size: 10px;
+  line-height: 1;
+  cursor: help;
+  transform: translateY(-2px);
+}
+
+.term-help:hover {
+  background: rgba(169, 201, 229, 0.18);
+}
+
+.term-help::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 220px;
+  max-width: 320px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(146, 184, 215, 0.55);
+  background: rgba(9, 25, 44, 0.96);
+  color: #e9f4ff;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 500;
+  white-space: normal;
+  text-align: left;
+  box-shadow: 0 10px 26px rgba(5, 15, 28, 0.35);
+  opacity: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  z-index: 40;
+}
+
+.term-help:hover::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .mono {
   font-family: "IBM Plex Mono", monospace;
 }

@@ -40,48 +40,11 @@ In short: **given a match replay, the model tells you who will win, who will die
 
 | Task | Description | Output |
 |------|-------------|--------|
-| **CT Win Rate** | Probability of the CT side winning the current round | Scalar in [0, 1] |
-| **Alive Prediction** | Per-player probability of surviving to the end of the round | One probability per player |
-| **Next Kill Prediction** | Who is most likely to get the next kill / who is most likely to die | Probability distribution over 10+1 classes |
+| **Win Rate Prediction** | Probability of team1 (mapped from CT/T by side) winning the current round | Scalar in [0, 1] |
+| **Alive Prediction** | Per-player probability of surviving the next 5 seconds | One probability per player |
+| **Next Kill Prediction** | Which player is most likely to get the next kill | Probability distribution over 10+1 classes |
+| **Next Death Prediction** | Which player is most likely to die next | Probability distribution over 10+1 classes |
 | **Duel Prediction** | 1v1 win probability for any CT-T player pair | 5x5 probability matrix |
-
-### Model Architecture
-
-CS-NET uses a three-stage Transformer architecture:
-
-```
-Demo File (.dem)
-    │
-    ▼
-┌──────────────────┐
-│  State Extractor │  Parse demo, extract game state at each sampled tick
-│  (demoparser2)   │  (player positions, HP, weapons, projectiles, etc.)
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│  Tick Tokenizer  │  Discretize continuous game state into token sequences
-│  (TickTokenizer) │  Vocabulary size: 979
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│  Embedder        │  Non-causal Transformer encoder (6 layers, 10 heads)
-│  (Single Frame)  │  Encode tokens from one tick into a vector
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│  Processor       │  Causal Transformer encoder (8 layers, 10 heads)
-│  (Temporal)      │  Model temporal dependencies across ticks (GPT-style)
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│  Task Heads      │  Task-specific MLP prediction heads
-│  (Predictions)   │  Alive / Kill / Win Rate / Duel
-└──────────────────┘
-```
 
 ## 🚀 Quick Start
 
@@ -145,6 +108,12 @@ Optional flag:
 ## 🌐 Web App Usage
 
 CS-NET now includes an interactive web app for demo analysis and LLM-based post-game summary.
+
+> **Attribution Notice**
+> The built-in 2D viewer is a modified integration of
+> [`sparkoo/csgo-2d-demo-viewer`](https://github.com/sparkoo/csgo-2d-demo-viewer).
+> We use the upstream project under the MIT License and adapt it for CS-NET's
+> Flask routes and model-prediction overlays.
 
 ### 1. Start the web app
 

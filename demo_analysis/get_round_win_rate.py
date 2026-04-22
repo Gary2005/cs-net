@@ -232,29 +232,53 @@ def build_sliding_windows(tick_emb, tick_mask, ticks_per_sample):
     return emb_win, msk_win
 
 
-def infer_alive_probs(model, cfg, eb, mb):
-    outs = []
-    for p in range(10):
-        cond = torch.full((eb.size(0), 1), p, dtype=torch.long, device=eb.device)
-        logit = model.get_predictions_from_tick_emb(eb, mb, cond).squeeze(-1)
-        logit = apply_temperature_scaling(logit, cfg)
-        outs.append(torch.sigmoid(logit))
-    return torch.stack(outs, dim=1)  # (B, 10)
+def build_alive_mask(states_batch, n_players=10):
+    """Return bool mask of shape (B, n_players) from players_info[*].is_alive."""
+    mask = torch.zeros((len(states_batch), n_players), dtype=torch.bool)
+    for i, s in enumerate(states_batch):
+        players = s.get("players_info", [])
+        for p in range(min(n_players, len(players))):
+            mask[i, p] = bool(players[p].get("is_alive", False))
+    return mask
 
 
-def infer_duel_probs(model, cfg, eb, mb, team_ct, team_t):
+def infer_alive_probs(model, cfg, eb, mb, alive_mask):
+    """
+    Infer alive probabilities only for currently alive players.
+    Dead players are skipped and left as 0.0 in output.
+    """
     B = eb.size(0)
+    out = torch.zeros((B, 10), device=eb.device)
+    for p in range(10):
+        idx = torch.nonzero(alive_mask[:, p], as_tuple=False).squeeze(-1)
+        if idx.numel() == 0:
+            continue
+        cond = torch.full((idx.numel(), 1), p, dtype=torch.long, device=eb.device)
+        logit = model.get_predictions_from_tick_emb(eb[idx], mb[idx], cond).squeeze(-1)
+        logit = apply_temperature_scaling(logit, cfg)
+        out[idx, p] = torch.sigmoid(logit)
+    return out  # (B, 10)
+
+
+def infer_duel_probs(model, cfg, eb, mb, team_ct, team_t, alive_mask):
+    B = eb.size(0)
+    # 0.5 on diagonal and whenever one side is dead.
     out = torch.full((B, 10, 10), 0.5, device=eb.device)
     for ct in team_ct:
         for t in team_t:
-            cond = torch.zeros((B, 2), dtype=torch.long, device=eb.device)
+            valid = alive_mask[:, ct] & alive_mask[:, t]
+            idx = torch.nonzero(valid, as_tuple=False).squeeze(-1)
+            if idx.numel() == 0:
+                continue
+
+            cond = torch.zeros((idx.numel(), 2), dtype=torch.long, device=eb.device)
             cond[:, 0] = ct
             cond[:, 1] = t
-            logit = model.get_predictions_from_tick_emb(eb, mb, cond).squeeze(-1)
+            logit = model.get_predictions_from_tick_emb(eb[idx], mb[idx], cond).squeeze(-1)
             logit = apply_temperature_scaling(logit, cfg)
             p = torch.sigmoid(logit)
-            out[:, ct, t] = p
-            out[:, t, ct] = 1.0 - p
+            out[idx, ct, t] = p
+            out[idx, t, ct] = 1.0 - p
     return out
 
 
@@ -324,10 +348,15 @@ def run_multihead(
         eb = emb_win[start:start + batch_size].to(device)
         mb = msk_win[start:start + batch_size].to(device)
         B = eb.shape[0]
+        states_batch = round_states[start:start + B]
+        alive_mask_cpu = build_alive_mask(states_batch)
+        alive_mask = alive_mask_cpu.to(device)
 
         with torch.no_grad():
             if alive_m is not None:
-                alive_probs = infer_alive_probs(alive_m, configs["alive"], eb, mb).cpu().numpy()
+                alive_probs = infer_alive_probs(
+                    alive_m, configs["alive"], eb, mb, alive_mask
+                ).cpu().numpy()
             else:
                 alive_probs = None
 
@@ -351,7 +380,7 @@ def run_multihead(
 
             if compute_duel and duel_m is not None:
                 duel_probs = infer_duel_probs(
-                    duel_m, configs["duel"], eb, mb, team_ct, team_t
+                    duel_m, configs["duel"], eb, mb, team_ct, team_t, alive_mask
                 ).cpu().numpy()
             else:
                 duel_probs = None
@@ -359,7 +388,12 @@ def run_multihead(
         for j in range(B):
             s = round_states[start + j]
             s["ct_win_rate"] = float(win_probs[j])
-            s["alive_pred"] = alive_probs[j].tolist() if alive_probs is not None else list(alive_fb)
+            if alive_probs is not None:
+                s["alive_pred"] = alive_probs[j].tolist()
+            else:
+                s["alive_pred"] = [
+                    alive_fb[k] if bool(alive_mask_cpu[j, k]) else 0.0 for k in range(10)
+                ]
             s["next_kill"] = kill_probs[j].tolist() if kill_probs is not None else list(kd_fb)
             s["next_death"] = death_probs[j].tolist() if death_probs is not None else list(kd_fb)
             s["duel"] = duel_probs[j].tolist() if duel_probs is not None else None
@@ -590,6 +624,23 @@ def build_round_ticks(round_states, duel_fallback):
         duel = s.get("duel")
         if duel is None:
             duel = duel_fallback
+
+        players = s.get("players_info", [])
+        alive = [bool(p.get("is_alive", False)) for p in players[:10]]
+        if len(alive) < 10:
+            alive.extend([False] * (10 - len(alive)))
+
+        # Mark duel cell as "/" whenever either side is dead at this tick.
+        duel_marked = []
+        for i in range(10):
+            row = []
+            for j in range(10):
+                if (not alive[i]) or (not alive[j]):
+                    row.append("/")
+                else:
+                    row.append(duel[i][j])
+            duel_marked.append(row)
+
         ticks.append({
             "round_seconds": s.get("round_seconds"),
             "players_info": radar_player_view(s.get("players_info", [])),
@@ -597,7 +648,7 @@ def build_round_ticks(round_states, duel_fallback):
             "alive_pred": s.get("alive_pred"),
             "next_kill": s.get("next_kill"),
             "next_death": s.get("next_death"),
-            "duel": duel,
+            "duel": duel_marked,
             "is_bomb_planted": s.get("is_bomb_planted"),
             "is_bomb_dropped": s.get("is_bomb_dropped"),
             "bomb_position": s.get("bomb_position"),
