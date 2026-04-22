@@ -55,6 +55,40 @@ ANALYSIS_LOCK = threading.Lock()
 VIEWER_DIR = Path(__file__).resolve().parent / "static" / "viewer"
 
 
+def _has_running_jobs() -> bool:
+    with ANALYSIS_LOCK:
+        for job in ANALYSIS_JOBS.values():
+            if job.get("status") in {"queued", "running"}:
+                return True
+    return False
+
+
+def cleanup_runtime_artifacts(clear_state: bool = True) -> dict[str, int]:
+    """Delete stale uploaded demos/results and optionally reset in-memory state."""
+    removed_uploads = 0
+    removed_outputs = 0
+
+    for path in UPLOAD_DIR.glob("*"):
+        if path.is_file() or path.is_symlink():
+            path.unlink(missing_ok=True)
+            removed_uploads += 1
+
+    for path in OUTPUT_DIR.glob("*"):
+        if path.is_file() or path.is_symlink():
+            path.unlink(missing_ok=True)
+            removed_outputs += 1
+
+    if clear_state:
+        with ANALYSIS_LOCK:
+            ANALYSIS_JOBS.clear()
+        ANALYSIS_CACHE.clear()
+
+    return {
+        "uploads": removed_uploads,
+        "outputs": removed_outputs,
+    }
+
+
 def choose_default_device() -> str:
     return "cpu"
 
@@ -1007,6 +1041,10 @@ def _run_analysis_job(
 
 @app.route("/")
 def index():
+    # Keep disk usage bounded for local usage: clear stale artifacts on each open.
+    if not _has_running_jobs():
+        cleanup_runtime_artifacts(clear_state=True)
+
     model_options = discover_model_paths()
     return render_template(
         "index.html",
@@ -1122,6 +1160,11 @@ def analyze_demo():
     dem_file = request.files.get("demo_file")
     if dem_file is None or dem_file.filename == "":
         return jsonify({"error": "请上传 .dem 文件"}), 400
+
+    if _has_running_jobs():
+        return jsonify({"error": "已有任务正在运行，请等待完成后再上传新 demo"}), 409
+
+    cleanup_runtime_artifacts(clear_state=True)
 
     model_path = request.form.get("model_path", "").strip()
     device = request.form.get("device", choose_default_device()).strip()
