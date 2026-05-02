@@ -1,4 +1,5 @@
 accelerate==1.12.0
+agent-framework-openai==1.2.2
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.1
