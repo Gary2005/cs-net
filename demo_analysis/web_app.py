@@ -162,6 +162,14 @@ def choose_default_model_path(model_options: list[str]) -> str:
 safe_float = high_level_analysis.safe_float
 
 
+def safe_nonnegative_int(value, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0, parsed)
+
+
 def _append_job_log(job_id: str, line: str) -> None:
     clean = line.rstrip("\n")
     with ANALYSIS_LOCK:
@@ -537,6 +545,10 @@ def llm_summary():
     base_url = body.get("base_url", "https://api.openai.com/v1").strip()
     temperature = safe_float(body.get("temperature", 0.95), 0.95)
     language = body.get("language", "zh").strip().lower()
+    max_detailed_rounds = safe_nonnegative_int(
+        body.get("max_detailed_rounds"),
+        llm_summary_module.MAX_DETAILED_TACTICAL_ROUNDS,
+    )
 
     if not analysis_id or analysis_id not in ANALYSIS_CACHE:
         return jsonify({"error": "无效的 analysis_id，请先完成 DEM 分析"}), 400
@@ -554,7 +566,11 @@ def llm_summary():
         language=language,
     )
     try:
-        content = llm_summary_module.llm_summary_sync(dashboard, config)
+        content = llm_summary_module.llm_summary_sync(
+            dashboard,
+            config,
+            max_detailed_rounds=max_detailed_rounds,
+        )
         return jsonify({"summary": content})
     except Exception as exc:
         return jsonify({"error": f"请求 LLM 接口异常: {exc}"}), 500
@@ -569,6 +585,10 @@ def llm_summary_stream():
     base_url = body.get("base_url", "https://api.openai.com/v1").strip()
     temperature = safe_float(body.get("temperature", 0.95), 0.95)
     language = body.get("language", "zh").strip().lower()
+    max_detailed_rounds = safe_nonnegative_int(
+        body.get("max_detailed_rounds"),
+        llm_summary_module.MAX_DETAILED_TACTICAL_ROUNDS,
+    )
 
     if not analysis_id or analysis_id not in ANALYSIS_CACHE:
         return jsonify({"error": "无效的 analysis_id，请先完成 DEM 分析"}), 400
@@ -589,7 +609,11 @@ def llm_summary_stream():
     @stream_with_context
     def generate_text_stream():
         try:
-            yield from llm_summary_module.llm_summary_stream_sync(dashboard, config)
+            yield from llm_summary_module.llm_summary_stream_sync(
+                dashboard,
+                config,
+                max_detailed_rounds=max_detailed_rounds,
+            )
         except Exception as exc:
             yield f"\n\n[LLM error] {exc}"
 

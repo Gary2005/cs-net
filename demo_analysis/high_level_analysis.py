@@ -229,18 +229,16 @@ def build_tactical_rounds(rounds: list[dict[str, Any]]) -> tuple[list[dict[str, 
         for kill in sorted(rd.get("kills") or [], key=lambda x: safe_float(x.get("round_seconds", 0.0))):
             t = safe_float(kill.get("round_seconds", 0.0))
             before_tick = nearest_point(ticks, t - 0.12)
-            after_tick = nearest_point(ticks, t + 0.12)
             killer = kill.get("killer", "Unknown")
             victim = kill.get("victim", "Unknown")
             killer_team = team_label_for_player(killer, team1_players, team2_players)
+            victim_team = team_label_for_player(victim, team1_players, team2_players)
             before_wr = wr_at(t - 0.12)
             after_wr = wr_at(t + 0.12)
             wr_delta = (after_wr - before_wr) * 100.0
             difficulty = safe_float(kill.get("difficulty", 0.0))
             killer_loc = location_for(before_tick, killer)
             victim_loc = location_for(before_tick, victim)
-            killer_snapshot = player_at(before_tick, killer) or {}
-            victim_snapshot = player_at(before_tick, victim) or {}
             duel_prob = None
             a_idx = name_to_idx.get(killer)
             v_idx = name_to_idx.get(victim)
@@ -259,47 +257,24 @@ def build_tactical_rounds(rounds: list[dict[str, Any]]) -> tuple[list[dict[str, 
                 {
                     "t": round(t, 2),
                     "type": "kill",
-                    "summary_facts": {
-                        "killer": killer,
-                        "victim": victim,
-                        "weapon": kill.get("weapon", "Unknown"),
-                        "headshot": bool(kill.get("headshot", False)),
-                        "assister": kill.get("assister"),
-                        "assistedflash": bool(kill.get("assistedflash", False)),
-                        "thrusmoke": bool(kill.get("thrusmoke", False)),
-                    },
-                    "players": {
-                        "killer": {
-                            "name": killer,
-                            "team": killer_team,
-                            "side": killer_snapshot.get("team_num"),
-                            "health": killer_snapshot.get("health"),
-                            "weapon": killer_snapshot.get("weapon_name"),
-                        },
-                        "victim": {
-                            "name": victim,
-                            "team": team_label_for_player(victim, team1_players, team2_players),
-                            "side": victim_snapshot.get("team_num"),
-                            "health": victim_snapshot.get("health"),
-                            "weapon": victim_snapshot.get("weapon_name"),
-                        },
-                    },
-                    "locations": {"killer": killer_loc, "victim": victim_loc},
+                    "killer": killer,
+                    "killer_team": killer_team,
+                    "victim": victim,
+                    "victim_team": victim_team,
+                    "weapon": kill.get("weapon", "Unknown"),
+                    "headshot": bool(kill.get("headshot", False)),
+                    "assister": kill.get("assister"),
+                    "assistedflash": bool(kill.get("assistedflash", False)),
+                    "thrusmoke": bool(kill.get("thrusmoke", False)),
+                    "killer_location": killer_loc,
+                    "victim_location": victim_loc,
+                    "has_reliable_locations": "missing" not in location_sources,
                     "alive_score": count_alive((before_tick or {}).get("players_info") or []),
                     "utility_state": summarize_utility(before_tick),
-                    "wr_before_pct": round(before_wr * 100.0, 1),
-                    "wr_after_pct": round(after_wr * 100.0, 1),
                     "wr_delta_pct": round(wr_delta, 1),
+                    "killer_team_swing_pct": round(killer_swing, 1),
                     "difficulty": round(difficulty, 3),
-                    "duel_context": {"killer_vs_victim": duel_prob},
-                    "evaluation_context": {
-                        "killer_team_swing_pct": round(killer_swing, 1),
-                        "winner_to_praise": killer,
-                        "loser_to_critique": victim,
-                        "location_sources": location_sources,
-                        "has_reliable_locations": "missing" not in location_sources,
-                        "notes": "Use win-rate swing, difficulty, and duel_context to judge this kill; do not use fixed labels.",
-                    },
+                    "duel_win_rate": duel_prob,
                 }
             )
 
@@ -324,14 +299,7 @@ def build_tactical_rounds(rounds: list[dict[str, Any]]) -> tuple[list[dict[str, 
                     "locations": {},
                     "alive_score": count_alive((plant_tick or {}).get("players_info") or []),
                     "utility_state": summarize_utility(plant_tick),
-                    "wr_before_pct": round(wr_before * 100.0, 1),
-                    "wr_after_pct": round(wr_after * 100.0, 1),
                     "wr_delta_pct": round((wr_after - wr_before) * 100.0, 1),
-                    "difficulty": None,
-                    "duel_context": {},
-                    "evaluation_context": {
-                        "notes": "Bomb plant event only; evaluate from win-rate movement and alive_score if useful.",
-                    },
                 }
             )
 

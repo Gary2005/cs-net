@@ -3,7 +3,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Iterator
 
-from agent_framework import Message
+from agent_framework import ChatResponse, ChatResponseUpdate, Message
 from agent_framework.openai import OpenAIChatCompletionClient
 
 from demo_analysis.high_level_analysis import safe_float
@@ -17,6 +17,69 @@ MAX_DETAILED_TACTICAL_ROUNDS = 8
 MIN_DETAILED_SWING_PCT = 15.0
 MAX_BRIEF_TIMELINE_EVENTS_PER_ROUND = 2
 
+ZH_SYSTEM_PROMPT_TEMPLATE = """你是专业的 CS2 战术分析师，请输出中文复盘。
+
+严格防幻觉与写作规则：
+- 合法玩家名（不得发明其它名字）：{all_players}
+- team1 阵容：{team1_players}
+- team2 阵容：{team2_players}
+- 合法展示回合 ID：{valid_round_ids}
+- 当前 CS2 使用 MR12：展示回合 1-12 是上半场，13-24 是下半场；12:12 后进入加时。
+- 加时是 MR3：每个加时块 6 回合，3 回合后换边；展示回合 25+ 都属于加时，绝不能算进下半场。
+- 任何数字（胜率、swing、难度、贡献）必须直接来自下方 JSON，不许编造或过度取整。
+- 如果某字段缺失，直接说明“数据中未提供”，不要猜。
+- 不要编造 JSON 里没有的击杀、残局、武器、回合结果、爆弹、前压或道具。
+- 点位只能使用 killer_location.name / victim_location.name；如果 callout_source 是 missing，就写“点位数据未提供”。
+- 不要向用户展示内部技术字段名，包括 detailed_tactical_rounds、brief_tactical_rounds、wr_start、wr_end、wr_start_pct、wr_end_pct、hard_win_rate、easy_win_rate、highlight_rate、evaluation_context、duel_context。
+- 评价可以夸击杀方，也可以批评被击杀方，但必须能从 JSON 数据推出。
+- 回合级胜率只写“某队在开局胜率 X% 的情况下获胜”；不要写终局 0.0%/100.0%，也不要展示 wr_start/wr_end 这样的字段名。
+- 详细回合的每个关键击杀可以、而且应该展示事件级数字：击杀方收益、Team1 胜率曲线变化、击杀难度、对决预测胜率。展示数字时用自然语言，不要写 JSON 字段名。
+"""
+
+ZH_USER_PROMPT_TEMPLATE = """请按如下结构输出（markdown，中文战报风格，信息要具体）：
+1) 上/下半场与加时：严格以 match_halves.first_half、match_halves.second_half 和 match_overtimes 为准。下半场只包含展示回合 13-24；如果有加时，单独列出。
+2) 转折回合详写：只遍历 JSON 里的详细转折回合列表，并按 round_display_id 顺序写。标题只写“回合 X”，不要写数据来源字段名。每回合先说明攻防方、开局装备概况，并读取 winner_start_win_rate_pct 但输出成“胜方开局胜率”，不要写字段名。然后按 timeline 写关键事件；对每个 kill 必须写清：击杀者、被击杀者、武器、点位、击杀方收益、Team1 胜率曲线变化、击杀难度、对决预测胜率，并基于这些数字给一句自然评价。
+3) 普通回合速览：遍历普通回合列表，每回合只写一句话，优先使用 brief_summary_hint 概括该回合，不要展开成详细战报。
+4) 团队叙事：节奏、稳定性、崩盘/翻盘瞬间。引用 overall_player_averages 与 match。
+5) 玩家点评：结合 advanced_player_stats、overall_player_averages，以及详细回合里的 killer_team_swing_pct / difficulty / duel_win_rate。解释困难枪胜率、简单枪胜率、高光回合占比等用户友好名词；只评论白名单里的玩家。
+6) 趣味数据：从 advanced_kill_ranking 里挑 top swing 的击杀，说明对应 difficulty。
+7) MVP/SVP 复核：对照 advanced_player_stats 看 match.mvp / match.svp 是否合理，给出数据支持或反对。
+8) 三条可执行改进建议。
+
+以下是结构化数据(JSON)：
+{data_json}"""
+
+EN_SYSTEM_PROMPT_TEMPLATE = """You are a professional CS2 tactical analyst. Produce an insightful English review.
+
+Strict anti-hallucination and writing rules:
+- Valid player names (do NOT invent others): {all_players}
+- team1 roster: {team1_players}
+- team2 roster: {team2_players}
+- Valid display round IDs: {valid_round_ids}
+- Current CS2 uses MR12: display rounds 1-12 are the first half, 13-24 are the second half; overtime starts after 12-12.
+- Overtime uses MR3: each overtime block has 6 rounds and sides switch after 3 rounds. Display rounds 25+ are overtime and must never be counted as the second half.
+- Every numeric claim (win rate, swing, difficulty, contribution) MUST come directly from the JSON data. Do not fabricate values or round aggressively.
+- If a field is missing, say so instead of guessing.
+- Do not invent kills, clutches, weapons, round outcomes, utility, pushes, or tactics absent from the JSON.
+- For locations, only use killer_location.name / victim_location.name. If callout_source is missing, say location data is unavailable.
+- Do not expose internal technical field names to the user, including detailed_tactical_rounds, brief_tactical_rounds, wr_start, wr_end, wr_start_pct, wr_end_pct, hard_win_rate, easy_win_rate, highlight_rate, evaluation_context, duel_context.
+- Round-level win-rate narration must say: “Team X won from an opening win probability of Y%”. Do not show terminal 0.0%/100.0% curve values or wr_start/wr_end field names.
+- For detailed rounds, each key kill should show event-level numbers: killer-side gain, Team1 curve change, kill difficulty, and duel predicted win rate. Use natural language, not JSON field names.
+"""
+
+EN_USER_PROMPT_TEMPLATE = """Deliver the following sections (concise, well-structured markdown):
+1) Halves and overtime: use match_halves.first_half, match_halves.second_half, and match_overtimes. The second half only contains display rounds 13-24; list overtime separately when present.
+2) Detailed turning rounds: iterate through the detailed turning round list in round_display_id order. Headings should say only “Round X”; do not mention internal source field names. State sides and opening economy; read winner_start_win_rate_pct but write it as “winner opening win probability” without exposing the field name. Then narrate timeline events; for each kill, include killer, victim, weapon, locations, killer-side gain, Team1 curve change, kill difficulty, duel predicted win rate, and one natural judgment grounded in those numbers.
+3) Brief ordinary rounds: iterate through the ordinary round list. Give one sentence per round, preferably using brief_summary_hint. Do not expand them into full reports.
+4) Team narrative: tempo, consistency, collapse/comeback moments. Cite overall_player_averages + match.
+5) Per-player review: cite advanced_player_stats, overall_player_averages, and detailed-round killer_team_swing_pct / difficulty / duel_win_rate. Explain user-friendly terms such as hard-duel win rate, easy-duel win rate, and highlight share. Only comment on whitelisted players.
+6) Fun stats from advanced_kill_ranking: top swings and their difficulty.
+7) MVP/SVP check: compare match.mvp / match.svp to advanced_player_stats; confirm or disagree with data.
+8) Three actionable improvement suggestions.
+
+Data (JSON):
+{data_json}"""
+
 
 @dataclass(frozen=True)
 class LlmSummaryConfig:
@@ -27,14 +90,126 @@ class LlmSummaryConfig:
     language: str = "zh"
 
 
-def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
+def build_llm_payload(
+    dashboard: dict[str, Any],
+    max_detailed_rounds: int | None = None,
+) -> dict[str, Any]:
     """
     Compact payload for the LLM. Large raw arrays are dropped so reports stay
     focused on decisive rounds, players, and advanced metrics.
     """
 
+    source_rounds = dashboard.get("rounds", [])
+    try:
+        detailed_round_limit = (
+            MAX_DETAILED_TACTICAL_ROUNDS
+            if max_detailed_rounds is None
+            else max(0, int(max_detailed_rounds))
+        )
+    except (TypeError, ValueError):
+        detailed_round_limit = MAX_DETAILED_TACTICAL_ROUNDS
+    raw_round_ids = [
+        x.get("round_id")
+        for x in source_rounds
+        if isinstance(x.get("round_id"), int)
+    ]
+    raw_round_ids.extend(
+        x.get("round_id")
+        for x in (dashboard.get("tactical_rounds", []) or [])
+        if isinstance(x.get("round_id"), int)
+    )
+    raw_round_ids.extend(
+        x.get("round")
+        for x in ((dashboard.get("advanced", {}) or {}).get("kill_ranking") or [])
+        if isinstance(x.get("round"), int)
+    )
+    round_display_offset = 1 if raw_round_ids and min(raw_round_ids) == 0 else 0
+
+    def display_round_id(round_id: Any) -> Any:
+        if isinstance(round_id, int):
+            return round_id + round_display_offset
+        return round_id
+
     def signed_percent(value: float) -> str:
         return f"{safe_float(value, 0.0) * 100.0:+.2f}%"
+
+    def percent_label(value: float) -> str:
+        return f"{safe_float(value, 0.0) * 100.0:.1f}%"
+
+    def display_team(team: Any) -> str:
+        if team == "team1":
+            return "Team1"
+        if team == "team2":
+            return "Team2"
+        return str(team or "Unknown")
+
+    def side_for_winner(round_data: dict[str, Any], winner: Any) -> str:
+        if winner == "team1":
+            return str(round_data.get("team1_side", "Unknown"))
+        if winner == "team2":
+            return str(round_data.get("team2_side", "Unknown"))
+        return "Unknown"
+
+    def winner_start_pct(winner: Any, team1_start_pct: Any) -> float:
+        team1_pct = safe_float(team1_start_pct, 0.0)
+        if winner == "team1":
+            return round(team1_pct, 1)
+        if winner == "team2":
+            return round(100.0 - team1_pct, 1)
+        return 0.0
+
+    def loser_start_pct(winner: Any, team1_start_pct: Any) -> float:
+        team1_pct = safe_float(team1_start_pct, 0.0)
+        if winner == "team1":
+            return round(100.0 - team1_pct, 1)
+        if winner == "team2":
+            return round(team1_pct, 1)
+        return 0.0
+
+    def add_winner_context(round_data: dict[str, Any]) -> dict[str, Any]:
+        winner = round_data.get("winner")
+        start_pct = round_data.get("wr_start_pct", 0.0)
+        return {
+            **round_data,
+            "winner_team": winner,
+            "winner_label": display_team(winner),
+            "winner_side": side_for_winner(round_data, winner),
+            "winner_start_win_rate_pct": winner_start_pct(winner, start_pct),
+            "loser_start_win_rate_pct": loser_start_pct(winner, start_pct),
+        }
+
+    def brief_event_text(event: dict[str, Any]) -> str:
+        if event.get("type") == "kill":
+            facts = event.get("summary_facts") or {}
+            killer = event.get("killer", facts.get("killer", "Unknown"))
+            victim = event.get("victim", facts.get("victim", "Unknown"))
+            weapon = event.get("weapon", facts.get("weapon", "Unknown"))
+            swing = safe_float(
+                event.get(
+                    "killer_team_swing_pct",
+                    (event.get("evaluation_context") or {}).get(
+                        "killer_team_swing_pct",
+                        event.get("wr_delta_pct", 0.0),
+                    ),
+                ),
+            )
+            return f"{killer} 用 {weapon} 击杀 {victim}，击杀方收益 {swing:+.1f}%"
+        if event.get("type") == "bomb_planted":
+            return "下包改变回合走势"
+        return "关键事件数据较少"
+
+    def brief_summary_hint(round_data: dict[str, Any]) -> str:
+        winner = display_team(round_data.get("winner"))
+        side = side_for_winner(round_data, round_data.get("winner"))
+        start_pct = winner_start_pct(round_data.get("winner"), round_data.get("wr_start_pct", 0.0))
+        swing = safe_float(round_data.get("largest_swing_pct", 0.0))
+        events = round_data.get("key_events") or []
+        event_bits = [brief_event_text(event) for event in events]
+        event_text = "；".join(event_bits) if event_bits else "关键事件数据较少"
+        return (
+            f"回合 {round_data.get('round_display_id')}：{winner}({side}) "
+            f"在开局胜率 {start_pct:.1f}% 的情况下获胜，最大摆动 {swing:.1f}%；{event_text}。"
+        )
 
     def format_contrib_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         formatted = []
@@ -89,7 +264,11 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
             return None
         first = half_rounds[0]
         team1_on_ct = bool(first.get("team1_on_ct", False))
-        round_ids = [int(x.get("round_id", 0)) for x in half_rounds if isinstance(x.get("round_id"), int)]
+        round_ids = [
+            int(display_round_id(x.get("round_id")))
+            for x in half_rounds
+            if isinstance(x.get("round_id"), int)
+        ]
         return {
             "name": name,
             "team1_side": "CT" if team1_on_ct else "T",
@@ -101,7 +280,6 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
             "score": half_score(half_rounds),
         }
 
-    source_rounds = dashboard.get("rounds", [])
     full_rounds: list[dict[str, Any]] = []
     for rd in source_rounds:
         win_rate = rd.get("win_rate", [])
@@ -142,21 +320,24 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
 
         peak_delta = max((abs(x["wr_delta_pct"]) for x in transitions), default=0.0)
         full_rounds.append(
-            {
-                "round_id": rd.get("round_id"),
-                "winner": rd.get("winner"),
-                "team1_side": team1_side,
-                "team2_side": team2_side,
-                "wr_start_pct": round(start_wr * 100.0, 1),
-                "wr_end_pct": round(end_wr * 100.0, 1),
-                "wr_max_pct": round(max_wr * 100.0, 1),
-                "wr_min_pct": round(min_wr * 100.0, 1),
-                "peak_kill_delta_pct": peak_delta,
-                "kill_transitions": transitions,
-                "final_contrib": format_contrib_items(
-                    rd.get("round_summary", {}).get("per_player", [])
-                ),
-            }
+            add_winner_context(
+                {
+                    "round_id": rd.get("round_id"),
+                    "round_display_id": display_round_id(rd.get("round_id")),
+                    "winner": rd.get("winner"),
+                    "team1_side": team1_side,
+                    "team2_side": team2_side,
+                    "wr_start_pct": round(start_wr * 100.0, 1),
+                    "wr_end_pct": round(end_wr * 100.0, 1),
+                    "wr_max_pct": round(max_wr * 100.0, 1),
+                    "wr_min_pct": round(min_wr * 100.0, 1),
+                    "peak_kill_delta_pct": peak_delta,
+                    "kill_transitions": transitions,
+                    "final_contrib": format_contrib_items(
+                        rd.get("round_summary", {}).get("per_player", [])
+                    ),
+                }
+            )
         )
 
     sorted_by_interest = sorted(
@@ -179,11 +360,17 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
             other_rounds.append(
                 {
                     "round_id": r["round_id"],
+                    "round_display_id": r["round_display_id"],
                     "winner": r["winner"],
+                    "winner_team": r["winner_team"],
+                    "winner_label": r["winner_label"],
+                    "winner_side": r["winner_side"],
                     "team1_side": r["team1_side"],
                     "team2_side": r["team2_side"],
                     "wr_start_pct": r["wr_start_pct"],
                     "wr_end_pct": r["wr_end_pct"],
+                    "winner_start_win_rate_pct": r["winner_start_win_rate_pct"],
+                    "loser_start_win_rate_pct": r["loser_start_win_rate_pct"],
                     "kill_count": len(r["kill_transitions"]),
                 }
             )
@@ -191,27 +378,67 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
     featured_rounds.sort(key=lambda r: r["round_id"])
     other_rounds.sort(key=lambda r: r["round_id"])
 
-    first_half_rounds: list[dict[str, Any]] = []
-    second_half_rounds: list[dict[str, Any]] = []
-    if source_rounds:
-        boundaries = [0]
-        prev_flag = bool(source_rounds[0].get("team1_on_ct", False))
-        for idx in range(1, len(source_rounds)):
-            curr_flag = bool(source_rounds[idx].get("team1_on_ct", False))
-            if curr_flag != prev_flag:
-                boundaries.append(idx)
-            prev_flag = curr_flag
-        boundaries.append(len(source_rounds))
-        first_half_rounds = source_rounds[boundaries[0]:boundaries[1]]
-        if len(boundaries) > 2:
-            second_half_rounds = source_rounds[boundaries[1]:boundaries[2]]
-        elif len(boundaries) > 1:
-            second_half_rounds = source_rounds[boundaries[1]:]
+    first_half_rounds = [
+        rd
+        for rd in source_rounds
+        if isinstance(rd.get("round_id"), int)
+        and 1 <= display_round_id(rd.get("round_id")) <= 12
+    ]
+    second_half_rounds = [
+        rd
+        for rd in source_rounds
+        if isinstance(rd.get("round_id"), int)
+        and 13 <= display_round_id(rd.get("round_id")) <= 24
+    ]
+    overtime_rounds = [
+        rd
+        for rd in source_rounds
+        if isinstance(rd.get("round_id"), int)
+        and display_round_id(rd.get("round_id")) >= 25
+    ]
+    match_overtimes = []
+    max_display_round = max(
+        [display_round_id(rd.get("round_id")) for rd in overtime_rounds],
+        default=24,
+    )
+    for block_start in range(25, max_display_round + 1, 6):
+        block_rounds = [
+            rd
+            for rd in overtime_rounds
+            if block_start <= display_round_id(rd.get("round_id")) <= block_start + 5
+        ]
+        if not block_rounds:
+            continue
+        first_three = [
+            rd
+            for rd in block_rounds
+            if block_start <= display_round_id(rd.get("round_id")) <= block_start + 2
+        ]
+        second_three = [
+            rd
+            for rd in block_rounds
+            if block_start + 3 <= display_round_id(rd.get("round_id")) <= block_start + 5
+        ]
+        block_meta = make_half_meta(
+            f"overtime_{((block_start - 25) // 6) + 1}",
+            block_rounds,
+        )
+        if block_meta:
+            block_meta["side_periods"] = [
+                x
+                for x in [
+                    make_half_meta("first_3_rounds", first_three),
+                    make_half_meta("second_3_rounds", second_three),
+                ]
+                if x
+            ]
+            match_overtimes.append(block_meta)
 
     advanced = dashboard.get("advanced", {}) or {}
     adv_kill_ranking = [
         {
             "round": k.get("round"),
+            "round_display_id": display_round_id(k.get("round")),
             "t": round(safe_float(k.get("round_seconds", 0.0)), 2),
             "attacker": k.get("attacker"),
             "victim": k.get("victim"),
@@ -230,6 +457,15 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
             "hard_win_rate": round(safe_float(p.get("hard_win_rate", 0.0)), 3),
             "easy_win_rate": round(safe_float(p.get("easy_win_rate", 0.0)), 3),
             "highlight_rate": round(safe_float(p.get("highlight_rate", 0.0)), 3),
+            "avg_kill_opp_label": "平均击杀机会",
+            "avg_death_opp_label": "平均阵亡威胁",
+            "avg_survive_chance_label": "平均存活率",
+            "hard_duel_win_rate_label": "困难枪胜率",
+            "easy_duel_win_rate_label": "简单枪胜率",
+            "highlight_rate_label": "高光回合占比",
+            "hard_duel_win_rate_pct": percent_label(p.get("hard_win_rate", 0.0)),
+            "easy_duel_win_rate_pct": percent_label(p.get("easy_win_rate", 0.0)),
+            "highlight_rate_pct": percent_label(p.get("highlight_rate", 0.0)),
         }
         for p in (advanced.get("player_stats") or [])
     ]
@@ -239,18 +475,21 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
     for rd in dashboard.get("tactical_rounds", []) or []:
         timeline = rd.get("timeline") or []
         tactical_rounds.append(
-            {
-                "round_id": rd.get("round_id"),
-                "map_name": rd.get("map_name"),
-                "winner": rd.get("winner"),
-                "team1_side": rd.get("team1_side"),
-                "team2_side": rd.get("team2_side"),
-                "economy_summary": rd.get("economy_summary"),
-                "wr_start_pct": rd.get("wr_start_pct"),
-                "wr_end_pct": rd.get("wr_end_pct"),
-                "timeline": timeline[:MAX_TIMELINE_EVENTS_PER_ROUND],
-                "round_takeaway": rd.get("round_takeaway"),
-            }
+            add_winner_context(
+                {
+                    "round_id": rd.get("round_id"),
+                    "round_display_id": display_round_id(rd.get("round_id")),
+                    "map_name": rd.get("map_name"),
+                    "winner": rd.get("winner"),
+                    "team1_side": rd.get("team1_side"),
+                    "team2_side": rd.get("team2_side"),
+                    "economy_summary": rd.get("economy_summary"),
+                    "wr_start_pct": rd.get("wr_start_pct"),
+                    "wr_end_pct": rd.get("wr_end_pct"),
+                    "timeline": timeline[:MAX_TIMELINE_EVENTS_PER_ROUND],
+                    "round_takeaway": rd.get("round_takeaway"),
+                }
+            )
         )
     detailed_candidates = [
         rd
@@ -263,9 +502,9 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
         reverse=True,
     )
     detailed_ids = {
-        rd.get("round_id") for rd in detailed_candidates[:MAX_DETAILED_TACTICAL_ROUNDS]
+        rd.get("round_id") for rd in detailed_candidates[:detailed_round_limit]
     }
-    if tactical_rounds and not detailed_ids:
+    if detailed_round_limit > 0 and tactical_rounds and not detailed_ids:
         strongest = max(
             tactical_rounds,
             key=lambda rd: safe_float((rd.get("round_takeaway") or {}).get("largest_swing_pct", 0.0)),
@@ -292,23 +531,32 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
         brief_tactical_rounds.append(
             {
                 "round_id": rd.get("round_id"),
+                "round_display_id": rd.get("round_display_id"),
                 "map_name": rd.get("map_name"),
                 "winner": rd.get("winner"),
+                "winner_team": rd.get("winner_team"),
+                "winner_label": rd.get("winner_label"),
+                "winner_side": rd.get("winner_side"),
                 "team1_side": rd.get("team1_side"),
                 "team2_side": rd.get("team2_side"),
                 "wr_start_pct": rd.get("wr_start_pct"),
                 "wr_end_pct": rd.get("wr_end_pct"),
+                "winner_start_win_rate_pct": rd.get("winner_start_win_rate_pct"),
+                "loser_start_win_rate_pct": rd.get("loser_start_win_rate_pct"),
                 "largest_swing_pct": takeaway.get("largest_swing_pct"),
                 "event_count": takeaway.get("event_count"),
                 "key_events": brief_events,
             }
+        )
+        brief_tactical_rounds[-1]["brief_summary_hint"] = brief_summary_hint(
+            brief_tactical_rounds[-1]
         )
     brief_tactical_rounds.sort(key=lambda rd: safe_float(rd.get("round_id"), 10**9))
 
     whitelist = {
         "team1_players": sorted(match_info.get("team1_players", []) or []),
         "team2_players": sorted(match_info.get("team2_players", []) or []),
-        "valid_round_ids": sorted([r["round_id"] for r in full_rounds if r["round_id"] is not None]),
+        "valid_round_ids": sorted([r["round_display_id"] for r in full_rounds if r["round_display_id"] is not None]),
     }
     map_names = sorted(
         {
@@ -331,10 +579,11 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
             "first_half": make_half_meta("first_half", first_half_rounds),
             "second_half": make_half_meta("second_half", second_half_rounds),
         },
+        "match_overtimes": match_overtimes,
+        "round_id_display_offset": round_display_offset,
         "whitelist": whitelist,
         "map_name": map_names[0] if len(map_names) == 1 else map_names,
         "map_callout_coverage": dashboard.get("map_callout_coverage", {}),
-        "tactical_rounds": detailed_tactical_rounds,
         "detailed_tactical_rounds": detailed_tactical_rounds,
         "brief_tactical_rounds": brief_tactical_rounds,
         "overall_player_averages": format_contrib_items(dashboard.get("overall", [])),
@@ -359,69 +608,33 @@ def build_llm_prompts(llm_data: dict[str, Any], language: str) -> tuple[str, str
     data_json = json.dumps(llm_data, ensure_ascii=False)
 
     if lang == "en":
-        system_prompt = (
-            "You are a professional CS2 tactical analyst. Produce an insightful English review.\n\n"
-            "STRICT ANTI-HALLUCINATION RULES:\n"
-            f"- Valid player names (do NOT invent others): {all_players}\n"
-            f"- team1 roster: {team1_players}\n"
-            f"- team2 roster: {team2_players}\n"
-            f"- Valid round IDs: {valid_round_ids}\n"
-            "- Every numeric claim (win rate, swing, difficulty, contribution) MUST come directly "
-            "from the JSON data. Do not fabricate values, do not round aggressively.\n"
-            "- If a field is missing, say so instead of guessing.\n"
-            "- Do not invent kills, clutches, weapons, or round outcomes that are absent from the JSON.\n"
-            "- For locations, only use locations.*.name from detailed_tactical_rounds / brief_tactical_rounds. "
-            "If callout_source is missing, say location data is unavailable.\n"
+        system_prompt = EN_SYSTEM_PROMPT_TEMPLATE.format(
+            all_players=all_players,
+            team1_players=team1_players,
+            team2_players=team2_players,
+            valid_round_ids=valid_round_ids,
         )
-        user_prompt = (
-            "Deliver the following sections (concise, well-structured markdown):\n"
-            "1) Halves & score: cite match_halves.first_half / .second_half verbatim (sides and score).\n"
-            "2) Detailed turning rounds: iterate through detailed_tactical_rounds in round order. For each round, state sides, "
-            "economy_summary, wr_start_pct -> wr_end_pct, then narrate timeline events using provided locations, alive_score, "
-            "utility_state, weapon, wr_delta_pct, difficulty, duel_context, and evaluation_context. For each kill, write a natural judgment "
-            "based on win-rate swing, difficulty, and duel probability; you may praise the winner or criticize the loser. Do not use fixed labels.\n"
-            "3) Brief ordinary rounds: iterate through brief_tactical_rounds in round order. Give one sentence per round using winner, "
-            "wr_start_pct -> wr_end_pct, largest_swing_pct, and at most key_events. Do not expand these rounds.\n"
-            "4) Team narrative: tempo, consistency, collapse/comeback moments. Cite overall_player_averages + match.\n"
-            "5) Per-player review: cite advanced_player_stats alongside overall_player_averages, and use evaluation_context/difficulty/duel_context "
-            "from detailed_tactical_rounds when judging decisions. Only comment on players in the whitelist.\n"
-            "6) Fun stats from advanced_kill_ranking (top swings and their difficulty).\n"
-            "7) MVP/SVP check: compare match.mvp / match.svp to advanced_player_stats; confirm or disagree with data.\n"
-            "8) Three actionable improvement suggestions.\n\n"
-            "Data (JSON):\n" + data_json
-        )
+        user_prompt = EN_USER_PROMPT_TEMPLATE.format(data_json=data_json)
         return system_prompt, user_prompt
 
-    system_prompt = (
-        "你是专业的 CS2 战术分析师，请输出中文复盘。\n\n"
-        "严格防幻觉规则：\n"
-        f"- 合法玩家名（不得发明其它名字）：{all_players}\n"
-        f"- team1 阵容：{team1_players}\n"
-        f"- team2 阵容：{team2_players}\n"
-        f"- 合法回合 ID：{valid_round_ids}\n"
-        "- 任何数字（胜率、swing、难度、贡献）必须直接来自下方 JSON，不许编造或过度取整。\n"
-        "- 如果某字段缺失，直接说明“数据中未提供”，不要猜。\n"
-        "- 不要编造 JSON 里没有的击杀、残局、武器、回合结果。\n"
-        "- 点位只能使用 detailed_tactical_rounds / brief_tactical_rounds 中 locations.*.name；如果 callout_source 是 missing，就写“点位数据未提供”。\n"
-        "- 不要使用固定操作评价标签；每个 kill 都要根据胜率变化、difficulty、duel_context 和 evaluation_context 自然评价。\n"
-        "- 评价可以夸击杀方，也可以批评被击杀方，但必须能从 JSON 数据推出。\n"
+    system_prompt = ZH_SYSTEM_PROMPT_TEMPLATE.format(
+        all_players=all_players,
+        team1_players=team1_players,
+        team2_players=team2_players,
+        valid_round_ids=valid_round_ids,
     )
-    user_prompt = (
-        "请按如下结构输出（markdown，中文战报风格，信息要具体）：\n"
-        "1) 上/下半场阵营与比分：严格以 match_halves.first_half / .second_half 为准。\n"
-        "2) 转折回合详写：只遍历 detailed_tactical_rounds，并按 round_id 顺序写。每回合说明攻防方、开局装备概况、wr_start_pct → wr_end_pct，"
-        "再按 timeline 写每个关键事件；必须写出提供的点位、人数、utility_state、武器、胜率变化、difficulty、duel_context 和 evaluation_context。"
-        "每个 kill 都要给一句自然评价：结合击杀方胜率收益、对枪难度、duel 胜率，判断是漂亮发挥、关键补枪、被抓失误、冒险成功，或信息不足；不要套用固定标签。"
-        "如果 timeline 没有点位，就明确写点位数据未提供；不要补写 JSON 没有的爆弹、前压、残局或道具。\n"
-        "3) 普通回合速览：遍历 brief_tactical_rounds，每回合只写一句话，使用 winner、wr_start_pct → wr_end_pct、largest_swing_pct 和最多 key_events；不要展开成详细战报。\n"
-        "4) 团队叙事：节奏、稳定性、崩盘/翻盘瞬间。引用 overall_player_averages 与 match。\n"
-        "5) 玩家点评：结合 advanced_player_stats、overall_player_averages，以及 detailed_tactical_rounds 里的 evaluation_context / difficulty / duel_context，评价每个人的关键操作质量；只评论白名单里的玩家。\n"
-        "6) 趣味数据：从 advanced_kill_ranking 里挑 top swing 的击杀，说明对应 difficulty。\n"
-        "7) MVP/SVP 复核：对照 advanced_player_stats 看 match.mvp / match.svp 是否合理，给出数据支持或反对。\n"
-        "8) 三条可执行改进建议。\n\n"
-        "以下是结构化数据(JSON)：\n" + data_json
-    )
+    user_prompt = ZH_USER_PROMPT_TEMPLATE.format(data_json=data_json)
     return system_prompt, user_prompt
+
+
+def _log_token_usage(response: ChatResponse[Any] | None) -> None:
+    usage = (response.usage_details if response is not None else None) or {}
+    print(
+        "[llm_summary] "
+        f"input_tokens={usage.get('input_token_count', 'unknown')}, "
+        f"output_tokens={usage.get('output_token_count', 'unknown')}, "
+        f"total_tokens={usage.get('total_token_count', 'unknown')}"
+    )
 
 
 def _normalize_base_url(base_url: str) -> str:
@@ -442,8 +655,9 @@ def _make_client(config: LlmSummaryConfig) -> OpenAIChatCompletionClient:
 async def llm_summary_stream(
     dashboard: dict[str, Any],
     config: LlmSummaryConfig,
+    max_detailed_rounds: int | None = None,
 ) -> AsyncIterator[str]:
-    llm_data = build_llm_payload(dashboard)
+    llm_data = build_llm_payload(dashboard, max_detailed_rounds=max_detailed_rounds)
     system_prompt, user_prompt = build_llm_prompts(llm_data, config.language)
     client = _make_client(config)
     messages = [
@@ -453,18 +667,29 @@ async def llm_summary_stream(
     options = {"temperature": config.temperature}
 
     stream = client.get_response(messages, stream=True, options=options)
-    async for chunk in stream:
-        text = getattr(chunk, "text", "")
-        if text:
-            yield text
+    chunks: list[ChatResponseUpdate] = []
+    try:
+        async for chunk in stream:
+            chunks.append(chunk)
+            text = getattr(chunk, "text", "")
+            if text:
+                yield text
+    finally:
+        response = ChatResponse.from_updates(chunks) if chunks else None
+        _log_token_usage(response)
 
 
 async def llm_summary(
     dashboard: dict[str, Any],
     config: LlmSummaryConfig,
+    max_detailed_rounds: int | None = None,
 ) -> str:
     chunks = []
-    async for chunk in llm_summary_stream(dashboard, config):
+    async for chunk in llm_summary_stream(
+        dashboard,
+        config,
+        max_detailed_rounds=max_detailed_rounds,
+    ):
         chunks.append(chunk)
     return "".join(chunks)
 
@@ -472,16 +697,28 @@ async def llm_summary(
 def llm_summary_sync(
     dashboard: dict[str, Any],
     config: LlmSummaryConfig,
+    max_detailed_rounds: int | None = None,
 ) -> str:
-    return asyncio.run(llm_summary(dashboard, config))
+    return asyncio.run(
+        llm_summary(
+            dashboard,
+            config,
+            max_detailed_rounds=max_detailed_rounds,
+        )
+    )
 
 
 def llm_summary_stream_sync(
     dashboard: dict[str, Any],
     config: LlmSummaryConfig,
+    max_detailed_rounds: int | None = None,
 ) -> Iterator[str]:
     loop = asyncio.new_event_loop()
-    async_iter = llm_summary_stream(dashboard, config)
+    async_iter = llm_summary_stream(
+        dashboard,
+        config,
+        max_detailed_rounds=max_detailed_rounds,
+    )
     try:
         while True:
             try:

@@ -159,6 +159,10 @@
           <span data-i18n="temperature">Temperature</span>
           <input type="number" id="llm-temperature" step="0.1" min="0" max="1.5" value="0.95" />
         </label>
+        <label>
+          <span data-i18n="max_detailed_rounds">最多详细回合数</span>
+          <input type="number" id="llm-max-detailed-rounds" step="1" min="0" value="8" />
+        </label>
       </div>
       <button id="llm-btn" type="button" data-i18n="llm_btn">生成 AI 复盘</button>
       <article id="llm-output" class="llm-output" data-i18n="llm_empty">暂无总结</article>
