@@ -31,6 +31,7 @@ const refs = {
   llmModel: document.getElementById("llm-model"),
   llmBaseUrl: document.getElementById("llm-base-url"),
   llmTemperature: document.getElementById("llm-temperature"),
+  llmMaxDetailedRounds: document.getElementById("llm-max-detailed-rounds"),
   viewerLaunchView: document.getElementById("viewer-launch-view"),
   viewerOpen: document.getElementById("viewer-open"),
   advancedView: document.getElementById("advanced-metrics-view"),
@@ -94,6 +95,7 @@ const I18N = {
     model_name_placeholder: "gpt-4.1 / deepseek-chat / qwen-max",
     base_url: "Base URL (OpenAI 兼容)",
     temperature: "Temperature",
+    max_detailed_rounds: "最多详细回合数",
     llm_btn: "生成 AI 复盘",
     llm_empty: "暂无总结",
     no_data: "暂无数据",
@@ -188,6 +190,7 @@ const I18N = {
     model_name_placeholder: "gpt-4.1 / deepseek-chat / qwen-max",
     base_url: "Base URL (OpenAI-compatible)",
     temperature: "Temperature",
+    max_detailed_rounds: "Max Detailed Rounds",
     llm_btn: "Generate AI Review",
     llm_empty: "No summary yet",
     no_data: "No data",
@@ -311,6 +314,7 @@ function getCurrentUserPrefs() {
     llm_model: refs.llmModel?.value || "",
     llm_base_url: refs.llmBaseUrl?.value || "",
     llm_temperature: refs.llmTemperature?.value || "",
+    llm_max_detailed_rounds: refs.llmMaxDetailedRounds?.value || "",
   };
 }
 
@@ -359,6 +363,9 @@ function restoreUserPrefs() {
   if (typeof prefs.llm_temperature === "string" && refs.llmTemperature) {
     refs.llmTemperature.value = prefs.llm_temperature;
   }
+  if (typeof prefs.llm_max_detailed_rounds === "string" && refs.llmMaxDetailedRounds) {
+    refs.llmMaxDetailedRounds.value = prefs.llm_max_detailed_rounds;
+  }
 }
 
 function bindUserPrefsPersistence() {
@@ -371,6 +378,7 @@ function bindUserPrefsPersistence() {
     refs.llmModel,
     refs.llmBaseUrl,
     refs.llmTemperature,
+    refs.llmMaxDetailedRounds,
   ];
 
   fields.forEach((field) => {
@@ -1041,6 +1049,10 @@ refs.llmBtn.addEventListener("click", async () => {
   const modelName = refs.llmModel.value.trim();
   const baseUrl = refs.llmBaseUrl.value.trim();
   const temperature = Number(refs.llmTemperature.value || 0.95);
+  const rawMaxDetailedRounds = Number(refs.llmMaxDetailedRounds?.value || 8);
+  const maxDetailedRounds = Number.isFinite(rawMaxDetailedRounds)
+    ? Math.max(0, Math.floor(rawMaxDetailedRounds))
+    : 8;
   const language = currentLang();
 
   if (!apiKey || !modelName) {
@@ -1062,6 +1074,7 @@ refs.llmBtn.addEventListener("click", async () => {
         model_name: modelName,
         base_url: baseUrl,
         temperature,
+        max_detailed_rounds: maxDetailedRounds,
         language,
       }),
     });
