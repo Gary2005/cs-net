@@ -2,6 +2,12 @@ import json
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+CALLOUT_CONFIG_PATH = ROOT_DIR / "config" / "map_callouts.yaml"
+
 
 def safe_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -75,6 +81,283 @@ def build_team_swings(win_rate: list[dict[str, Any]], horizon: float = 5.0) -> d
         "largest_team1_drop_5s": largest_drop if largest_drop["start"] is not None else None,
         "largest_team1_rise_5s": largest_rise if largest_rise["start"] is not None else None,
     }
+
+
+def load_map_callouts() -> dict[str, Any]:
+    if not CALLOUT_CONFIG_PATH.exists():
+        return {}
+    with CALLOUT_CONFIG_PATH.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def normalize_callout(
+    map_name: str | None,
+    raw_place: Any,
+    callouts: dict[str, Any],
+) -> dict[str, Any]:
+    raw = "" if raw_place is None else str(raw_place).strip()
+    if not raw:
+        return {"raw": None, "name": "数据未提供", "callout_source": "missing"}
+
+    aliases: dict[str, str] = {}
+    for section in ("default", map_name or ""):
+        cfg = callouts.get(section, {}) if section else {}
+        aliases.update(cfg.get("aliases", {}) or {})
+
+    compact = raw.replace(" ", "").replace("_", "")
+    lookup = {str(k): str(v) for k, v in aliases.items()}
+    lookup.update({str(k).replace(" ", "").replace("_", ""): str(v) for k, v in aliases.items()})
+    if raw in lookup:
+        return {"raw": raw, "name": lookup[raw], "callout_source": "mapped"}
+    if compact in lookup:
+        return {"raw": raw, "name": lookup[compact], "callout_source": "mapped"}
+    return {"raw": raw, "name": raw, "callout_source": "raw"}
+
+
+def nearest_point(points: list[dict[str, Any]], t: float) -> dict[str, Any] | None:
+    if not points:
+        return None
+    best = points[0]
+    best_gap = abs(safe_float(best.get("round_seconds", 0.0)) - t)
+    for point in points[1:]:
+        gap = abs(safe_float(point.get("round_seconds", 0.0)) - t)
+        if gap < best_gap:
+            best = point
+            best_gap = gap
+    return best
+
+
+def count_alive(players: list[dict[str, Any]]) -> dict[str, int]:
+    score = {"CT": 0, "T": 0}
+    for p in players or []:
+        if not bool(p.get("is_alive", False)):
+            continue
+        side = p.get("team_num")
+        if side in score:
+            score[side] += 1
+    return score
+
+
+def summarize_utility(tick: dict[str, Any] | None) -> dict[str, Any]:
+    projectiles = (tick or {}).get("projectiles") or []
+    entity_grenades = (tick or {}).get("entity_grenades") or []
+    smokes = sum(1 for p in projectiles if p.get("type") == "smokegrenade")
+    infernos = sum(1 for p in projectiles if p.get("type") == "inferno")
+    return {
+        "active_smokes": smokes,
+        "active_infernos": infernos,
+        "flying_grenades": len(entity_grenades),
+        "bomb_planted": bool((tick or {}).get("is_bomb_planted", False)),
+    }
+
+
+def team_label_for_player(name: str, team1_players: list[str], team2_players: list[str]) -> str:
+    if name in team1_players:
+        return "team1"
+    if name in team2_players:
+        return "team2"
+    return "unknown"
+
+
+def summarize_inventory(items: list[dict[str, Any]]) -> dict[str, Any]:
+    rifles = {
+        "AK-47", "M4A4", "M4A1-S", "AUG", "SG 553", "FAMAS", "Galil AR",
+        "AWP", "SSG 08", "G3SG1", "SCAR-20",
+    }
+    pistols = {
+        "Glock-18", "USP-S", "P2000", "P250", "Desert Eagle", "Five-SeveN",
+        "Tec-9", "CZ75-Auto", "Dual Berettas", "R8 Revolver",
+    }
+    grenades = {
+        "Flashbang", "High Explosive Grenade", "Smoke Grenade", "Molotov",
+        "Incendiary Grenade", "Decoy Grenade",
+    }
+    by_side: dict[str, dict[str, Any]] = {}
+    for item in items or []:
+        side = item.get("team_num", "Unknown")
+        inv = set(item.get("inventory") or [])
+        entry = by_side.setdefault(
+            side,
+            {"rifles": 0, "pistols": 0, "awps": 0, "grenades": 0, "helmets": 0, "kits": 0},
+        )
+        entry["rifles"] += int(bool(inv & rifles))
+        entry["pistols"] += int(bool(inv & pistols))
+        entry["awps"] += int("AWP" in inv)
+        entry["grenades"] += len(inv & grenades)
+        entry["helmets"] += int(bool(item.get("has_helmet", False)))
+        entry["kits"] += int(bool(item.get("has_defuser", False)))
+    return by_side
+
+
+def build_tactical_rounds(rounds: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    callouts = load_map_callouts()
+    coverage = {"mapped": 0, "raw": 0, "missing": 0}
+    tactical_rounds: list[dict[str, Any]] = []
+
+    for rd in rounds:
+        ticks = rd.get("ticks") or []
+        win_rate = rd.get("win_rate") or []
+        map_name = rd.get("map_name")
+        team1_players = rd.get("team1_players") or []
+        team2_players = rd.get("team2_players") or []
+        first_tick = ticks[0] if ticks else {}
+        first_players = first_tick.get("players_info") or []
+        name_to_idx = {
+            p.get("name"): idx
+            for idx, p in enumerate(first_players[:10])
+            if p.get("name") is not None
+        }
+
+        def player_at(tick: dict[str, Any] | None, name: str) -> dict[str, Any] | None:
+            for p in (tick or {}).get("players_info") or []:
+                if p.get("name") == name:
+                    return p
+            return None
+
+        def location_for(tick: dict[str, Any] | None, name: str) -> dict[str, Any]:
+            p = player_at(tick, name)
+            loc = normalize_callout(map_name, (p or {}).get("last_place_name"), callouts)
+            coverage[loc["callout_source"]] += 1
+            return loc
+
+        def wr_at(t: float) -> float:
+            point = nearest_point(win_rate, t)
+            return safe_float((point or {}).get("team1_win_rate", 0.0))
+
+        timeline: list[dict[str, Any]] = []
+        for kill in sorted(rd.get("kills") or [], key=lambda x: safe_float(x.get("round_seconds", 0.0))):
+            t = safe_float(kill.get("round_seconds", 0.0))
+            before_tick = nearest_point(ticks, t - 0.12)
+            after_tick = nearest_point(ticks, t + 0.12)
+            killer = kill.get("killer", "Unknown")
+            victim = kill.get("victim", "Unknown")
+            killer_team = team_label_for_player(killer, team1_players, team2_players)
+            before_wr = wr_at(t - 0.12)
+            after_wr = wr_at(t + 0.12)
+            wr_delta = (after_wr - before_wr) * 100.0
+            difficulty = safe_float(kill.get("difficulty", 0.0))
+            killer_loc = location_for(before_tick, killer)
+            victim_loc = location_for(before_tick, victim)
+            killer_snapshot = player_at(before_tick, killer) or {}
+            victim_snapshot = player_at(before_tick, victim) or {}
+            duel_prob = None
+            a_idx = name_to_idx.get(killer)
+            v_idx = name_to_idx.get(victim)
+            duel = (before_tick or {}).get("duel") or []
+            if a_idx is not None and v_idx is not None and a_idx < len(duel):
+                row = duel[a_idx]
+                if isinstance(row, list) and v_idx < len(row) and row[v_idx] != "/":
+                    duel_prob = round(safe_float(row[v_idx], 0.0), 3)
+            killer_swing = wr_delta if killer_team == "team1" else -wr_delta
+            location_sources = [
+                killer_loc.get("callout_source"),
+                victim_loc.get("callout_source"),
+            ]
+
+            timeline.append(
+                {
+                    "t": round(t, 2),
+                    "type": "kill",
+                    "summary_facts": {
+                        "killer": killer,
+                        "victim": victim,
+                        "weapon": kill.get("weapon", "Unknown"),
+                        "headshot": bool(kill.get("headshot", False)),
+                        "assister": kill.get("assister"),
+                        "assistedflash": bool(kill.get("assistedflash", False)),
+                        "thrusmoke": bool(kill.get("thrusmoke", False)),
+                    },
+                    "players": {
+                        "killer": {
+                            "name": killer,
+                            "team": killer_team,
+                            "side": killer_snapshot.get("team_num"),
+                            "health": killer_snapshot.get("health"),
+                            "weapon": killer_snapshot.get("weapon_name"),
+                        },
+                        "victim": {
+                            "name": victim,
+                            "team": team_label_for_player(victim, team1_players, team2_players),
+                            "side": victim_snapshot.get("team_num"),
+                            "health": victim_snapshot.get("health"),
+                            "weapon": victim_snapshot.get("weapon_name"),
+                        },
+                    },
+                    "locations": {"killer": killer_loc, "victim": victim_loc},
+                    "alive_score": count_alive((before_tick or {}).get("players_info") or []),
+                    "utility_state": summarize_utility(before_tick),
+                    "wr_before_pct": round(before_wr * 100.0, 1),
+                    "wr_after_pct": round(after_wr * 100.0, 1),
+                    "wr_delta_pct": round(wr_delta, 1),
+                    "difficulty": round(difficulty, 3),
+                    "duel_context": {"killer_vs_victim": duel_prob},
+                    "evaluation_context": {
+                        "killer_team_swing_pct": round(killer_swing, 1),
+                        "winner_to_praise": killer,
+                        "loser_to_critique": victim,
+                        "location_sources": location_sources,
+                        "has_reliable_locations": "missing" not in location_sources,
+                        "notes": "Use win-rate swing, difficulty, and duel_context to judge this kill; do not use fixed labels.",
+                    },
+                }
+            )
+
+        planted_time = None
+        for tk in ticks:
+            if tk.get("bomb_planted_time") is not None:
+                planted_time = safe_float(tk.get("bomb_planted_time"))
+                break
+            if tk.get("is_bomb_planted"):
+                planted_time = safe_float(tk.get("round_seconds", 0.0))
+                break
+        if planted_time is not None:
+            plant_tick = nearest_point(ticks, planted_time)
+            wr_before = wr_at(planted_time - 0.12)
+            wr_after = wr_at(planted_time + 0.12)
+            timeline.append(
+                {
+                    "t": round(planted_time, 2),
+                    "type": "bomb_planted",
+                    "summary_facts": {"bomb_position": (plant_tick or {}).get("bomb_position")},
+                    "players": {},
+                    "locations": {},
+                    "alive_score": count_alive((plant_tick or {}).get("players_info") or []),
+                    "utility_state": summarize_utility(plant_tick),
+                    "wr_before_pct": round(wr_before * 100.0, 1),
+                    "wr_after_pct": round(wr_after * 100.0, 1),
+                    "wr_delta_pct": round((wr_after - wr_before) * 100.0, 1),
+                    "difficulty": None,
+                    "duel_context": {},
+                    "evaluation_context": {
+                        "notes": "Bomb plant event only; evaluate from win-rate movement and alive_score if useful.",
+                    },
+                }
+            )
+
+        timeline.sort(key=lambda x: x["t"])
+        wr_values = [safe_float(x.get("team1_win_rate", 0.0)) for x in win_rate]
+        round_takeaway = {
+            "winner": rd.get("winner"),
+            "event_count": len(timeline),
+            "largest_swing_pct": max((abs(safe_float(x.get("wr_delta_pct", 0.0))) for x in timeline), default=0.0),
+        }
+        tactical_rounds.append(
+            {
+                "round_id": rd.get("round_id"),
+                "map_name": map_name,
+                "winner": rd.get("winner"),
+                "team1_side": "CT" if bool(rd.get("team1_on_ct", False)) else "T",
+                "team2_side": "T" if bool(rd.get("team1_on_ct", False)) else "CT",
+                "economy_summary": summarize_inventory(rd.get("start_inventory") or []),
+                "wr_start_pct": round((wr_values[0] if wr_values else 0.0) * 100.0, 1),
+                "wr_end_pct": round((wr_values[-1] if wr_values else 0.0) * 100.0, 1),
+                "timeline": timeline,
+                "round_takeaway": round_takeaway,
+            }
+        )
+
+    return tactical_rounds, coverage
 
 
 def build_advanced_metrics(rounds: list[dict[str, Any]]) -> dict[str, Any]:
@@ -352,12 +635,15 @@ def build_dashboard_payload(raw_results: dict[str, Any]) -> dict[str, Any]:
 
     winners = [x for x in overall if x["team"] == match_winner]
     losers = [x for x in overall if x["team"] == match_loser]
+    tactical_rounds, map_callout_coverage = build_tactical_rounds(rounds)
 
     return {
         "rounds": rounds,
         "overall": overall,
         "errors": errors,
         "advanced": build_advanced_metrics(rounds),
+        "tactical_rounds": tactical_rounds,
+        "map_callout_coverage": map_callout_coverage,
         "match": {
             "team1_round_wins": team1_round_wins,
             "team2_round_wins": team2_round_wins,

@@ -12,6 +12,10 @@ from demo_analysis.high_level_analysis import safe_float
 MAX_FEATURED_ROUNDS = 6
 MAX_KILLS_PER_FEATURED_ROUND = 5
 MAX_KILL_RANKING_ENTRIES = 10
+MAX_TIMELINE_EVENTS_PER_ROUND = 12
+MAX_DETAILED_TACTICAL_ROUNDS = 8
+MIN_DETAILED_SWING_PCT = 15.0
+MAX_BRIEF_TIMELINE_EVENTS_PER_ROUND = 2
 
 
 @dataclass(frozen=True)
@@ -231,14 +235,92 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
     ]
 
     match_info = dashboard.get("match", {}) or {}
+    tactical_rounds = []
+    for rd in dashboard.get("tactical_rounds", []) or []:
+        timeline = rd.get("timeline") or []
+        tactical_rounds.append(
+            {
+                "round_id": rd.get("round_id"),
+                "map_name": rd.get("map_name"),
+                "winner": rd.get("winner"),
+                "team1_side": rd.get("team1_side"),
+                "team2_side": rd.get("team2_side"),
+                "economy_summary": rd.get("economy_summary"),
+                "wr_start_pct": rd.get("wr_start_pct"),
+                "wr_end_pct": rd.get("wr_end_pct"),
+                "timeline": timeline[:MAX_TIMELINE_EVENTS_PER_ROUND],
+                "round_takeaway": rd.get("round_takeaway"),
+            }
+        )
+    detailed_candidates = [
+        rd
+        for rd in tactical_rounds
+        if safe_float((rd.get("round_takeaway") or {}).get("largest_swing_pct", 0.0))
+        >= MIN_DETAILED_SWING_PCT
+    ]
+    detailed_candidates.sort(
+        key=lambda rd: safe_float((rd.get("round_takeaway") or {}).get("largest_swing_pct", 0.0)),
+        reverse=True,
+    )
+    detailed_ids = {
+        rd.get("round_id") for rd in detailed_candidates[:MAX_DETAILED_TACTICAL_ROUNDS]
+    }
+    if tactical_rounds and not detailed_ids:
+        strongest = max(
+            tactical_rounds,
+            key=lambda rd: safe_float((rd.get("round_takeaway") or {}).get("largest_swing_pct", 0.0)),
+        )
+        detailed_ids = {strongest.get("round_id")}
+
+    detailed_tactical_rounds = [
+        rd for rd in tactical_rounds if rd.get("round_id") in detailed_ids
+    ]
+    detailed_tactical_rounds.sort(key=lambda rd: safe_float(rd.get("round_id"), 10**9))
+
+    brief_tactical_rounds = []
+    for rd in tactical_rounds:
+        if rd.get("round_id") in detailed_ids:
+            continue
+        takeaway = rd.get("round_takeaway") or {}
+        timeline = rd.get("timeline") or []
+        brief_events = sorted(
+            timeline,
+            key=lambda ev: abs(safe_float(ev.get("wr_delta_pct", 0.0))),
+            reverse=True,
+        )[:MAX_BRIEF_TIMELINE_EVENTS_PER_ROUND]
+        brief_events.sort(key=lambda ev: safe_float(ev.get("t", 0.0)))
+        brief_tactical_rounds.append(
+            {
+                "round_id": rd.get("round_id"),
+                "map_name": rd.get("map_name"),
+                "winner": rd.get("winner"),
+                "team1_side": rd.get("team1_side"),
+                "team2_side": rd.get("team2_side"),
+                "wr_start_pct": rd.get("wr_start_pct"),
+                "wr_end_pct": rd.get("wr_end_pct"),
+                "largest_swing_pct": takeaway.get("largest_swing_pct"),
+                "event_count": takeaway.get("event_count"),
+                "key_events": brief_events,
+            }
+        )
+    brief_tactical_rounds.sort(key=lambda rd: safe_float(rd.get("round_id"), 10**9))
+
     whitelist = {
         "team1_players": sorted(match_info.get("team1_players", []) or []),
         "team2_players": sorted(match_info.get("team2_players", []) or []),
         "valid_round_ids": sorted([r["round_id"] for r in full_rounds if r["round_id"] is not None]),
     }
+    map_names = sorted(
+        {
+            str(r.get("map_name"))
+            for r in source_rounds
+            if r.get("map_name") is not None
+        }
+    )
 
     return {
         "match": {
+            "map_name": map_names[0] if len(map_names) == 1 else map_names,
             "team1_round_wins": match_info.get("team1_round_wins"),
             "team2_round_wins": match_info.get("team2_round_wins"),
             "winner": match_info.get("winner"),
@@ -250,9 +332,14 @@ def build_llm_payload(dashboard: dict[str, Any]) -> dict[str, Any]:
             "second_half": make_half_meta("second_half", second_half_rounds),
         },
         "whitelist": whitelist,
+        "map_name": map_names[0] if len(map_names) == 1 else map_names,
+        "map_callout_coverage": dashboard.get("map_callout_coverage", {}),
+        "tactical_rounds": detailed_tactical_rounds,
+        "detailed_tactical_rounds": detailed_tactical_rounds,
+        "brief_tactical_rounds": brief_tactical_rounds,
         "overall_player_averages": format_contrib_items(dashboard.get("overall", [])),
-        "featured_rounds": featured_rounds,
-        "other_rounds": other_rounds,
+        "featured_rounds": [] if detailed_tactical_rounds else featured_rounds,
+        "other_rounds": [] if detailed_tactical_rounds else other_rounds,
         "advanced_kill_ranking": adv_kill_ranking,
         "advanced_player_stats": adv_player_stats,
     }
@@ -283,19 +370,24 @@ def build_llm_prompts(llm_data: dict[str, Any], language: str) -> tuple[str, str
             "from the JSON data. Do not fabricate values, do not round aggressively.\n"
             "- If a field is missing, say so instead of guessing.\n"
             "- Do not invent kills, clutches, weapons, or round outcomes that are absent from the JSON.\n"
+            "- For locations, only use locations.*.name from detailed_tactical_rounds / brief_tactical_rounds. "
+            "If callout_source is missing, say location data is unavailable.\n"
         )
         user_prompt = (
             "Deliver the following sections (concise, well-structured markdown):\n"
             "1) Halves & score: cite match_halves.first_half / .second_half verbatim (sides and score).\n"
-            "2) Team narrative: tempo, consistency, collapse/comeback moments. Cite overall_player_averages + match.\n"
-            "3) Featured rounds: walk through each round in featured_rounds.\n"
-            "   For each, state team1_side/team2_side, wr_start_pct → wr_end_pct, and the 1-3 most decisive "
-            "   kill_transitions (use killer, victim, weapon, wr_delta_pct, difficulty).\n"
-            "4) Per-player review: cite advanced_player_stats (avg_kill_opp, avg_survive_chance, hard_win_rate) "
-            "   alongside overall_player_averages. Only comment on players in the whitelist.\n"
-            "5) Fun stats from advanced_kill_ranking (top swings and their difficulty).\n"
-            "6) MVP/SVP check: compare match.mvp / match.svp to advanced_player_stats; confirm or disagree with data.\n"
-            "7) Three actionable improvement suggestions.\n\n"
+            "2) Detailed turning rounds: iterate through detailed_tactical_rounds in round order. For each round, state sides, "
+            "economy_summary, wr_start_pct -> wr_end_pct, then narrate timeline events using provided locations, alive_score, "
+            "utility_state, weapon, wr_delta_pct, difficulty, duel_context, and evaluation_context. For each kill, write a natural judgment "
+            "based on win-rate swing, difficulty, and duel probability; you may praise the winner or criticize the loser. Do not use fixed labels.\n"
+            "3) Brief ordinary rounds: iterate through brief_tactical_rounds in round order. Give one sentence per round using winner, "
+            "wr_start_pct -> wr_end_pct, largest_swing_pct, and at most key_events. Do not expand these rounds.\n"
+            "4) Team narrative: tempo, consistency, collapse/comeback moments. Cite overall_player_averages + match.\n"
+            "5) Per-player review: cite advanced_player_stats alongside overall_player_averages, and use evaluation_context/difficulty/duel_context "
+            "from detailed_tactical_rounds when judging decisions. Only comment on players in the whitelist.\n"
+            "6) Fun stats from advanced_kill_ranking (top swings and their difficulty).\n"
+            "7) MVP/SVP check: compare match.mvp / match.svp to advanced_player_stats; confirm or disagree with data.\n"
+            "8) Three actionable improvement suggestions.\n\n"
             "Data (JSON):\n" + data_json
         )
         return system_prompt, user_prompt
@@ -310,17 +402,23 @@ def build_llm_prompts(llm_data: dict[str, Any], language: str) -> tuple[str, str
         "- 任何数字（胜率、swing、难度、贡献）必须直接来自下方 JSON，不许编造或过度取整。\n"
         "- 如果某字段缺失，直接说明“数据中未提供”，不要猜。\n"
         "- 不要编造 JSON 里没有的击杀、残局、武器、回合结果。\n"
+        "- 点位只能使用 detailed_tactical_rounds / brief_tactical_rounds 中 locations.*.name；如果 callout_source 是 missing，就写“点位数据未提供”。\n"
+        "- 不要使用固定操作评价标签；每个 kill 都要根据胜率变化、difficulty、duel_context 和 evaluation_context 自然评价。\n"
+        "- 评价可以夸击杀方，也可以批评被击杀方，但必须能从 JSON 数据推出。\n"
     )
     user_prompt = (
-        "请按如下结构输出（markdown，精炼）：\n"
+        "请按如下结构输出（markdown，中文战报风格，信息要具体）：\n"
         "1) 上/下半场阵营与比分：严格以 match_halves.first_half / .second_half 为准。\n"
-        "2) 团队叙事：节奏、稳定性、崩盘/翻盘瞬间。引用 overall_player_averages 与 match。\n"
-        "3) 精选回合讲解：遍历 featured_rounds 列表。\n"
-        "   每一回合写出 team1_side / team2_side、wr_start_pct → wr_end_pct，并挑 1-3 个 kill_transitions 里 |wr_delta_pct| 最大的击杀展开（注明 killer、victim、weapon、wr_delta_pct、difficulty）。\n"
-        "4) 玩家点评：结合 advanced_player_stats（avg_kill_opp / avg_survive_chance / hard_win_rate）与 overall_player_averages，只评论白名单里的玩家。\n"
-        "5) 趣味数据：从 advanced_kill_ranking 里挑 top swing 的击杀，说明对应 difficulty。\n"
-        "6) MVP/SVP 复核：对照 advanced_player_stats 看 match.mvp / match.svp 是否合理，给出数据支持或反对。\n"
-        "7) 三条可执行改进建议。\n\n"
+        "2) 转折回合详写：只遍历 detailed_tactical_rounds，并按 round_id 顺序写。每回合说明攻防方、开局装备概况、wr_start_pct → wr_end_pct，"
+        "再按 timeline 写每个关键事件；必须写出提供的点位、人数、utility_state、武器、胜率变化、difficulty、duel_context 和 evaluation_context。"
+        "每个 kill 都要给一句自然评价：结合击杀方胜率收益、对枪难度、duel 胜率，判断是漂亮发挥、关键补枪、被抓失误、冒险成功，或信息不足；不要套用固定标签。"
+        "如果 timeline 没有点位，就明确写点位数据未提供；不要补写 JSON 没有的爆弹、前压、残局或道具。\n"
+        "3) 普通回合速览：遍历 brief_tactical_rounds，每回合只写一句话，使用 winner、wr_start_pct → wr_end_pct、largest_swing_pct 和最多 key_events；不要展开成详细战报。\n"
+        "4) 团队叙事：节奏、稳定性、崩盘/翻盘瞬间。引用 overall_player_averages 与 match。\n"
+        "5) 玩家点评：结合 advanced_player_stats、overall_player_averages，以及 detailed_tactical_rounds 里的 evaluation_context / difficulty / duel_context，评价每个人的关键操作质量；只评论白名单里的玩家。\n"
+        "6) 趣味数据：从 advanced_kill_ranking 里挑 top swing 的击杀，说明对应 difficulty。\n"
+        "7) MVP/SVP 复核：对照 advanced_player_stats 看 match.mvp / match.svp 是否合理，给出数据支持或反对。\n"
+        "8) 三条可执行改进建议。\n\n"
         "以下是结构化数据(JSON)：\n" + data_json
     )
     return system_prompt, user_prompt

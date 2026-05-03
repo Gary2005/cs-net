@@ -1,0 +1,513 @@
+# Initial Chinese callout aliases.
+# English callout names are seeded from TotalCS callout tables; compact aliases
+# also cover demoparser last_place_name values such as TSpawn / BombsiteA.
+default:
+  aliases:
+    T Spawn: T出生点
+    TSpawn: T出生点
+    CT Spawn: CT出生点
+    CTSpawn: CT出生点
+    A Site: A包点
+    BombsiteA: A包点
+    B Site: B包点
+    BombsiteB: B包点
+    A: A区
+    B: B区
+    Mid: 中路
+    Middle: 中路
+    Connector: 连接
+    Short: 小道
+    Long: 长道
+    Ramp: 坡道
+    Palace: 皇宫
+    Apartments: 二楼
+    Apps: 二楼
+    Catwalk: 小道
+    Tunnel: 管道
+    Tunnels: 管道
+    Upper Tunnels: 上层管道
+    UpperTunnel: 上层管道
+    Lower Tunnels: 下层管道
+    LowerTunnel: 下层管道
+    Heaven: 天堂
+    Stairs: 楼梯
+    Window: 窗口
+    Door: 门口
+    Doors: 门
+    Default: 默认包位
+    Back Site: 后点
+    Big Box: 大箱
+    Triple Box: 三箱
+    Boost: 双架位
+    Bench: 长椅
+
+de_dust2:
+  aliases:
+    A Short: A小
+    Short: A小
+    Catwalk: 小道
+    T Spawn: T出生点
+    TSpawn: T出生点
+    T Ramp: T坡
+    TRamp: T坡
+    T Plat: T平台
+    Outside Tunnels: B洞外
+    Upper B Tunnels: B洞上层
+    UpperTunnel: B洞上层
+    Lower B Tunnels: B洞下层
+    LowerTunnel: B洞下层
+    Close: B近点
+    B Closet: B车位角落
+    B Car: B车
+    Fence: B铁网
+    B Plat: B平台
+    Back Plat: B后平台
+    Big Box: B大箱
+    Double Stack: B双箱
+    B Default Plant: B默认包位
+    B Window: B窗
+    B Back Site: B后点
+    B Doors: B门
+    BDoors: B门
+    B Boxes: B门箱
+    Scaffolding: 脚手架
+    CT Mid: 警家中路
+    Mid Doors: 中门
+    MidDoors: 中门
+    Close Mid Doors: 中门近点
+    Xbox: Xbox
+    Mid: 中路
+    Middle: 中路
+    Palm: 棕榈位
+    Right Side Mid: 中路右侧
+    Top Mid: 中路上段
+    TopMid: 中路上段
+    Suicide: 自杀位
+    Outside Long: A门外
+    OutsideLong: A门外
+    Long Doors: A大门
+    LongDoors: A大门
+    Blue: 蓝箱
+    Side Pit: 大坑边
+    Pit: 大坑
+    Pit Plat: 大坑平台
+    A Long: A大
+    LongA: A大
+    Long Corner: A大拐角
+    A Car: A车
+    A Cross: A过点
+    A Ramp: A斜坡
+    A Default Plant: A默认包位
+    Barrels: 油桶
+    Goose: 鹅位
+    Elevator: 电梯位
+    Short Boost: 小道双架
+    A Platform: A平台
+    A Ninja: A忍者位
+    Stairs: 小道楼梯
+    CT Spawn: CT出生点
+    CTSpawn: CT出生点
+
+de_mirage:
+  aliases:
+    Mid: 中路
+    Middle: 中路
+    B Site: B包点
+    BombsiteB: B包点
+    A Site: A包点
+    BombsiteA: A包点
+    T Spawn: T出生点
+    TSpawn: T出生点
+    T Roof: T屋顶
+    A Ramp: A坡
+    Ramp: A坡
+    TRamp: A坡
+    Palace: 皇宫
+    PalaceInterior: 皇宫内
+    PalaceAlley: 皇宫通道
+    Pillars: 皇宫柱
+    Balcony: 皇宫阳台
+    Shadows: 阴影位
+    Tetris: 俄罗斯方块
+    Sandwich: 三明治
+    Stairs: 楼梯
+    Firebox: 火箱
+    Ninja: 忍者位
+    CT: 警家口
+    Ticket Booth: 售票亭
+    Trash: 垃圾桶
+    CT Spawn: CT出生点
+    CTSpawn: CT出生点
+    Jungle: 丛林
+    Connector: 连接
+    Vent: 通风口
+    "Sniper's Nest": 警家窗口
+    SnipersNest: 警家窗口
+    Ladder Room: 梯子房
+    Ladder: 梯子房
+    Underpass: 下水道
+    Boost: 中路双架
+    Chair: 椅子
+    Top Mid: 中路上段
+    TopMid: 中路上段
+    TopofMid: 中路上段
+    Mid Boxes: 中路箱
+    Default: 默认包位
+    Triple Box: 三箱
+    Catwalk: 小道
+    B Short: B小
+    Short: B小
+    Short Corner: B小拐角
+    Market: 超市
+    Shop: 超市
+    Window: 超市窗口
+    Door: 超市门
+    Bench: 长椅
+    Van: 白车
+    Truck: 白车
+    B Apartments: B二楼
+    Apartments: B二楼
+    Kitchen: 厨房
+    B Plat: B平台
+    Side Alley: 侧巷
+    SideAlley: 侧巷
+    TV: 电视房
+    Cart: 推车
+    Apps Ramp: 二楼坡
+    Arches: 拱门
+    Sneaky: 冰箱上
+    Empty: 空柱
+    E Box: E箱
+    Boost Boxes: 双架箱
+    House: 房区
+    Back Alley: 后巷
+    BackAlley: 后巷
+    Scaffolding: 脚手架
+
+de_inferno:
+  aliases:
+    Banana: 香蕉道
+    B Site: B包点
+    BombsiteB: B包点
+    T Spawn: T出生点
+    TSpawn: T出生点
+    Mid: 中路
+    Middle: 中路
+    Second Mid: 二中
+    SecondMid: 二中
+    T Ramp: T坡
+    TRamp: T坡
+    Ledge: 台阶
+    Living Room: 客厅
+    Balcony: 阳台
+    Bridge: 连廊
+    A Short: A短
+    Short: A短
+    A Long: A长
+    Long: A长
+    T Apartments: T二楼
+    Apartments: 二楼
+    Second Mid Door: 二中门
+    Back Alley: 后巷
+    Underpass: 下水道
+    Bench: 长椅
+    Second Mid Stairs: 二中楼梯
+    CT Apartments: CT二楼
+    Top Mid: 中路上段
+    TopMid: 中路上段
+    Pit: 大坑
+    Boiler: 锅炉房
+    Window: 窗口
+    Stairs: 楼梯
+    Close Apartments: 近点二楼
+    Dosia: Dosia位
+    Cemetery: 墓地墙
+    Graveyard: 墓地
+    Truck: 卡车
+    Patio: 阳台位
+    Long Corner: A长拐角
+    Library: 书房
+    Kitchen: 厨房
+    A Site: A包点
+    BombsiteA: A包点
+    Close Left: 近点左侧
+    Back Site (A): A后点
+    Arch: 拱门
+    CT Spawn: CT出生点
+    CTSpawn: CT出生点
+    Speedway: 连接路
+    Terrace: 露台
+    Well: 水井
+    CT: 警家口
+    Tree: 树位
+    CT Boost: 警家双架
+    Construction: 工地
+    Sand Bags (Construction): 工地沙袋
+    Garden: 花园
+    Coffins: 棺材
+    Grill: 烤架
+    Dark: 黑屋
+    Fountain: 喷泉
+    Quad: 四箱
+    "2nd": 二箱位
+    "1st": 一箱位
+    Boost: 双架位
+    Sand Bags (B): 香蕉道沙袋
+    Car: 车位
+    Logs: 木柴
+    Bottom Mid: 中路底
+
+de_nuke:
+  aliases:
+    T Spawn: T出生点
+    TSpawn: T出生点
+    CT Spawn: CT出生点
+    CTSpawn: CT出生点
+    Outside: 外场
+    A Site: A包点
+    BombsiteA: A包点
+    B Site: B包点
+    BombsiteB: B包点
+    Garage: 仓库
+    Ramp: 铁板
+    CT Box: CT箱
+    T Roof: T屋顶
+    Lobby: 大厅
+    Radio: 广播室
+    Trophy: 奖杯房
+    Control: 控制室
+    Squeaky: 铁门
+    Vent: 管道
+    Hell: 地狱
+    Heaven: 天堂
+    Lockers: 更衣室
+    Headshot: 头皮位
+    Sandbags: 沙袋
+    Hut: 黄房
+    Tetris: 俄罗斯方块
+    Mustang: Mustang位
+    Rafters: 栈道
+    Bridge: 天桥
+    Turn Pike: 转角房
+    Stack: 铁板箱
+    Boost: 双架位
+    Big Box: 大箱
+    T Red: T红箱
+    CT Red: CT红箱
+    Main: 正门
+    Window: 窗口
+    Dark: 黑角
+    Decon: 消毒室
+    Back Vents: 后管道
+    Tunnels: 地下管道
+    Doors: 双门
+    Bottom Ramp: 铁板下
+    Silo: 罐顶
+    Secret: K1
+
+de_overpass:
+  aliases:
+    A Site: A包点
+    BombsiteA: A包点
+    B Site: B包点
+    BombsiteB: B包点
+    T Spawn: T出生点
+    TSpawn: T出生点
+    A Long: A大
+    LongA: A大
+    Upper Tunnels: 上层管道
+    Lower Tunnels: 下层管道
+    Connector: 连接
+    Party: 派对
+    Mid: 中路
+    Middle: 中路
+    Fountain: 喷泉
+    Playground: 游乐场
+    Rock: 石头
+    Tree: 树位
+    Long Toilets: A大厕所
+    Long Boost: A大双架
+    Close Left (Long): A大近点左
+    Van: 车位
+    Bank: 银行
+    Default (A): A默认包位
+    Optimus: 卡车
+    Truck: 卡车
+    Bins: 垃圾桶
+    Toilets: 厕所
+    A Short: A短
+    Flowers: 花坛
+    CT: 警家口
+    Monster: 下水道
+    Tracks: 轨道
+    Short Tunnel: 短管
+    Water: 水下
+    Squeaky: 水下门
+    B Short: B短
+    Short: B短
+    Sandbags: 沙袋
+    Sewers: 下水道出口
+    Pillar: 柱子
+    Toxic Barrels: 毒桶
+    Pit: 坑位
+    Heaven: 天堂
+    Graffiti: 涂鸦
+    Cafe: 咖啡位
+    Bench: 长椅
+    Storage: 储藏室
+    Bridge: 桥
+    Boost: 双架位
+    Ladder: 梯子
+    Signpost: 路牌
+    Hitmarker: Hitmarker位
+
+de_ancient:
+  aliases:
+    T Spawn: T出生点
+    TSpawn: T出生点
+    Tunnel: 管道
+    Tunnels: 管道
+    Water: 水道
+    Ruins: 废墟
+    Doors: 双门
+    Split: 分叉口
+    Stairs: 楼梯
+    Elbow: 肘部
+    A Halls: A厅
+    A Main: A门
+    Long: A长
+    Boost: 双架位
+    Big Box: 大箱
+    Single: 单箱
+    Plat: 平台
+    A Site: A包点
+    BombsiteA: A包点
+    Triple Box: 三箱
+    CT Lane: 警家通道
+    Temple: 神庙
+    CT Spawn: CT出生点
+    CTSpawn: CT出生点
+    Snipers Nest: 狙击台
+    Top Mid: 中路上段
+    TopMid: 中路上段
+    Pit: 坑位
+    Mid: 中路
+    Middle: 中路
+    Short: 短道
+    Xbox: Xbox
+    Heaven: 天堂
+    Lamp Room: 灯房
+    Dark: 黑屋
+    T Lower: T低坡
+    Ramp: 斜坡
+    Cave: 黑屋
+    House: 房区
+    B Site: B包点
+    BombsiteB: B包点
+    Pillar: 柱子
+    Square: 方块位
+    Back Halls: 后厅
+    Alley: 小巷
+
+de_anubis:
+  aliases:
+    T Spawn: T出生点
+    TSpawn: T出生点
+    Alley: 小巷
+    Ruins: 废墟
+    Top Mid: 中路上段
+    TopMid: 中路上段
+    B Long: B长
+    Gate: 门口
+    Ivy: 藤蔓
+    Heaven: 天堂
+    Pillar: 柱子
+    Default: 默认包位
+    E Box: E箱
+    Water: 水下
+    Arches: 拱门
+    Wood: 木板
+    B Site: B包点
+    BombsiteB: B包点
+    Back Site: 后点
+    Ninja: 忍者位
+    Bridge: 桥
+    Double Doors: 双门
+    Palace: 宫殿
+    Street: 街道
+    Sniper: 狙击位
+    Stairs: 楼梯
+    Middle: 中路
+    Mid: 中路
+    Cave: 洞口
+    A Connector: A连接
+    Connector: 连接
+    Plateau: 高台
+    Drop: 下落口
+    CT Spawn: CT出生点
+    CTSpawn: CT出生点
+    Main: 正门
+    Headshot: 头皮位
+    Boat: 船位
+    Tunnel: 管道
+    Fountain: 喷泉
+    Upper: 上层
+    A Site: A包点
+    BombsiteA: A包点
+    Beach: 沙滩
+    Corner: 角落
+    Back Site (A): A后点
+
+de_train:
+  aliases:
+    T Spawn: T出生点
+    TSpawn: T出生点
+    A Main: A门
+    Main: A门
+    T Main: 匪口
+    TMain: 匪口
+    T Stairs: T楼梯
+    Brown Halls: 棕厅
+    Showers: 浴室
+    Popdog: 狗洞
+    B Halls: B厅
+    B Ramp: B坡
+    Upper B: B上层
+    Ladder: 梯子
+    Spools: 线轴
+    Catwalk: 小道
+    Headshot: 头皮位
+    Bomb Train (B): B包车
+    White: 白车
+    Yellow: 黄车
+    Red (B): B红车
+    Oil: 油车
+    Sidewalk: 人行道
+    Z Connector: Z连接
+    Connector: 连接
+    CT Spawn: CT出生点
+    CTSpawn: CT出生点
+    Back Site (B): B后点
+    CT Stairs: CT楼梯
+    Old Bomb: 老包点
+    A1: A1车
+    A2: A2车
+    A3: A3车
+    CT Tunnel: CT管道
+    Ivy: 绿通
+    Dumpster: 垃圾箱
+    Alley: 小巷
+    Olof: Olof位
+    Sandwich: 三明治
+    Hell: 地狱
+    Red (A): A红车
+    Blue: 蓝车
+    Green: 绿车
+    E Box: E箱
+    Bomb Train (A): A包车
+    Heaven: 天堂
+    Cubby: 凹槽
+    Pigeons: 鸽子位
+    Camera: 摄像头
+    Kitchen: 厨房
+    Summit: Summit位

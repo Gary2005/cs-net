@@ -493,6 +493,9 @@ def process_round_json(round_result):
             "player": p.get("name", "Unknown"),
             "team_num": p.get("team_num", "Unknown"),
             "inventory": p.get("inventory", []),
+            "armor": p.get("armor"),
+            "has_helmet": p.get("has_helmet"),
+            "has_defuser": p.get("has_defuser"),
         }
         for p in round_result[0]["players_info"]
     ]
@@ -572,6 +575,11 @@ def process_round_json(round_result):
                     "weapon": kill["weapon"],
                     "headshot": bool(kill.get("headshot", False)),
                     "difficulty": difficulty,
+                    "assistedflash": bool(kill.get("assistedflash", False)),
+                    "attackerblind": bool(kill.get("attackerblind", False)),
+                    "attackerinair": bool(kill.get("attackerinair", False)),
+                    "thrusmoke": bool(kill.get("thrusmoke", False)),
+                    "dmg_health": kill.get("dmg_health"),
                 })
         else:
             alive_t = [p for p in alive_players if p in team_t]
@@ -612,6 +620,11 @@ def radar_player_view(players_info):
             "is_alive": bool(p.get("is_alive")),
             "health": p.get("health"),
             "weapon_name": p.get("weapon_name"),
+            "last_place_name": p.get("last_place_name"),
+            "inventory": p.get("inventory"),
+            "armor": p.get("armor"),
+            "has_helmet": p.get("has_helmet"),
+            "has_defuser": p.get("has_defuser"),
             "flash_duration": p.get("flash_duration"),
             "flash_max_alpha": p.get("flash_max_alpha"),
         })
@@ -651,7 +664,11 @@ def build_round_ticks(round_states, duel_fallback):
             "duel": duel_marked,
             "is_bomb_planted": s.get("is_bomb_planted"),
             "is_bomb_dropped": s.get("is_bomb_dropped"),
+            "bomb_planted_time": s.get("bomb_planted_time"),
+            "bomb_planted_duration": s.get("bomb_planted_duration"),
             "bomb_position": s.get("bomb_position"),
+            "projectiles": s.get("projectiles", []),
+            "entity_grenades": s.get("entity_grenades", []),
         })
     return ticks
 
