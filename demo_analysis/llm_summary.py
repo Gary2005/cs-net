@@ -29,7 +29,7 @@ ZH_SYSTEM_PROMPT_TEMPLATE = """你是专业的 CS2 战术分析师，请输出�
 - 任何数字（胜率、swing、难度、贡献）必须直接来自下方 JSON，不许编造或过度取整。
 - 如果某字段缺失，直接说明“数据中未提供”，不要猜。
 - 不要编造 JSON 里没有的击杀、残局、武器、回合结果、爆弹、前压或道具。
-- 点位只能使用 killer_location.name / victim_location.name；如果 callout_source 是 missing，就写“点位数据未提供”。
+- 点位只能逐字复制 killer_location.name / victim_location.name；不得翻译、意译、概括或改写。如果 callout_source 是 missing，就写“点位数据未提供”。
 - 不要向用户展示内部技术字段名，包括 detailed_tactical_rounds、brief_tactical_rounds、wr_start、wr_end、wr_start_pct、wr_end_pct、hard_win_rate、easy_win_rate、highlight_rate、evaluation_context、duel_context。
 - 评价可以夸击杀方，也可以批评被击杀方，但必须能从 JSON 数据推出。
 - 回合级胜率只写“某队在开局胜率 X% 的情况下获胜”；不要写终局 0.0%/100.0%，也不要展示 wr_start/wr_end 这样的字段名。
@@ -61,7 +61,7 @@ Strict anti-hallucination and writing rules:
 - Every numeric claim (win rate, swing, difficulty, contribution) MUST come directly from the JSON data. Do not fabricate values or round aggressively.
 - If a field is missing, say so instead of guessing.
 - Do not invent kills, clutches, weapons, round outcomes, utility, pushes, or tactics absent from the JSON.
-- For locations, only use killer_location.name / victim_location.name. If callout_source is missing, say location data is unavailable.
+- For locations, copy killer_location.name / victim_location.name exactly; do not translate, paraphrase, summarize, or rewrite them. If callout_source is missing, say location data is unavailable.
 - Do not expose internal technical field names to the user, including detailed_tactical_rounds, brief_tactical_rounds, wr_start, wr_end, wr_start_pct, wr_end_pct, hard_win_rate, easy_win_rate, highlight_rate, evaluation_context, duel_context.
 - Round-level win-rate narration must say: “Team X won from an opening win probability of Y%”. Do not show terminal 0.0%/100.0% curve values or wr_start/wr_end field names.
 - For detailed rounds, each key kill should show event-level numbers: killer-side gain, Team1 curve change, kill difficulty, and duel predicted win rate. Use natural language, not JSON field names.
@@ -93,6 +93,7 @@ class LlmSummaryConfig:
 def build_llm_payload(
     dashboard: dict[str, Any],
     max_detailed_rounds: int | None = None,
+    language: str = "zh",
 ) -> dict[str, Any]:
     """
     Compact payload for the LLM. Large raw arrays are dropped so reports stay
@@ -100,6 +101,29 @@ def build_llm_payload(
     """
 
     source_rounds = dashboard.get("rounds", [])
+    output_lang = "en" if (language or "").strip().lower() == "en" else "zh"
+
+    def localize_location(loc: Any) -> Any:
+        if not isinstance(loc, dict):
+            return loc
+        name_key = "name_en" if output_lang == "en" else "name_cn"
+        localized = loc.get(name_key) or loc.get("name")
+        if localized is None:
+            return loc
+        return {**loc, "name": localized}
+
+    def localize_event_locations(event: Any) -> Any:
+        if not isinstance(event, dict):
+            return event
+        updated = dict(event)
+        if "killer_location" in updated:
+            updated["killer_location"] = localize_location(updated["killer_location"])
+        if "victim_location" in updated:
+            updated["victim_location"] = localize_location(updated["victim_location"])
+        return updated
+
+    def localize_timeline(timeline: Any) -> list[Any]:
+        return [localize_event_locations(event) for event in (timeline or [])]
     try:
         detailed_round_limit = (
             MAX_DETAILED_TACTICAL_ROUNDS
@@ -473,7 +497,7 @@ def build_llm_payload(
     match_info = dashboard.get("match", {}) or {}
     tactical_rounds = []
     for rd in dashboard.get("tactical_rounds", []) or []:
-        timeline = rd.get("timeline") or []
+        timeline = localize_timeline(rd.get("timeline") or [])
         tactical_rounds.append(
             add_winner_context(
                 {
@@ -521,7 +545,7 @@ def build_llm_payload(
         if rd.get("round_id") in detailed_ids:
             continue
         takeaway = rd.get("round_takeaway") or {}
-        timeline = rd.get("timeline") or []
+        timeline = localize_timeline(rd.get("timeline") or [])
         brief_events = sorted(
             timeline,
             key=lambda ev: abs(safe_float(ev.get("wr_delta_pct", 0.0))),
@@ -657,7 +681,11 @@ async def llm_summary_stream(
     config: LlmSummaryConfig,
     max_detailed_rounds: int | None = None,
 ) -> AsyncIterator[str]:
-    llm_data = build_llm_payload(dashboard, max_detailed_rounds=max_detailed_rounds)
+    llm_data = build_llm_payload(
+        dashboard,
+        max_detailed_rounds=max_detailed_rounds,
+        language=config.language,
+    )
     system_prompt, user_prompt = build_llm_prompts(llm_data, config.language)
     client = _make_client(config)
     messages = [

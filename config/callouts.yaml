@@ -1,0 +1,168 @@
+defaults:
+  nearest_threshold: 300
+maps:
+  de_ancient:
+    nearest_threshold: 300
+    overview: demo_analysis/static/overviews/de_ancient.png
+    polygons_cn: []
+    polygons_en: []
+    transform:
+      pzero:
+      - -2953
+      - 2164
+      scale: 5
+  de_ancient_night:
+    nearest_threshold: 300
+    overview: demo_analysis/static/overviews/de_ancient_night.png
+    polygons_cn: []
+    polygons_en: []
+    transform:
+      pzero:
+      - -2953
+      - 2164
+      scale: 5
+  de_anubis:
+    nearest_threshold: 300
+    overview: demo_analysis/static/overviews/de_anubis.png
+    polygons_cn: []
+    polygons_en: []
+    transform:
+      pzero:
+      - -2796
+      - 3328
+      scale: 5.22
+  de_dust2:
+    nearest_threshold: 300
+    overview: demo_analysis/static/overviews/de_dust2.png
+    polygons_cn: []
+    polygons_en: []
+    transform:
+      pzero:
+      - -2476
+      - 3239
+      scale: 4.4
+  de_inferno:
+    nearest_threshold: 300
+    overview: demo_analysis/static/overviews/de_inferno.png
+    polygons_cn: []
+    polygons_en: []
+    transform:
+      pzero:
+      - -2087
+      - 3870
+      scale: 4.9
+  de_mirage:
+    nearest_threshold: 300
+    overview: demo_analysis/static/overviews/de_mirage.png
+    polygons_cn:
+    - name: 沙发
+      points:
+      - - -2678.25
+        - 609.49
+      - - -2719.12
+        - 88.39
+      - - -2422.81
+        - 57.74
+      - - -2453.46
+        - 609.49
+    - name: B 包
+      points:
+      - - -2310.41
+        - 558.41
+      - - -2300.19
+        - 6.65
+      - - -1860.84
+        - 6.65
+      - - -1840.4
+        - 578.84
+    - name: VIP
+      points:
+      - - -1349.95
+        - -412.27
+      - - -1370.39
+        - -1168.38
+      - - -1104.73
+        - -1199.03
+      - - -1125.16
+        - -422.49
+    - name: jungle
+      points:
+      - - -1309.08
+        - -1229.68
+      - - -1339.73
+        - -1556.65
+      - - -982.12
+        - -1577.08
+      - - -992.33
+        - -1158.16
+    - name: A 二楼
+      points:
+      - - -21.66
+        - -1852.96
+      - - -21.66
+        - -2455.8
+      - - 1122.72
+        - -2445.58
+      - - 1173.81
+        - -1873.39
+      z_min: -80
+    - name: A 二楼下
+      points:
+      - - -82.96
+        - -2231.01
+      - - -82.96
+        - -1679.26
+      - - 172.48
+        - -1761
+      - - 152.04
+        - -2139.05
+      z_max: -80
+    polygons_en: []
+    transform:
+      pzero:
+      - -3230
+      - 1713
+      scale: 5
+  de_nuke:
+    lower_overview: demo_analysis/static/overviews/de_nuke_lower.png
+    nearest_threshold: 300
+    overview: demo_analysis/static/overviews/de_nuke.png
+    polygons_cn: []
+    polygons_en: []
+    transform:
+      pzero:
+      - -3453
+      - 2887
+      scale: 7
+  de_overpass:
+    nearest_threshold: 300
+    overview: demo_analysis/static/overviews/de_overpass.png
+    polygons_cn: []
+    polygons_en: []
+    transform:
+      pzero:
+      - -4831
+      - 1781
+      scale: 5.2
+  de_train:
+    lower_overview: demo_analysis/static/overviews/de_train_lower.png
+    nearest_threshold: 300
+    overview: demo_analysis/static/overviews/de_train.png
+    polygons_cn: []
+    polygons_en: []
+    transform:
+      pzero:
+      - -2308
+      - 2078
+      scale: 4.082077
+  de_vertigo:
+    lower_overview: demo_analysis/static/overviews/de_vertigo_lower.png
+    nearest_threshold: 300
+    overview: demo_analysis/static/overviews/de_vertigo.png
+    polygons_cn: []
+    polygons_en: []
+    transform:
+      pzero:
+      - -3168
+      - 1762
+      scale: 4
