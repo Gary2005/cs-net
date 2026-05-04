@@ -11,7 +11,8 @@ from flask import Flask, jsonify, render_template, request, send_from_directory
 
 TOOLS_DIR = Path(__file__).resolve().parent
 ROOT_DIR = TOOLS_DIR.parent
-CONFIG_PATH = ROOT_DIR / "config" / "callouts.yaml"
+CALLOUT_CONFIG_DIR = ROOT_DIR / "config" / "callouts"
+DEFAULT_NEAREST_THRESHOLD = 300
 OVERVIEW_DIR = ROOT_DIR / "demo_analysis" / "static" / "overviews"
 
 app = Flask(
@@ -42,24 +43,48 @@ def finite_float(value: Any) -> float | None:
     return parsed if math.isfinite(parsed) else None
 
 
+def empty_config() -> dict[str, Any]:
+    return {"defaults": {"nearest_threshold": DEFAULT_NEAREST_THRESHOLD}, "maps": {}}
+
+
+def map_config_path(map_name: str) -> Path:
+    name = str(map_name)
+    if not name or Path(name).name != name or name in {".", ".."}:
+        raise ValueError(f"Invalid map name: {name!r}")
+    return CALLOUT_CONFIG_DIR / f"{name}.yaml"
+
+
 def load_config() -> dict[str, Any]:
-    if not CONFIG_PATH.exists():
-        return {"defaults": {"nearest_threshold": 300}, "maps": {}}
-    with CONFIG_PATH.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    if not isinstance(data, dict):
-        data = {}
-    data.setdefault("defaults", {}).setdefault("nearest_threshold", 300)
-    data.setdefault("maps", {})
+    data = empty_config()
+    if not CALLOUT_CONFIG_DIR.exists():
+        return data
+    for path in sorted(CALLOUT_CONFIG_DIR.glob("*.yaml")):
+        with path.open("r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        if not isinstance(cfg, dict):
+            cfg = {}
+        cfg.setdefault("nearest_threshold", DEFAULT_NEAREST_THRESHOLD)
+        cfg.setdefault("polygons_cn", [])
+        cfg.setdefault("polygons_en", [])
+        data["maps"][path.stem] = cfg
     return data
 
 
 def save_config(data: dict[str, Any]) -> None:
-    data.setdefault("defaults", {}).setdefault("nearest_threshold", 300)
-    data.setdefault("maps", {})
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with CONFIG_PATH.open("w", encoding="utf-8", newline="\n") as f:
-        yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False, width=120)
+    defaults = data.get("defaults") if isinstance(data.get("defaults"), dict) else {}
+    threshold = defaults.get("nearest_threshold", DEFAULT_NEAREST_THRESHOLD)
+    maps = data.get("maps")
+    if not isinstance(maps, dict):
+        maps = {}
+    CALLOUT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    for map_name, cfg in sorted(maps.items()):
+        if not isinstance(cfg, dict):
+            continue
+        cfg.setdefault("nearest_threshold", threshold)
+        cfg.setdefault("polygons_cn", [])
+        cfg.setdefault("polygons_en", [])
+        with map_config_path(map_name).open("w", encoding="utf-8", newline="\n") as f:
+            yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False, width=120)
 
 
 def sample_demo(path: Path, max_ticks: int = 650) -> dict[str, Any]:
@@ -133,8 +158,11 @@ def api_save_config():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"error": "Expected JSON object"}), 400
-    save_config(data)
-    return jsonify({"ok": True, "path": str(CONFIG_PATH)})
+    try:
+        save_config(data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"ok": True, "path": str(CALLOUT_CONFIG_DIR)})
 
 
 @app.post("/api/demo")

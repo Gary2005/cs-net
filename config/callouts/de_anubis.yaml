@@ -1,0 +1,9 @@
+nearest_threshold: 300
+overview: demo_analysis/static/overviews/de_anubis.png
+polygons_cn: []
+polygons_en: []
+transform:
+  pzero:
+  - -2796
+  - 3328
+  scale: 5.22

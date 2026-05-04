@@ -7,7 +7,8 @@ import yaml
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-CALLOUT_CONFIG_PATH = ROOT_DIR / "config" / "callouts.yaml"
+CALLOUT_CONFIG_DIR = ROOT_DIR / "config" / "callouts"
+DEFAULT_NEAREST_THRESHOLD = 300
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:
@@ -85,11 +86,20 @@ def build_team_swings(win_rate: list[dict[str, Any]], horizon: float = 5.0) -> d
 
 
 def load_callouts() -> dict[str, Any]:
-    if not CALLOUT_CONFIG_PATH.exists():
-        return {}
-    with CALLOUT_CONFIG_PATH.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    return data if isinstance(data, dict) else {}
+    callouts: dict[str, Any] = {"defaults": {"nearest_threshold": DEFAULT_NEAREST_THRESHOLD}, "maps": {}}
+    if not CALLOUT_CONFIG_DIR.exists():
+        return callouts
+    maps = callouts["maps"]
+    for path in sorted(CALLOUT_CONFIG_DIR.glob("*.yaml")):
+        with path.open("r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        if not isinstance(cfg, dict):
+            cfg = {}
+        cfg.setdefault("nearest_threshold", DEFAULT_NEAREST_THRESHOLD)
+        cfg.setdefault("polygons_cn", [])
+        cfg.setdefault("polygons_en", [])
+        maps[path.stem] = cfg
+    return callouts
 
 
 def callout_map_config(map_name: str | None, callouts: dict[str, Any]) -> dict[str, Any]:

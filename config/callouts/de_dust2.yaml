@@ -1,0 +1,9 @@
+nearest_threshold: 300
+overview: demo_analysis/static/overviews/de_dust2.png
+polygons_cn: []
+polygons_en: []
+transform:
+  pzero:
+  - -2476
+  - 3239
+  scale: 4.4

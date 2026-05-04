@@ -1,0 +1,10 @@
+lower_overview: demo_analysis/static/overviews/de_nuke_lower.png
+nearest_threshold: 300
+overview: demo_analysis/static/overviews/de_nuke.png
+polygons_cn: []
+polygons_en: []
+transform:
+  pzero:
+  - -3453
+  - 2887
+  scale: 7

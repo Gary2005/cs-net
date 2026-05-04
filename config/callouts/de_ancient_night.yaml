@@ -1,0 +1,9 @@
+nearest_threshold: 300
+overview: demo_analysis/static/overviews/de_ancient_night.png
+polygons_cn: []
+polygons_en: []
+transform:
+  pzero:
+  - -2953
+  - 2164
+  scale: 5

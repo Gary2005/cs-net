@@ -1,0 +1,9 @@
+nearest_threshold: 300
+overview: demo_analysis/static/overviews/de_overpass.png
+polygons_cn: []
+polygons_en: []
+transform:
+  pzero:
+  - -4831
+  - 1781
+  scale: 5.2

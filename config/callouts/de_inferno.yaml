@@ -1,0 +1,9 @@
+nearest_threshold: 300
+overview: demo_analysis/static/overviews/de_inferno.png
+polygons_cn: []
+polygons_en: []
+transform:
+  pzero:
+  - -2087
+  - 3870
+  scale: 4.9
