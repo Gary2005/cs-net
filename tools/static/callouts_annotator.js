@@ -5,6 +5,7 @@ const state = {
   selected: -1,
   draft: [],
   image: new Image(),
+  layer: "upper",
   showPlace: "",
   annotationLang: "cn",
 };
@@ -25,7 +26,8 @@ function escapeHtml(value) {
 }
 
 function setStatus(text) {
-  $("status").textContent = text || "";
+  const status = $("status");
+  if (status) status.textContent = text || "";
 }
 
 function mapConfig() {
@@ -43,6 +45,50 @@ function mapConfig() {
 
 function transform() {
   return mapConfig().transform || null;
+}
+
+function hasLowerOverview() {
+  return Boolean(mapConfig().lower_overview);
+}
+
+function currentOverview() {
+  const cfg = mapConfig();
+  const path = state.layer === "lower" && cfg.lower_overview ? cfg.lower_overview : cfg.overview;
+  return path ? path.split(/[\\/]/).pop() : "empty.png";
+}
+
+function setLayer(layer) {
+  state.layer = layer === "lower" && hasLowerOverview() ? "lower" : "upper";
+  const layerBadge = $("layer-badge");
+  if (layerBadge) layerBadge.textContent = `layer: ${state.layer}`;
+  const toggle = $("layer-toggle");
+  if (toggle) {
+    toggle.hidden = !hasLowerOverview();
+    toggle.textContent = state.layer === "lower" ? "Lower layer" : "Upper layer";
+    toggle.classList.toggle("lower", state.layer === "lower");
+  }
+}
+
+function loadOverview() {
+  const overview = currentOverview();
+  state.image = new Image();
+  state.image.onload = render;
+  state.image.onerror = () => {
+    setStatus(`overview not found: ${overview}`);
+    render();
+  };
+  state.image.src = `/overviews/${overview}`;
+}
+
+function toggleLayer() {
+  if (!hasLowerOverview()) return;
+  setLayer(state.layer === "lower" ? "upper" : "lower");
+  loadOverview();
+  render();
+}
+
+function syncLayerControls() {
+  setLayer(state.layer);
 }
 
 function worldToCanvas(x, y) {
@@ -168,24 +214,19 @@ function setMap(map) {
   state.map = map;
   $("map").value = map;
   $("map-badge").textContent = `map: ${map}`;
+  setLayer("upper");
   state.selected = -1;
   state.draft = [];
   clearForm();
 
   const cfg = mapConfig();
-  const overview = cfg.overview ? cfg.overview.split(/[\\/]/).pop() : "empty.png";
-  state.image = new Image();
-  state.image.onload = render;
-  state.image.onerror = () => {
-    setStatus(`overview not found: ${overview}`);
-    render();
-  };
-  state.image.src = `/overviews/${overview}`;
+  loadOverview();
+  syncLayerControls();
 
   if (!cfg.transform) {
     setStatus("missing overview transform; samples loaded but cannot be projected");
   } else if (!state.samples.length) {
-    setStatus("");
+    setStatus(hasLowerOverview() ? "use the layer button to toggle upper/lower overview" : "");
   }
   render();
 }
@@ -250,6 +291,10 @@ canvas.addEventListener("mousemove", (event) => {
     tip.style.display = "none";
   }
 });
+
+if ($("layer-toggle")) {
+  $("layer-toggle").onclick = toggleLayer;
+}
 
 $("map").onchange = (event) => setMap(event.target.value);
 $("annotation-lang").onchange = (event) => {

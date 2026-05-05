@@ -20,16 +20,19 @@
     <section class="stage">
       <div class="row status-row">
         <span id="map-badge" class="badge">map: none</span>
+        <span id="layer-badge" class="badge">layer: upper</span>
         <span id="sample-badge" class="badge">samples: 0</span>
         <span id="drawn-badge" class="badge">drawn: 0</span>
         <span id="status" class="hint"></span>
       </div>
       <div class="canvas-box">
         <canvas id="canvas" width="1024" height="1024"></canvas>
+        <button id="layer-toggle" class="layer-toggle" type="button" hidden>Upper layer</button>
       </div>
       <p class="hint">
         Click map to add polygon points. Shift-click creates a rectangle from the first point.
         Hover sample points to see demoparser last_place_name and X/Y/Z.
+        Use the layer button to toggle upper/lower overview when the map has both layers.
       </p>
       <div class="tooltip" id="tip"></div>
     </section>
