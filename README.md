@@ -62,10 +62,10 @@ pip install -r requirements.txt
 
 Download all pre-trained models and tokenizers to `./cs-net-models/`:
 
-Model weights are also available here: https://huggingface.co/gary2oos/cs-net
+Model weights are also available here: https://huggingface.co/gary2oos/CS-Net-V3
 
 ```bash
-python -m examples.download_model
+python -m scripts.download_model
 ```
 
 ### 3. Convert Demo to JSON
@@ -81,29 +81,6 @@ python -m data.process_demo \
   -interval 0.25 \
   -out examples/test.json
 ```
-
-### 4. Run Case Study & Visualization
-
-Generate predictions and visualizations using the processed data:
-
-```bash
-python -m examples.case_study \
-  --json_path examples/test.json \
-  --alive_ckpt_dir cs-net-models/alive \
-  --kill_ckpt_dir cs-net-models/nxt_kill \
-  --death_ckpt_dir cs-net-models/nxt_death \
-  --winrate_ckpt_dir cs-net-models/win_rate \
-  --duel_ckpt_dir cs-net-models/duel \
-  --device cpu
-```
-
-**Note on `--device` flag:**
-- Use `cuda` for NVIDIA GPUs
-- Use `mps` for Apple Silicon (M1/M2/M3)
-- Use `cpu` for CPU-only inference
-
-Optional flag:
-- `--remove_projectiles`: remove projectile and grenade entities from JSON before inference.
 
 ## 🌐 Web App Usage
 
@@ -133,7 +110,7 @@ http://127.0.0.1:7860
 2. Select the **model root directory** (normally `cs-net-models/`). The web app
    loads all five prediction heads (`alive`, `nxt_kill`, `nxt_death`,
    `win_rate`, `duel`) from their subdirectories in one go.
-3. Select device (cpu / cuda / mps).
+3. Select device (cpu / cuda).
 4. Click Start Analysis.
 
 ### 3. Generate LLM summary
