@@ -498,14 +498,15 @@ def _safe_div(a, b):
 
 def compute_kill_difficulty(round_result, kill_time, attacker_idx, victim_idx, window_s=5.0):
     if attacker_idx is None or victim_idx is None:
-        return 0.0
+        return -1, -1
     if attacker_idx >= 10 or victim_idx >= 10:
-        return 0.0
+        return -1, -1
 
+    duel_prediction = 0
     a_kill = a_death = v_kill = v_death = 0.0
     n = 0
     for state in round_result:
-        sec = float(state.get("round_seconds", 0.0))
+        sec = float(state.get("round_seconds"))
         if sec > kill_time:
             continue
         if sec < kill_time - window_s:
@@ -520,17 +521,22 @@ def compute_kill_difficulty(round_result, kill_time, attacker_idx, victim_idx, w
             v_kill += float(nk[victim_idx])
         if victim_idx < len(nd):
             v_death += float(nd[victim_idx])
+        duel_prediction_mat = state.get("duel", None)
+        if duel_prediction_mat is not None and attacker_idx < len(duel_prediction_mat) and victim_idx < len(duel_prediction_mat[attacker_idx]):
+            duel_prediction += duel_prediction_mat[attacker_idx][victim_idx]
         n += 1
 
     if n == 0:
-        return 0.0
+        return -1, -1
+    duel_prediction = duel_prediction / n
+    
     avg_a_kill = a_kill / n
     avg_a_death = a_death / n
     avg_v_kill = v_kill / n
     avg_v_death = v_death / n
     num = avg_v_kill * avg_a_death
     den = avg_a_kill * avg_v_death
-    return _safe_div(num, den)
+    return _safe_div(num, den), duel_prediction
 
 
 def process_round_json(round_result):
@@ -633,11 +639,12 @@ def process_round_json(round_result):
                             for p in alive_ct:
                                 player_data[p]["tactical_contribution"] += d_win / (kill_count * len(alive_ct))
 
-                difficulty = compute_kill_difficulty(
+                difficulty, duel_prediction = compute_kill_difficulty(
                     round_result,
                     float(kill["time"]),
                     name_to_idx.get(killer),
                     name_to_idx.get(victim),
+                    window_s = 3.0,
                 )
 
                 processed_json["kills"].append({
@@ -649,6 +656,7 @@ def process_round_json(round_result):
                     "weapon": kill["weapon"],
                     "headshot": bool(kill.get("headshot", False)),
                     "difficulty": difficulty,
+                    "duel_prediction": duel_prediction,
                     "assistedflash": bool(kill.get("assistedflash", False)),
                     "attackerblind": bool(kill.get("attackerblind", False)),
                     "attackerinair": bool(kill.get("attackerinair", False)),
@@ -866,7 +874,7 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
     results = to_jsonable(results)
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(results, f)
+        json.dump(results, f, indent=2, ensure_ascii=False)
 
     print(f"Results saved to {output_path}")
 
