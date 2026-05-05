@@ -2,32 +2,26 @@ import os
 import shutil
 from huggingface_hub import hf_hub_download
 
-REPO_ID = "gary2oos/cs-net"
+REPO_ID = "gary2oos/CS-Net-V3"
 
 FILES = {
     "alive": [
-        "model2_alive_latest_model.pt",
-        "model2_alive.yaml",
+        "latest_alive_in_the_end.pt",
     ],
     "duel": [
-        "model2_duel_latest_model.pt",
-        "model2_duel.yaml",
+        "latest_duel.pt",
     ],
     "nxt_kill": [
-        "model2_kill_latest_model.pt",
-        "model2_kill.yaml",
+        "latest_nxt_kill.pt",
     ],
     "nxt_death": [
-        "model2_death_latest_model.pt",
-        "model2_death.yaml",
+        "latest_nxt_death.pt",
     ],
     "win_rate": [
-        "model2_win_latest_model.pt",
-        "model2_win.yaml",
+        "latest_winrate.pt",
     ],
 }
 
-TOKENIZER_FILE = "tokenizer.yaml"
 OUTPUT_DIR = "./cs-net-models"
 
 
@@ -41,9 +35,6 @@ def download_file(filename):
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-    # download tokenizer once
-    tokenizer_path = download_file(TOKENIZER_FILE)
 
     for folder, file_list in FILES.items():
         target_dir = os.path.join(OUTPUT_DIR, folder)
@@ -59,8 +50,6 @@ def main():
             downloaded_path = download_file(filename)
             shutil.copy(downloaded_path, os.path.join(target_dir, filename))
 
-        # copy tokenizer.yaml
-        shutil.copy(tokenizer_path, os.path.join(target_dir, TOKENIZER_FILE))
 
     print("Done!")
 

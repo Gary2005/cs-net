@@ -137,8 +137,8 @@ def extract_states(demo_path: str, ticks: list[int]) -> list[dict]:
 
     df_end = parser.parse_event("round_end")
 
-    round_end_ticks = df_end['tick'].tolist()
-    df_round_end_ticks = parser.parse_ticks(wanted_props=["health", "kills_this_round", "deaths_this_round", "assists_this_round", "damage_this_round", "team_num"], ticks=round_end_ticks)
+    # round_end_ticks = df_end['tick'].tolist()
+    # df_round_end_ticks = parser.parse_ticks(wanted_props=["health", "kills_this_round", "deaths_this_round", "assists_this_round", "damage_this_round", "team_num", "approximate_spotted_by"], ticks=round_end_ticks)
 
     for index, row in df_end.iterrows():
 
@@ -190,7 +190,7 @@ def extract_states(demo_path: str, ticks: list[int]) -> list[dict]:
         if isinstance(row.inventory, list) and "C4 Explosive" in row.inventory:  
             bomb_carrier_by_tick[row.tick] = (row.steamid, row.X, row.Y, row.Z, row.total_rounds_played)
 
-    df_ticks = parser.parse_ticks(wanted_props=["game_time", "game_start_time", "total_rounds_played", "X", "Y", "Z", "weapon_name", "inventory", "inventory_as_ids", "pitch", "yaw", "is_alive", "health", "flash_duration", "flash_max_alpha", "team_num", "last_place_name", "armor", "has_helmet", "has_defuser", "is_bomb_planted", "is_bomb_dropped"], ticks=ticks)
+    df_ticks = parser.parse_ticks(wanted_props=["game_time", "game_start_time", "total_rounds_played", "X", "Y", "Z", "weapon_name", "inventory", "inventory_as_ids", "pitch", "yaw", "is_alive", "health", "flash_duration", "flash_max_alpha", "team_num", "last_place_name", "armor", "has_helmet", "has_defuser", "is_bomb_planted", "is_bomb_dropped", "approximate_spotted_by", "velocity", "velocity_X", "velocity_Y", "velocity_Z"], ticks=ticks)
 
     results = []
 
@@ -240,6 +240,10 @@ def extract_states(demo_path: str, ticks: list[int]) -> list[dict]:
             })
         players_info = []
 
+        steam_id_to_team = {}
+        for row in df_tick.itertuples():
+            steam_id_to_team[row.steamid] = ("CT" if row.team_num == 3 else "T", row.is_alive)
+
         for row in df_tick.itertuples():
 
             players_info.append({
@@ -262,6 +266,11 @@ def extract_states(demo_path: str, ticks: list[int]) -> list[dict]:
                 "has_helmet": row.has_helmet,
                 "has_defuser": row.has_defuser,
                 "team_num": "CT" if row.team_num == 3 else "T",
+                "spotted_by": [steamid for steamid in row.approximate_spotted_by if steamid in steam_id_to_team and steam_id_to_team[steamid][0] != ("CT" if row.team_num == 3 else "T") and steam_id_to_team[steamid][1]],
+                "velocity": (0 if np.isnan(row.velocity) else row.velocity),
+                "velocity_X": (0 if np.isnan(row.velocity_X) else row.velocity_X),
+                "velocity_Y": (0 if np.isnan(row.velocity_Y) else row.velocity_Y),
+                "velocity_Z": (0 if np.isnan(row.velocity_Z) else row.velocity_Z)
             })
         info['players_info'] = players_info
         info['projectiles'] = []
@@ -391,6 +400,7 @@ def extract_states(demo_path: str, ticks: list[int]) -> list[dict]:
     check_steamid_consistency(results)
 
     return results
+
 
 
 def extract_states_by_group(demo_path: str, ticks_group: list[list[int]]) -> list[dict]:
@@ -569,7 +579,7 @@ def extract_states_by_group(demo_path: str, ticks_group: list[list[int]]) -> lis
             ticks = sorted(ticks)
 
 
-            df_ticks = parser.parse_ticks(wanted_props=["game_time", "game_start_time", "total_rounds_played", "X", "Y", "Z", "weapon_name", "inventory", "inventory_as_ids", "pitch", "yaw", "is_alive", "health", "flash_duration", "flash_max_alpha", "team_num", "last_place_name", "armor", "has_helmet", "has_defuser", "is_bomb_planted", "is_bomb_dropped"], ticks=ticks)
+            df_ticks = parser.parse_ticks(wanted_props=["game_time", "game_start_time", "total_rounds_played", "X", "Y", "Z", "weapon_name", "inventory", "inventory_as_ids", "pitch", "yaw", "is_alive", "health", "flash_duration", "flash_max_alpha", "team_num", "last_place_name", "armor", "has_helmet", "has_defuser", "is_bomb_planted", "is_bomb_dropped", "approximate_spotted_by", "velocity", "velocity_X", "velocity_Y", "velocity_Z"], ticks=ticks)
 
             results = []
 
@@ -615,8 +625,11 @@ def extract_states_by_group(demo_path: str, ticks_group: list[list[int]]) -> lis
                     })
                 players_info = []
 
+                steam_id_to_team = {}
                 for row in df_tick.itertuples():
+                    steam_id_to_team[row.steamid] = ("CT" if row.team_num == 3 else "T", row.is_alive)
 
+                for row in df_tick.itertuples():
                     players_info.append({
                         "steamid": row.steamid,
                         "name": row.name,
@@ -637,6 +650,11 @@ def extract_states_by_group(demo_path: str, ticks_group: list[list[int]]) -> lis
                         "has_helmet": row.has_helmet,
                         "has_defuser": row.has_defuser,
                         "team_num": "CT" if row.team_num == 3 else "T",
+                        "spotted_by": [steamid for steamid in row.approximate_spotted_by if steamid in steam_id_to_team and steam_id_to_team[steamid][0] != ("CT" if row.team_num == 3 else "T") and steam_id_to_team[steamid][1]],
+                        "velocity": (0 if np.isnan(row.velocity) else row.velocity),
+                        "velocity_X": (0 if np.isnan(row.velocity_X) else row.velocity_X),
+                        "velocity_Y": (0 if np.isnan(row.velocity_Y) else row.velocity_Y),
+                        "velocity_Z": (0 if np.isnan(row.velocity_Z) else row.velocity_Z)
                     })
                 info['players_info'] = players_info
                 info['projectiles'] = []
@@ -773,6 +791,7 @@ def extract_states_by_group(demo_path: str, ticks_group: list[list[int]]) -> lis
 
     return results_group
 
+
 def convert_to_python_type(obj):
     if isinstance(obj, dict):
         return {k: convert_to_python_type(v) for k, v in obj.items()}
@@ -794,7 +813,7 @@ def save_as_json(results, path, compression=False):
         with open(path, "wb") as f:
             f.write(compressed)
     else:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(path, "w") as f:
             json.dump(results_py, f, indent=4, ensure_ascii=False)
 
 

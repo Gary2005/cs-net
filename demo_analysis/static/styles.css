@@ -199,6 +199,8 @@ button:hover {
   font-size: 12px;
   max-height: 220px;
   overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .hint {

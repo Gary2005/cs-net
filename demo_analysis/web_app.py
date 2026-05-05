@@ -249,8 +249,6 @@ def _run_analysis_job(
         "--batch_size",
         batch_size,
     ]
-    if device == "cpu":
-        cmd.append("--skip_duel")
 
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
