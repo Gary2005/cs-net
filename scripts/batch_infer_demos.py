@@ -18,7 +18,7 @@ def run_one(demo_path: Path, output_dir: Path, device: str, batch_size: int, mod
     cmd = [
         sys.executable,
         "-m",
-        "demo_analysis.inference",
+        "demo_analysis.get_round_win_rate",
         "--demo_path",
         str(demo_path),
         "--output",

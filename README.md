@@ -82,6 +82,34 @@ python -m data.process_demo \
   -out examples/test.json
 ```
 
+### 4. Download Test Data
+
+To reproduce the calibration/evaluation numbers below, download the test shard first:
+
+```bash
+python -m scripts.download_data
+```
+
+This script downloads `test/shards-00000.tar` from Hugging Face and stores it under `./dataset/test/`.
+
+### 5. Calibrate Temperature Scaling
+
+You can calibrate the model3.0 heads with:
+
+```bash
+python -m scripts.train3_t_scaling --dataset_path dataset --device cpu
+```
+
+On the current test shard, the calibration results are:
+
+| Task | T | Before Loss | Before ECE | Before Acc | After Loss | After ECE | After Acc |
+|------|---|-------------|------------|------------|------------|-----------|-----------|
+| Alive | 1.193158 | 0.431486 | 0.028640 | 0.774641 | 0.429344 | 0.021371 | 0.774641 |
+| Duel | 1.146975 | 0.633122 | 0.017835 | 0.632217 | 0.632133 | 0.014517 | 0.632217 |
+| Next Death | 1.493995 | 1.785793 | 0.077382 | 0.342485 | 1.741089 | 0.012107 | 0.342485 |
+| Next Kill | 1.602551 | 1.801647 | 0.102502 | 0.339024 | 1.736153 | 0.012922 | 0.339024 |
+| Win Rate | 1.061342 | 0.467820 | 0.029351 | 0.754566 | 0.467459 | 0.029516 | 0.754566 |
+
 ## 🌐 Web App Usage
 
 CS-NET now includes an interactive web app for demo analysis and LLM-based post-game summary.
