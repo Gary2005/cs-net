@@ -70,21 +70,17 @@ def load_config() -> dict[str, Any]:
     return data
 
 
-def save_config(data: dict[str, Any]) -> None:
-    defaults = data.get("defaults") if isinstance(data.get("defaults"), dict) else {}
-    threshold = defaults.get("nearest_threshold", DEFAULT_NEAREST_THRESHOLD)
-    maps = data.get("maps")
-    if not isinstance(maps, dict):
-        maps = {}
+def save_map_config(map_name: str, cfg: dict[str, Any]) -> Path:
+    if not isinstance(cfg, dict):
+        raise ValueError("Expected map config object")
+    cfg.setdefault("nearest_threshold", DEFAULT_NEAREST_THRESHOLD)
+    cfg.setdefault("polygons_cn", [])
+    cfg.setdefault("polygons_en", [])
     CALLOUT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    for map_name, cfg in sorted(maps.items()):
-        if not isinstance(cfg, dict):
-            continue
-        cfg.setdefault("nearest_threshold", threshold)
-        cfg.setdefault("polygons_cn", [])
-        cfg.setdefault("polygons_en", [])
-        with map_config_path(map_name).open("w", encoding="utf-8", newline="\n") as f:
-            yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False, width=120)
+    path = map_config_path(map_name)
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        yaml.safe_dump(cfg, f, allow_unicode=True, sort_keys=False, width=120)
+    return path
 
 
 def sample_demo(path: Path, max_ticks: int = 650) -> dict[str, Any]:
@@ -153,16 +149,16 @@ def api_config():
     return jsonify(load_config())
 
 
-@app.post("/api/config")
-def api_save_config():
+@app.post("/api/config/<map_name>")
+def api_save_map_config(map_name: str):
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"error": "Expected JSON object"}), 400
     try:
-        save_config(data)
+        path = save_map_config(map_name, data)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    return jsonify({"ok": True, "path": str(CALLOUT_CONFIG_DIR)})
+    return jsonify({"ok": True, "path": str(path)})
 
 
 @app.post("/api/demo")

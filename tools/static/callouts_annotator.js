@@ -297,10 +297,10 @@ $("apply").onclick = () => {
   selectPolygon(state.selected);
 };
 $("save").onclick = async () => {
-  const resp = await fetch("/api/config", {
+  const resp = await fetch(`/api/config/${encodeURIComponent(state.map)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(state.config),
+    body: JSON.stringify(mapConfig()),
   });
   const data = await resp.json();
   alert(data.ok ? `Saved ${data.path}` : data.error);

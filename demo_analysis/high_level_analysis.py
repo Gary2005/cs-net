@@ -199,6 +199,16 @@ def point_polygon_distance(px: float, py: float, points: list[tuple[float, float
     )
 
 
+def polygon_size(points: list[tuple[float, float]]) -> float:
+    if len(points) < 3:
+        return 0.0
+    area = 0.0
+    for i, (x1, y1) in enumerate(points):
+        x2, y2 = points[(i + 1) % len(points)]
+        area += x1 * y2 - x2 * y1
+    return abs(area) / 2.0
+
+
 def polygon_name(polygon: dict[str, Any], lang: str, idx: int) -> str:
     if lang == "en":
         return str(polygon.get("name") or polygon.get("name_en") or f"polygon_{idx}")
@@ -237,31 +247,34 @@ def polygon_location_for_list(
             continue
         candidates.append((idx, polygon, points))
 
-    for idx, polygon, points in candidates:
-        if len(points) >= 3 and point_in_polygon(px, py, points):
-            return {
-                "name": polygon_name(polygon, lang, idx),
-                "callout_source": "polygon",
-                "polygon_index": idx,
-                "polygon_key": polygon_key,
-                "polygon_distance": 0.0,
-            }
-
     threshold = callout_threshold(map_name, callouts)
-    nearest: tuple[float, int, dict[str, Any]] | None = None
+    matches: list[tuple[dict[str, Any], int]] = []
     for idx, polygon, points in candidates:
         distance = point_polygon_distance(px, py, points)
-        if nearest is None or distance < nearest[0]:
-            nearest = (distance, idx, polygon)
+        if distance == 0.0 or distance < threshold:
+            matches.append((
+                {
+                    "name": polygon_name(polygon, lang, idx),
+                    "distance": round(distance, 3),
+                    "size": round(polygon_size(points), 3),
+                },
+                idx,
+            ))
 
-    if nearest is not None and nearest[0] <= threshold:
-        distance, idx, polygon = nearest
+    if matches:
+        matches.sort(
+            key=lambda item: (
+                safe_float(item[0].get("distance")),
+                safe_float(item[0].get("size")),
+                item[1],
+            )
+        )
+        best = matches[0][0]
         return {
-            "name": polygon_name(polygon, lang, idx),
-            "callout_source": "near_polygon",
-            "polygon_index": idx,
-            "polygon_key": polygon_key,
-            "polygon_distance": round(distance, 3),
+            "callout_source": "polygon"
+            if safe_float(best.get("distance")) == 0.0
+            else "near_polygon",
+            "callout_candidates": [match for match, _idx in matches],
         }
     return None
 
@@ -279,20 +292,13 @@ def polygon_location(
         return None
     base = cn or en
     assert base is not None
-    name_cn = cn.get("name") if cn else None
-    name_en = en.get("name") if en else None
+    callout_candidates_cn = (cn or {}).get("callout_candidates") or []
+    callout_candidates_en = (en or {}).get("callout_candidates") or []
     return {
-        **base,
-        "name": name_cn or name_en or base.get("name"),
-        "name_cn": name_cn,
-        "name_en": name_en,
+        "callout_candidates": callout_candidates_cn or callout_candidates_en,
+        "callout_candidates_cn": callout_candidates_cn,
+        "callout_candidates_en": callout_candidates_en,
         "callout_source": base.get("callout_source", "polygon"),
-        "callout_source_cn": (cn or {}).get("callout_source"),
-        "callout_source_en": (en or {}).get("callout_source"),
-        "polygon_index_cn": (cn or {}).get("polygon_index"),
-        "polygon_index_en": (en or {}).get("polygon_index"),
-        "polygon_distance_cn": (cn or {}).get("polygon_distance"),
-        "polygon_distance_en": (en or {}).get("polygon_distance"),
     }
 
 
@@ -313,18 +319,12 @@ def normalize_location(
         if raw:
             loc = {
                 "name": raw,
-                "name_cn": raw,
-                "name_en": raw,
                 "callout_source": "raw",
-                "polygon_distance": None,
             }
         else:
             loc = {
                 "name": "数据未提供",
-                "name_cn": "数据未提供",
-                "name_en": "location data unavailable",
                 "callout_source": "missing",
-                "polygon_distance": None,
             }
 
     loc.update({

@@ -29,8 +29,9 @@ ZH_SYSTEM_PROMPT_TEMPLATE = """你是专业的 CS2 战术分析师，请输出�
 - 任何数字（胜率、swing、难度、贡献）必须直接来自下方 JSON，不许编造或过度取整。
 - 如果某字段缺失，直接说明“数据中未提供”，不要猜。
 - 不要编造 JSON 里没有的击杀、残局、武器、回合结果、爆弹、前压或道具。
-- 点位只能逐字复制 killer_location.name / victim_location.name；不得翻译、意译、概括或改写。如果 callout_source 是 missing，就写“点位数据未提供”。
-- 不要向用户展示内部技术字段名，包括 detailed_tactical_rounds、brief_tactical_rounds、wr_start、wr_end、wr_start_pct、wr_end_pct、hard_win_rate、easy_win_rate、highlight_rate、evaluation_context、duel_context。
+- 报点必须基于 killer_location / victim_location 里的点位数据。callout_candidates 是候选点位列表；每项的 name 是点位名，distance 是当前位置到该点位边界的距离，size 是点位多边形面积，数值越大代表点位范围越大。优先使用 distance 为 0 的覆盖点位和距离更近的小点位组合自然报点：如果一个点被大点位包含，同时靠近某个小点位，可以写成“大点位小点位附近/位置”。不得发明候选外的点位。如果 callout_source 是 missing，就写“点位数据未提供”。
+- 报点 few-shot 示例：候选为 [{{name:"B 包", distance:0, size:250000}}, {{name:"大箱", distance:38, size:12000}}]，可写“B 包大箱附近”；候选为 [{{name:"A 区", distance:0, size:300000}}, {{name:"三箱", distance:0, size:18000}}]，可写“A 区三箱位”；候选为 [{{name:"中路", distance:0, size:220000}}, {{name:"VIP", distance:90, size:25000}}]，可写“中路靠 VIP 一侧”。
+- 不要向用户展示内部技术字段名，包括 detailed_tactical_rounds、brief_tactical_rounds、wr_start、wr_end、wr_start_pct、wr_end_pct、hard_win_rate、easy_win_rate、highlight_rate、evaluation_context、duel_context、callout_candidates。
 - 评价可以夸击杀方，也可以批评被击杀方，但必须能从 JSON 数据推出。
 - 回合级胜率只写“某队在开局胜率 X% 的情况下获胜”；不要写终局 0.0%/100.0%，也不要展示 wr_start/wr_end 这样的字段名。
 - 详细回合的每个关键击杀可以、而且应该展示事件级数字：击杀方收益、Team1 胜率曲线变化、击杀难度、对决预测胜率。展示数字时用自然语言，不要写 JSON 字段名。
@@ -61,8 +62,9 @@ Strict anti-hallucination and writing rules:
 - Every numeric claim (win rate, swing, difficulty, contribution) MUST come directly from the JSON data. Do not fabricate values or round aggressively.
 - If a field is missing, say so instead of guessing.
 - Do not invent kills, clutches, weapons, round outcomes, utility, pushes, or tactics absent from the JSON.
-- For locations, copy killer_location.name / victim_location.name exactly; do not translate, paraphrase, summarize, or rewrite them. If callout_source is missing, say location data is unavailable.
-- Do not expose internal technical field names to the user, including detailed_tactical_rounds, brief_tactical_rounds, wr_start, wr_end, wr_start_pct, wr_end_pct, hard_win_rate, easy_win_rate, highlight_rate, evaluation_context, duel_context.
+- Location callouts must be grounded in killer_location / victim_location. callout_candidates is a list of candidate locations; name is the location name, distance is the distance from the current position to that location boundary, and size is polygon area, where larger values mean broader regions. Prefer distance 0 containing regions and nearby smaller landmarks together: if a point is inside a broad location and close to a smaller one, you may combine them naturally as "broad location near smaller landmark". Do not invent locations outside the candidates. If callout_source is missing, say location data is unavailable.
+- Location few-shot examples: candidates [{{name:"B Site", distance:0, size:250000}}, {{name:"Van", distance:35, size:12000}}] -> "B Site near Van"; candidates [{{name:"A Site", distance:0, size:300000}}, {{name:"Triple", distance:0, size:18000}}] -> "A Site Triple"; candidates [{{name:"Mid", distance:0, size:220000}}, {{name:"Window", distance:80, size:25000}}] -> "Mid toward Window".
+- Do not expose internal technical field names to the user, including detailed_tactical_rounds, brief_tactical_rounds, wr_start, wr_end, wr_start_pct, wr_end_pct, hard_win_rate, easy_win_rate, highlight_rate, evaluation_context, duel_context, callout_candidates.
 - Round-level win-rate narration must say: “Team X won from an opening win probability of Y%”. Do not show terminal 0.0%/100.0% curve values or wr_start/wr_end field names.
 - For detailed rounds, each key kill should show event-level numbers: killer-side gain, Team1 curve change, kill difficulty, and duel predicted win rate. Use natural language, not JSON field names.
 """
@@ -106,11 +108,15 @@ def build_llm_payload(
     def localize_location(loc: Any) -> Any:
         if not isinstance(loc, dict):
             return loc
-        name_key = "name_en" if output_lang == "en" else "name_cn"
-        localized = loc.get(name_key) or loc.get("name")
-        if localized is None:
-            return loc
-        return {**loc, "name": localized}
+        candidates_key = "callout_candidates_en" if output_lang == "en" else "callout_candidates_cn"
+        candidates = loc.get(candidates_key) or loc.get("callout_candidates")
+        compact = {
+            "callout_source": loc.get("callout_source"),
+            "callout_candidates": candidates or [],
+        }
+        if not compact["callout_candidates"] and loc.get("name") is not None:
+            compact["name"] = loc.get("name")
+        return compact
 
     def localize_event_locations(event: Any) -> Any:
         if not isinstance(event, dict):
