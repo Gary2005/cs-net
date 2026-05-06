@@ -9,16 +9,16 @@ from demoparser2 import DemoParser
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
 
-TOOLS_DIR = Path(__file__).resolve().parent
-ROOT_DIR = TOOLS_DIR.parent
+ANNOTATOR_DIR = Path(__file__).resolve().parent
+ROOT_DIR = ANNOTATOR_DIR.parents[1]
 CALLOUT_CONFIG_DIR = ROOT_DIR / "config" / "callouts"
 DEFAULT_NEAREST_THRESHOLD = 300
 OVERVIEW_DIR = ROOT_DIR / "demo_analysis" / "static" / "overviews"
 
 app = Flask(
     __name__,
-    template_folder=str(TOOLS_DIR / "templates"),
-    static_folder=str(TOOLS_DIR / "static"),
+    template_folder=str(ANNOTATOR_DIR / "templates"),
+    static_folder=str(ANNOTATOR_DIR / "static"),
     static_url_path="/tool_static",
 )
 
@@ -180,6 +180,10 @@ def overviews(filename: str):
     return send_from_directory(OVERVIEW_DIR, filename)
 
 
-if __name__ == "__main__":
+def main() -> None:
     print("Open http://127.0.0.1:7871")
     app.run(host="127.0.0.1", port=7871)
+
+
+if __name__ == "__main__":
+    main()
