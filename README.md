@@ -62,10 +62,10 @@ pip install -r requirements.txt
 
 Download all pre-trained models and tokenizers to `./cs-net-models/`:
 
-Model weights are also available here: https://huggingface.co/gary2oos/cs-net
+Model weights are also available here: https://huggingface.co/gary2oos/CS-Net-V3
 
 ```bash
-python -m examples.download_model
+python -m scripts.download_model
 ```
 
 ### 3. Convert Demo to JSON
@@ -82,28 +82,33 @@ python -m data.process_demo \
   -out examples/test.json
 ```
 
-### 4. Run Case Study & Visualization
+### 4. Download Test Data
 
-Generate predictions and visualizations using the processed data:
+To reproduce the calibration/evaluation numbers below, download the test shard first:
 
 ```bash
-python -m examples.case_study \
-  --json_path examples/test.json \
-  --alive_ckpt_dir cs-net-models/alive \
-  --kill_ckpt_dir cs-net-models/nxt_kill \
-  --death_ckpt_dir cs-net-models/nxt_death \
-  --winrate_ckpt_dir cs-net-models/win_rate \
-  --duel_ckpt_dir cs-net-models/duel \
-  --device cpu
+python -m scripts.download_data
 ```
 
-**Note on `--device` flag:**
-- Use `cuda` for NVIDIA GPUs
-- Use `mps` for Apple Silicon (M1/M2/M3)
-- Use `cpu` for CPU-only inference
+This script downloads `test/shards-00000.tar` from Hugging Face and stores it under `./dataset/test/`.
 
-Optional flag:
-- `--remove_projectiles`: remove projectile and grenade entities from JSON before inference.
+### 5. Calibrate Temperature Scaling
+
+You can calibrate the model3.0 heads with:
+
+```bash
+python -m scripts.train3_t_scaling --dataset_path dataset --device cpu
+```
+
+On the current test shard, the calibration results are:
+
+| Task | T | Before Loss | Before ECE | Before Acc | After Loss | After ECE | After Acc |
+|------|---|-------------|------------|------------|------------|-----------|-----------|
+| Alive | 1.193158 | 0.431486 | 0.028640 | 0.774641 | 0.429344 | 0.021371 | 0.774641 |
+| Duel | 1.146975 | 0.633122 | 0.017835 | 0.632217 | 0.632133 | 0.014517 | 0.632217 |
+| Next Death | 1.493995 | 1.785793 | 0.077382 | 0.342485 | 1.741089 | 0.012107 | 0.342485 |
+| Next Kill | 1.602551 | 1.801647 | 0.102502 | 0.339024 | 1.736153 | 0.012922 | 0.339024 |
+| Win Rate | 1.061342 | 0.467820 | 0.029351 | 0.754566 | 0.467459 | 0.029516 | 0.754566 |
 
 ## 🌐 Web App Usage
 
@@ -133,7 +138,7 @@ http://127.0.0.1:7860
 2. Select the **model root directory** (normally `cs-net-models/`). The web app
    loads all five prediction heads (`alive`, `nxt_kill`, `nxt_death`,
    `win_rate`, `duel`) from their subdirectories in one go.
-3. Select device (cpu / cuda / mps).
+3. Select device (cpu / cuda).
 4. Click Start Analysis.
 
 ### 3. Generate LLM summary

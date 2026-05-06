@@ -1,194 +1,131 @@
-"""
-Batched multi-head inference for the demo_analysis pipeline.
-
-For each round in a demo we run all five heads (win / alive / kill / death / duel)
-in a single pass by reusing the shared frozen tick_encoder across models. Each
-tick in the output JSON carries:
-
-    ct_win_rate: float
-    alive_pred : list[10] float
-    next_kill  : list[11] float
-    next_death : list[11] float
-    duel       : list[10][10] float   (0.5 on the diagonal and where one player is dead)
-
-On top of that we still emit the round-level dashboard fields the web app already
-uses (win_rate curve, kills, player_data contribution, winner, inventories) and
-a `ticks` array with the minimal radar view of every tick.
-
-This mirrors the approach in ``cs2-demo-analytics/scripts/inference.py`` —
-compute tick embeddings once, then re-use them for every head.
-"""
-
 import argparse
 import json
+import math
 import os
-import sys
-import traceback
 from copy import deepcopy
 from pathlib import Path
 
-import numpy as np
 import torch
 import yaml
 from tqdm import tqdm
 
-from data.create_training_data import process_json_bytes
 from data.process_demo import get_important_ticks_by_round
 from demoparser2 import DemoParser
 from demoparser_utils.state_extract import extract_states_by_group
-from demoparser_utils.tick_tokenizer import TickTokenizer
-from models.model2 import Model2
+from models.model3_space_only import CSModelV3
 
 
-# ---------------------------------------------------------------------------
-# model / fs helpers
-# ---------------------------------------------------------------------------
+SPACE_SIZE = 31
+N_PLAYERS = 10
 
-DEFAULT_SUBDIRS = {
-    "alive": "alive",
-    "kill":  "nxt_kill",
-    "death": "nxt_death",
-    "win":   "win_rate",
-    "duel":  "duel",
+MAP_CONFIG = {
+    "maps": {
+        "de_mirage": {
+            "center": [-605.8900146484375, -866.8900146484375, -171.6199951171875],
+        },
+        "de_dust2": {
+            "center": [-199.0, 977.0, 32.220001220703125],
+        },
+        "de_inferno": {
+            "center": [481.07000732421875, 1396.47998046875, 137.91000366210938],
+        },
+        "de_nuke": {
+            "center": [265.9599914550781, -772.5, -381.8999938964844],
+        },
+        "de_overpass": {
+            "center": [-2027.3900146484375, -812.9000244140625, 324.95001220703125],
+        },
+        "de_ancient": {
+            "center": [-435.5, -348.0, 43.650001525878906],
+        },
+        "de_anubis": {
+            "center": [-77.38999938964844, 618.9000244140625, -6.800000190734863],
+        },
+        "de_train": {
+            "center": [-118.25, -2.0, -128.52000427246094],
+        },
+    },
+    "ranges": {
+        "x": [-5000, 5000],
+        "y": [-5000, 5000],
+        "z": [-2000, 2000],
+    },
 }
 
-HEAD_ORDER = ("alive", "kill", "death", "win", "duel")
+MAP_NAME_TO_IDX = {map_name: idx for idx, map_name in enumerate(MAP_CONFIG["maps"].keys())}
 
 
-def load_config(path):
-    with open(path, "r", encoding="utf-8") as f:
+def clip_and_scale(value, range_vals):
+    min_val, max_val = range_vals
+    if value < min_val:
+        value = min_val
+    elif value > max_val:
+        value = max_val
+    return value / max(abs(min_val), abs(max_val))
+
+
+def load_tokenizer_cfg():
+    with open("demoparser_utils/tokenizer.yaml", "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-def find_yaml(folder):
-    for name in sorted(os.listdir(folder)):
-        if name.endswith(".yaml") and "tokenizer" not in name:
-            return os.path.join(folder, name)
-    raise RuntimeError(f"No model yaml found in {folder}")
+def build_weapon_index(tokenizer_cfg):
+    weapons = tokenizer_cfg.get("weapons", [])
+    return {name: i for i, name in enumerate(weapons)}
 
 
-def find_checkpoint(folder):
-    for preferred in ("latest_checkpoint.pth", "best_checkpoint.pth",
-                      "latest_checkpoint.pt", "best_checkpoint.pt"):
-        p = os.path.join(folder, preferred)
-        if os.path.exists(p):
-            return p
+def build_projectile_index(tokenizer_cfg):
+    projectiles = tokenizer_cfg.get("projectiles", [])
+    return {name: i for i, name in enumerate(projectiles)}
+
+
+def find_checkpoint(folder: str) -> str:
     for name in sorted(os.listdir(folder)):
         if name.endswith((".pth", ".pt")):
             return os.path.join(folder, name)
     raise RuntimeError(f"No checkpoint found in {folder}")
 
 
-def find_tokenizer_yaml(folder):
-    direct = os.path.join(folder, "tokenizer.yaml")
-    if os.path.exists(direct):
-        return direct
-    for root, _, files in os.walk(folder):
-        for name in files:
-            if name == "tokenizer.yaml":
-                return os.path.join(root, name)
-    raise RuntimeError(f"tokenizer.yaml not found under {folder}")
+def load_yaml(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 
-def load_model(folder, device):
-    cfg = load_config(find_yaml(folder))
-    model = Model2(cfg).to(device)
+def find_head_yaml(head_dir: str) -> str:
+    last = os.path.basename(os.path.normpath(head_dir))
+    if last == "alive":
+        return "config/model3_alive_space_only.yaml"
+    if last == "duel":
+        return "config/model3_duel_space_only.yaml"
+    if last == "nxt_death":
+        return "config/model3_death_space_only.yaml"
+    if last == "nxt_kill":
+        return "config/model3_kill_space_only.yaml"
+    if last == "win_rate":
+        return "config/model3_win_space_only.yaml"
+    raise RuntimeError(f"No config mapping for head dir: {head_dir}")
 
-    ckpt = find_checkpoint(folder)
+
+def load_model_and_cfg(head_dir: str, device: torch.device):
+    cfg_path = find_head_yaml(head_dir)
+    cfg = load_yaml(cfg_path)
+    model = CSModelV3(cfg).to(device)
+    ckpt = find_checkpoint(head_dir)
     state = torch.load(ckpt, map_location=device, weights_only=False)
     if isinstance(state, dict) and "model_state_dict" in state:
         model.load_state_dict(state["model_state_dict"])
     else:
         model.load_state_dict(state)
     model.eval()
-    print(f"Loaded {os.path.basename(folder)} model from {ckpt}")
-    return model, cfg
+    return model, cfg, ckpt
 
 
-def _looks_like_ckpt_dir(path):
-    """True if `path` itself is a single-head checkpoint dir (has yaml + .pt/.pth)."""
-    if not path or not os.path.isdir(path):
-        return False
-    has_yaml = any(
-        n.endswith(".yaml") and "tokenizer" not in n for n in os.listdir(path)
-    )
-    has_ckpt = any(n.endswith((".pth", ".pt")) for n in os.listdir(path))
-    return has_yaml and has_ckpt
-
-
-def resolve_head_dirs(args):
-    """
-    Expand --model_root into per-head dirs, honoring per-head overrides.
-    Missing heads are returned as None — the pipeline runs with sensible
-    fallbacks for all heads except `win`, which is required.
-    Legacy layout (user only has `win_rate/`) is accepted two ways:
-      - `--model_root path/to/win_rate`  (auto-detected as a bare win head dir)
-      - `--winrate_ckpt_dir path/to/win_rate` (explicit override)
-    """
-    explicit = {
-        "alive": args.alive_ckpt_dir,
-        "kill":  args.kill_ckpt_dir,
-        "death": args.death_ckpt_dir,
-        "win":   args.winrate_ckpt_dir,
-        "duel":  args.duel_ckpt_dir,
-    }
-
-    root = args.model_root
-    legacy_win_root = root and _looks_like_ckpt_dir(root) and not any(
-        os.path.isdir(os.path.join(root, DEFAULT_SUBDIRS[h])) for h in HEAD_ORDER
-    )
-
-    dirs = {}
-    for head in HEAD_ORDER:
-        if explicit[head]:
-            candidate = explicit[head]
-        elif legacy_win_root and head == "win":
-            candidate = root
-        elif root and not legacy_win_root:
-            candidate = os.path.join(root, DEFAULT_SUBDIRS[head])
-        else:
-            candidate = None
-        if candidate and os.path.isdir(candidate):
-            dirs[head] = candidate
-        else:
-            dirs[head] = None
-
-    if dirs["win"] is None:
-        raise RuntimeError(
-            "win rate model dir is required. Pass --model_root <root containing win_rate/> "
-            "or --winrate_ckpt_dir <dir>, or point --model_root directly at the legacy "
-            "win_rate checkpoint dir."
-        )
-
-    missing = [h for h in HEAD_ORDER if dirs[h] is None]
-    if missing:
-        print(f"[warn] optional heads missing — running with fallbacks: {missing}")
-
-    return dirs
-
-
-def to_jsonable(v):
-    if isinstance(v, dict):
-        return {k: to_jsonable(x) for k, x in v.items()}
-    if isinstance(v, (list, tuple)):
-        return [to_jsonable(x) for x in v]
-    if isinstance(v, np.ndarray):
-        return v.tolist()
-    if isinstance(v, np.generic):
-        return v.item()
-    return v
-
-
-# ---------------------------------------------------------------------------
-# inference core — shared tick embeddings, batched heads
-# ---------------------------------------------------------------------------
-
-def apply_temperature_scaling(logits, config):
-    calib = (config or {}).get("calibration", {}).get("temperature_scaling")
-    if calib is None:
+def apply_temperature_scaling(logits: torch.Tensor, cfg: dict):
+    calib = (cfg or {}).get("calibration", {}).get("temperature_scaling")
+    if not calib:
         return logits
-    T = float(calib.get("temperature", 1.0)) or 1.0
-    scaled = logits / T
+    temperature = float(calib.get("temperature", 1.0)) or 1.0
+    scaled = logits / temperature
     bias = calib.get("bias")
     if bias is None:
         return scaled
@@ -198,235 +135,378 @@ def apply_temperature_scaling(logits, config):
     return scaled + float(bias)
 
 
-def pad_round_tensor(tensor, seq_len, pad_token):
-    if tensor.shape[1] < seq_len:
-        pad = torch.full(
-            (tensor.shape[0], seq_len - tensor.shape[1]),
-            pad_token,
-            dtype=tensor.dtype,
-        )
-        return torch.cat([tensor, pad], dim=1)
-    return tensor[:, :seq_len]
+def process_xyz(x, y, z, map_name):
+    center = MAP_CONFIG["maps"][map_name]["center"]
+    x -= center[0]
+    y -= center[1]
+    z -= center[2]
+    return [
+        clip_and_scale(x, MAP_CONFIG["ranges"]["x"]),
+        clip_and_scale(y, MAP_CONFIG["ranges"]["y"]),
+        clip_and_scale(z, MAP_CONFIG["ranges"]["z"]),
+    ]
 
 
-def compute_tick_embeddings(model, token_tensor, device, batch_size):
-    embs, masks = [], []
-    for i in range(0, token_tensor.shape[0], batch_size):
-        batch = token_tensor[i:i + batch_size].to(device)
-        with torch.no_grad():
-            e, m = model.get_tick_embeddings(batch)
-        embs.append(e.cpu())
-        masks.append(m.cpu())
-    return torch.cat(embs, dim=0), torch.cat(masks, dim=0)
+def build_tick_features(state, weapon2idx, projectile2idx):
+    map_name = state.get("map_name")
+    if map_name not in MAP_NAME_TO_IDX:
+        raise ValueError(f"Unknown map: {map_name}")
 
+    mlp1_f = [[0.0, 0.0, 0.0] for _ in range(SPACE_SIZE)]
+    mlp1_i = [0 for _ in range(SPACE_SIZE)]
+    mlp1_mask = [False for _ in range(SPACE_SIZE)]
 
-def build_sliding_windows(tick_emb, tick_mask, ticks_per_sample):
-    total = tick_emb.shape[0]
-    if total < ticks_per_sample:
-        raise RuntimeError(
-            f"need >= {ticks_per_sample} ticks, got {total} after padding"
-        )
-    n = total - ticks_per_sample + 1
-    emb_win = torch.stack([tick_emb[i:i + ticks_per_sample] for i in range(n)], 0)
-    msk_win = torch.stack([tick_mask[i:i + ticks_per_sample] for i in range(n)], 0)
-    return emb_win, msk_win
+    mlp2_f = [[0.0 for _ in range(14)] for _ in range(SPACE_SIZE)]
+    mlp2_mask = [False for _ in range(SPACE_SIZE)]
 
+    mlp3_f = [[0.0] for _ in range(SPACE_SIZE)]
+    mlp3_i = [0 for _ in range(SPACE_SIZE)]
+    mlp3_mask = [False for _ in range(SPACE_SIZE)]
 
-def build_alive_mask(states_batch, n_players=10):
-    """Return bool mask of shape (B, n_players) from players_info[*].is_alive."""
-    mask = torch.zeros((len(states_batch), n_players), dtype=torch.bool)
-    for i, s in enumerate(states_batch):
-        players = s.get("players_info", [])
-        for p in range(min(n_players, len(players))):
-            mask[i, p] = bool(players[p].get("is_alive", False))
-    return mask
+    mlp4_f = [[0.0 for _ in range(4)] for _ in range(SPACE_SIZE)]
+    mlp4_mask = [False for _ in range(SPACE_SIZE)]
 
+    mlp5_f = [[[0.0 for _ in range(13)] for _ in range(9)] for _ in range(SPACE_SIZE)]
+    mlp5_i = [[0 for _ in range(9)] for _ in range(SPACE_SIZE)]
+    mlp5_mask = [[False for _ in range(9)] for _ in range(SPACE_SIZE)]
 
-def infer_alive_probs(model, cfg, eb, mb, alive_mask):
-    """
-    Infer alive probabilities only for currently alive players.
-    Dead players are skipped and left as 0.0 in output.
-    """
-    B = eb.size(0)
-    out = torch.zeros((B, 10), device=eb.device)
-    for p in range(10):
-        idx = torch.nonzero(alive_mask[:, p], as_tuple=False).squeeze(-1)
-        if idx.numel() == 0:
+    emb1_i = [[0 for _ in range(9)] for _ in range(SPACE_SIZE)]
+    emb1_mask = [[False for _ in range(9)] for _ in range(SPACE_SIZE)]
+
+    emb2_i = [0 for _ in range(SPACE_SIZE)]
+    emb2_mask = [False for _ in range(SPACE_SIZE)]
+
+    dead_mask = [False for _ in range(SPACE_SIZE)]
+    pad_mask = [False for _ in range(SPACE_SIZE)]
+
+    players_info = state.get("players_info", [])
+    for idx, player in enumerate(players_info[:N_PLAYERS]):
+        if not player.get("is_alive", False):
+            dead_mask[idx] = True
             continue
-        cond = torch.full((idx.numel(), 1), p, dtype=torch.long, device=eb.device)
-        logit = model.get_predictions_from_tick_emb(eb[idx], mb[idx], cond).squeeze(-1)
-        logit = apply_temperature_scaling(logit, cfg)
-        out[idx, p] = torch.sigmoid(logit)
-    return out  # (B, 10)
 
+        mlp1_f[idx] = process_xyz(player["X"], player["Y"], player["Z"], map_name)
+        mlp1_i[idx] = MAP_NAME_TO_IDX[map_name]
+        mlp1_mask[idx] = True
 
-def infer_duel_probs(model, cfg, eb, mb, team_ct, team_t, alive_mask):
-    B = eb.size(0)
-    # 0.5 on diagonal and whenever one side is dead.
-    out = torch.full((B, 10, 10), 0.5, device=eb.device)
-    for ct in team_ct:
-        for t in team_t:
-            valid = alive_mask[:, ct] & alive_mask[:, t]
-            idx = torch.nonzero(valid, as_tuple=False).squeeze(-1)
-            if idx.numel() == 0:
+        mlp2_f[idx] = [
+            float(player.get("armor", 0) > 0),
+            float(player.get("has_helmet", False)),
+            float(player.get("has_defuser", False)),
+            float(player.get("flash_duration", 0) > 0),
+            math.cos(math.radians(float(player.get("pitch", 0.0) or 0.0))),
+            math.sin(math.radians(float(player.get("pitch", 0.0) or 0.0))),
+            math.cos(math.radians(float(player.get("yaw", 0.0) or 0.0))),
+            math.sin(math.radians(float(player.get("yaw", 0.0) or 0.0))),
+            float(player.get("health", 0)) / 100.0,
+            float(player.get("team_num") == "CT"),
+            clip_and_scale(float(player.get("velocity", 0.0) or 0.0), [0, 8000]),
+            clip_and_scale(float(player.get("velocity_X", 0.0) or 0.0), [-8000, 8000]),
+            clip_and_scale(float(player.get("velocity_Y", 0.0) or 0.0), [-8000, 8000]),
+            clip_and_scale(float(player.get("velocity_Z", 0.0) or 0.0), [-1000, 1000]),
+        ]
+        mlp2_mask[idx] = True
+
+        inventory = player.get("inventory", []) or []
+        inv_ids = [weapon2idx.get(w, weapon2idx.get("knife", 0)) for w in inventory]
+        if len(inv_ids) > 9:
+            inv_ids = inv_ids[:9]
+        emb1_i[idx] = inv_ids + [0] * (9 - len(inv_ids))
+        emb1_mask[idx] = [True] * len(inv_ids) + [False] * (9 - len(inv_ids))
+
+    bomb_pos = state.get("bomb_position")
+    if bomb_pos is not None:
+        mlp1_f[10] = process_xyz(bomb_pos[0], bomb_pos[1], bomb_pos[2], map_name)
+        mlp1_i[10] = MAP_NAME_TO_IDX[map_name]
+        mlp1_mask[10] = True
+
+        emb2_i[10] = MAP_NAME_TO_IDX[map_name]
+        emb2_mask[10] = True
+
+        planted = bool(state.get("is_bomb_planted", False))
+        dropped = bool(state.get("is_bomb_dropped", False))
+        planted_duration = state.get("bomb_planted_duration")
+        if not planted:
+            planted_duration = 0.0
+        if planted_duration is None:
+            planted_duration = 0.0
+
+        mlp4_f[10] = [
+            float(state.get("round_seconds", 0.0)) / 160.0,
+            float(planted),
+            float(dropped),
+            float(planted_duration) / 40.0,
+        ]
+        mlp4_mask[10] = True
+
+    projectiles = list(state.get("projectiles", []) or [])
+    max_projectiles = SPACE_SIZE - 11
+    if len(projectiles) > max_projectiles:
+        projectiles = projectiles[:max_projectiles]
+
+    for idx, proj in enumerate(projectiles):
+        token_idx = idx + 11
+        proj_type = proj.get("type")
+        if proj_type not in projectile2idx:
+            continue
+
+        pos = proj.get("position") or [0.0, 0.0, 0.0]
+        mlp1_f[token_idx] = process_xyz(pos[0], pos[1], pos[2], map_name)
+        mlp1_i[token_idx] = MAP_NAME_TO_IDX[map_name]
+        mlp1_mask[token_idx] = True
+
+        duration = float(proj.get("duration", 0.0) or 0.0)
+        mlp3_f[token_idx] = [duration / 25.0]
+        mlp3_i[token_idx] = projectile2idx[proj_type]
+        mlp3_mask[token_idx] = True
+
+    num_tokens = 11 + len(projectiles)
+    for i in range(num_tokens, SPACE_SIZE):
+        pad_mask[i] = True
+
+    for idx, player in enumerate(players_info[:N_PLAYERS]):
+        if not player.get("is_alive", False):
+            continue
+
+        mlp5_features = []
+        mlp5_index = []
+
+        for idx2, other in enumerate(players_info[:N_PLAYERS]):
+            if idx == idx2:
+                continue
+            if not other.get("is_alive", False):
                 continue
 
-            cond = torch.zeros((idx.numel(), 2), dtype=torch.long, device=eb.device)
-            cond[:, 0] = ct
-            cond[:, 1] = t
-            logit = model.get_predictions_from_tick_emb(eb[idx], mb[idx], cond).squeeze(-1)
-            logit = apply_temperature_scaling(logit, cfg)
-            p = torch.sigmoid(logit)
-            out[idx, ct, t] = p
-            out[idx, t, ct] = 1.0 - p
-    return out
+            dx = other["X"] - player["X"]
+            dy = other["Y"] - player["Y"]
+            dz = other["Z"] - player["Z"]
+            dist = (dx * dx + dy * dy + dz * dz) ** 0.5
+            j_is_teammate = player.get("team_num") == other.get("team_num")
+            j_is_enemy = not j_is_teammate
+
+            yaw_deg = float(player.get("yaw", 0.0) or 0.0)
+            pitch_deg = float(player.get("pitch", 0.0) or 0.0)
+            yaw_rad = math.radians(yaw_deg)
+            pitch_rad = math.radians(pitch_deg)
+
+            xy_norm = math.hypot(dx, dy)
+            if xy_norm > 0:
+                fwd_x = math.cos(yaw_rad)
+                fwd_y = math.sin(yaw_rad)
+                dot_xy = (dx * fwd_x + dy * fwd_y) / xy_norm
+                dot_xy = max(-1.0, min(1.0, dot_xy))
+                d_theta_xy = math.degrees(math.acos(dot_xy))
+            else:
+                d_theta_xy = 0.0
+
+            xy_plane_dist = math.hypot(dx, dy)
+            if xy_plane_dist > 0:
+                target_pitch = math.atan2(dz, xy_plane_dist)
+            else:
+                target_pitch = math.pi / 2 if dz > 0 else (-math.pi / 2 if dz < 0 else 0.0)
+            d_theta_z = abs(math.degrees(pitch_rad - target_pitch))
+
+            rel = [
+                clip_and_scale(dx, MAP_CONFIG["ranges"]["x"]),
+                clip_and_scale(dy, MAP_CONFIG["ranges"]["y"]),
+                clip_and_scale(dz, MAP_CONFIG["ranges"]["z"]),
+                math.log(clip_and_scale(dist, [0, 5000]) + 1.0),
+                float(j_is_teammate),
+                float(j_is_enemy),
+                0.0,
+                float(j_is_enemy and (player.get("steamid") in (other.get("spotted_by") or []))),
+                float(j_is_enemy and (other.get("steamid") in (player.get("spotted_by") or []))),
+                math.cos(math.radians(d_theta_xy)),
+                math.sin(math.radians(d_theta_xy)),
+                math.cos(math.radians(d_theta_z)),
+                math.sin(math.radians(d_theta_z)),
+            ]
+
+            mlp5_features.append(rel)
+            mlp5_index.append(idx2)
+
+        if len(mlp5_features) > 9:
+            mlp5_features = mlp5_features[:9]
+            mlp5_index = mlp5_index[:9]
+
+        mlp5_f[idx] = mlp5_features + [[0.0 for _ in range(13)] for _ in range(9 - len(mlp5_features))]
+        mlp5_i[idx] = mlp5_index + [0 for _ in range(9 - len(mlp5_index))]
+        mlp5_mask[idx] = [True] * len(mlp5_features) + [False] * (9 - len(mlp5_features))
+
+    return {
+        "mlp1_f": mlp1_f,
+        "mlp1_i": mlp1_i,
+        "mlp1_mask": mlp1_mask,
+        "mlp2_f": mlp2_f,
+        "mlp2_mask": mlp2_mask,
+        "mlp3_f": mlp3_f,
+        "mlp3_i": mlp3_i,
+        "mlp3_mask": mlp3_mask,
+        "mlp4_f": mlp4_f,
+        "mlp4_mask": mlp4_mask,
+        "mlp5_f": mlp5_f,
+        "mlp5_i": mlp5_i,
+        "mlp5_mask": mlp5_mask,
+        "emb1_i": emb1_i,
+        "emb1_mask": emb1_mask,
+        "emb2_i": emb2_i,
+        "emb2_mask": emb2_mask,
+        "dead_mask": dead_mask,
+        "pad_mask": pad_mask,
+    }
 
 
-def run_multihead(
-    round_tensor,
-    round_states,
-    models,
-    configs,
-    device,
-    batch_size,
-    compute_duel,
-):
-    """
-    Enrich each state dict in round_states with head predictions.
+def build_batch(round_states, weapon2idx, projectile2idx, device):
+    samples = [build_tick_features(s, weapon2idx, projectile2idx) for s in round_states]
 
-    `models` and `configs` are dicts keyed by head name (alive / kill / death / win / duel).
-    Missing heads → fallback values (uniform / 0.5). The `win` head is required and
-    drives `ct_win_rate`; all other heads are optional. Since every head shares the
-    same frozen tick_encoder, embeddings are computed from whichever model is loaded.
-    """
-    win_m = models["win"]
-    win_cfg = configs["win"]
-    if win_m is None:
-        raise RuntimeError("run_multihead: win-rate model is required")
+    def stack(key, dtype, is_bool=False):
+        data = [s[key] for s in samples]
+        tensor = torch.tensor(data, dtype=dtype)
+        if is_bool:
+            tensor = tensor.bool()
+        return tensor.to(device)
 
-    # Any loaded model works — the tick_encoder is a frozen copy of the pretrained embedder.
-    encoder_model = next((m for m in models.values() if m is not None), None)
-    if encoder_model is None:
-        raise RuntimeError("no loaded models")
+    return {
+        "mlp1_f": stack("mlp1_f", torch.float32),
+        "mlp1_i": stack("mlp1_i", torch.long),
+        "mlp1_mask": stack("mlp1_mask", torch.bool, is_bool=True),
+        "mlp2_f": stack("mlp2_f", torch.float32),
+        "mlp2_mask": stack("mlp2_mask", torch.bool, is_bool=True),
+        "mlp3_f": stack("mlp3_f", torch.float32),
+        "mlp3_i": stack("mlp3_i", torch.long),
+        "mlp3_mask": stack("mlp3_mask", torch.bool, is_bool=True),
+        "mlp4_f": stack("mlp4_f", torch.float32),
+        "mlp4_mask": stack("mlp4_mask", torch.bool, is_bool=True),
+        "mlp5_f": stack("mlp5_f", torch.float32),
+        "mlp5_i": stack("mlp5_i", torch.long),
+        "mlp5_mask": stack("mlp5_mask", torch.bool, is_bool=True),
+        "emb1_i": stack("emb1_i", torch.long),
+        "emb1_mask": stack("emb1_mask", torch.bool, is_bool=True),
+        "emb2_i": stack("emb2_i", torch.long),
+        "emb2_mask": stack("emb2_mask", torch.bool, is_bool=True),
+        "dead_mask": stack("dead_mask", torch.bool, is_bool=True),
+        "pad_mask": stack("pad_mask", torch.bool, is_bool=True),
+    }
 
-    ref_cfg = win_cfg
-    seq_len = ref_cfg["data"]["tick_seq_len"]
-    ticks_per_sample = ref_cfg["data"]["temporal_seq_len"]
-    pad_token = ref_cfg["model"]["pad_token_id"]
 
-    team_ct, team_t = [], []
-    for idx, p in enumerate(round_states[0]["players_info"]):
-        (team_ct if p["team_num"] == "CT" else team_t).append(idx)
+def compute_duel_matrix(model, cfg, batch, alive_mask, team_ct, team_t):
+    if not team_ct or not team_t:
+        return None
 
-    tensor = pad_round_tensor(round_tensor, seq_len, pad_token)
-    front = torch.full(
-        (ticks_per_sample - 1, tensor.shape[1]),
-        pad_token,
-        dtype=tensor.dtype,
-    )
-    padded = torch.cat([front, tensor], dim=0)
+    with torch.no_grad():
+        x = model.encode_tick(batch)
+        x = model.space_tf(x, batch["pad_mask"], batch["dead_mask"])
 
-    tick_emb, tick_mask = compute_tick_embeddings(encoder_model, padded, device, batch_size)
-    emb_win, msk_win = build_sliding_windows(tick_emb, tick_mask, ticks_per_sample)
+        pairs = [(ct, t) for ct in team_ct for t in team_t]
+        a_idx = torch.tensor([p[0] for p in pairs], device=x.device)
+        b_idx = torch.tensor([p[1] for p in pairs], device=x.device)
 
-    N = emb_win.shape[0]
-    if N != len(round_states):
-        raise RuntimeError(
-            f"window count {N} does not match state count {len(round_states)}"
-        )
+        token_a = x[:, a_idx, :]
+        token_b = x[:, b_idx, :]
+        logits = model.head(torch.cat([token_a, token_b], dim=-1)).squeeze(-1)
+        logits = apply_temperature_scaling(logits, cfg)
+        probs = torch.sigmoid(logits)
 
-    alive_m = models.get("alive")
-    kill_m = models.get("kill")
-    death_m = models.get("death")
-    duel_m = models.get("duel")
+        duel = torch.full((x.shape[0], N_PLAYERS, N_PLAYERS), 0.5, device=x.device)
+        for i, (a, b) in enumerate(pairs):
+            duel[:, a, b] = probs[:, i]
+            duel[:, b, a] = 1.0 - probs[:, i]
 
-    alive_fb = [0.5] * 10
-    # Uniform over the 11 kill/death slots (10 players + 1 "no event").
-    kd_fb = [1.0 / 11.0] * 11
+    alive_mask = alive_mask.to(duel.device)
+    for i in range(N_PLAYERS):
+        for j in range(N_PLAYERS):
+            invalid = (~alive_mask[:, i]) | (~alive_mask[:, j])
+            if invalid.any():
+                duel[invalid, i, j] = 0.5
 
-    for start in range(0, N, batch_size):
-        eb = emb_win[start:start + batch_size].to(device)
-        mb = msk_win[start:start + batch_size].to(device)
-        B = eb.shape[0]
-        states_batch = round_states[start:start + B]
-        alive_mask_cpu = build_alive_mask(states_batch)
-        alive_mask = alive_mask_cpu.to(device)
+    return duel
+
+
+def run_round_inference(round_states, models, cfgs, weapon2idx, projectile2idx, device, batch_size):
+    batch = build_batch(round_states, weapon2idx, projectile2idx, device)
+    total = batch["mlp1_f"].shape[0]
+
+    team_ct = [i for i, p in enumerate(round_states[0]["players_info"][:N_PLAYERS]) if p.get("team_num") == "CT"]
+    team_t = [i for i, p in enumerate(round_states[0]["players_info"][:N_PLAYERS]) if p.get("team_num") == "T"]
+
+    results = []
+    for start in range(0, total, batch_size):
+        end = min(total, start + batch_size)
+        sub = {k: v[start:end] for k, v in batch.items()}
+        B = end - start
+
+        alive_mask = torch.zeros((B, N_PLAYERS), dtype=torch.bool, device=device)
+        for i in range(B):
+            players = round_states[start + i].get("players_info", [])
+            for j in range(min(N_PLAYERS, len(players))):
+                alive_mask[i, j] = bool(players[j].get("is_alive", False))
 
         with torch.no_grad():
-            if alive_m is not None:
-                alive_probs = infer_alive_probs(
-                    alive_m, configs["alive"], eb, mb, alive_mask
-                ).cpu().numpy()
+            win_logits, _ = models["win"]({**sub, "label": torch.zeros(B, device=device)})
+            win_logits = apply_temperature_scaling(win_logits, cfgs["win"])
+            win_probs = torch.sigmoid(win_logits).cpu().tolist()
+
+            if models.get("alive") is not None:
+                alive_logits, _ = models["alive"]({**sub, "alive_in_the_end": torch.zeros((B, N_PLAYERS), device=device)})
+                alive_logits = apply_temperature_scaling(alive_logits, cfgs["alive"])
+                alive_probs = torch.sigmoid(alive_logits).cpu().tolist()
             else:
                 alive_probs = None
 
-            if kill_m is not None:
-                k_logit = kill_m.get_predictions_from_tick_emb(eb, mb, None)
-                k_logit = apply_temperature_scaling(k_logit, configs["kill"])
-                kill_probs = torch.softmax(k_logit, dim=-1).cpu().numpy()
+            if models.get("kill") is not None:
+                kill_logits, _ = models["kill"]({**sub, "nxt_kill": torch.zeros(B, dtype=torch.long, device=device)})
+                kill_logits = apply_temperature_scaling(kill_logits, cfgs["kill"])
+                kill_probs = torch.softmax(kill_logits, dim=-1).cpu().tolist()
             else:
                 kill_probs = None
 
-            if death_m is not None:
-                d_logit = death_m.get_predictions_from_tick_emb(eb, mb, None)
-                d_logit = apply_temperature_scaling(d_logit, configs["death"])
-                death_probs = torch.softmax(d_logit, dim=-1).cpu().numpy()
+            if models.get("death") is not None:
+                death_logits, _ = models["death"]({**sub, "nxt_death": torch.zeros(B, dtype=torch.long, device=device)})
+                death_logits = apply_temperature_scaling(death_logits, cfgs["death"])
+                death_probs = torch.softmax(death_logits, dim=-1).cpu().tolist()
             else:
                 death_probs = None
 
-            w_logit = win_m.get_predictions_from_tick_emb(eb, mb, None).squeeze(-1)
-            w_logit = apply_temperature_scaling(w_logit, win_cfg)
-            win_probs = torch.sigmoid(w_logit).cpu().numpy()
-
-            if compute_duel and duel_m is not None:
-                duel_probs = infer_duel_probs(
-                    duel_m, configs["duel"], eb, mb, team_ct, team_t, alive_mask
-                ).cpu().numpy()
+            if models.get("duel") is not None:
+                duel_probs = compute_duel_matrix(models["duel"], cfgs["duel"], sub, alive_mask, team_ct, team_t)
+                duel_probs = duel_probs.cpu().tolist() if duel_probs is not None else None
             else:
                 duel_probs = None
 
-        for j in range(B):
-            s = round_states[start + j]
-            s["ct_win_rate"] = float(win_probs[j])
-            if alive_probs is not None:
-                s["alive_pred"] = alive_probs[j].tolist()
-            else:
-                s["alive_pred"] = [
-                    alive_fb[k] if bool(alive_mask_cpu[j, k]) else 0.0 for k in range(10)
-                ]
-            s["next_kill"] = kill_probs[j].tolist() if kill_probs is not None else list(kd_fb)
-            s["next_death"] = death_probs[j].tolist() if death_probs is not None else list(kd_fb)
-            s["duel"] = duel_probs[j].tolist() if duel_probs is not None else None
+        for i in range(B):
+            state = round_states[start + i]
+            state["ct_win_rate"] = float(win_probs[i])
+            state["alive_pred"] = (
+                alive_probs[i]
+                if alive_probs is not None
+                else [0.5 if alive_mask[i, j].item() else 0.0 for j in range(N_PLAYERS)]
+            )
+            state["next_kill"] = (
+                kill_probs[i] if kill_probs is not None else [1.0 / 11.0] * 11
+            )
+            state["next_death"] = (
+                death_probs[i] if death_probs is not None else [1.0 / 11.0] * 11
+            )
+            state["duel"] = duel_probs[i] if duel_probs is not None else None
 
     return round_states
 
-
-# ---------------------------------------------------------------------------
-# contribution / dashboard assembly (unchanged logic)
-# ---------------------------------------------------------------------------
 
 def _safe_div(a, b):
     return a / b if b else 0.0
 
 
 def compute_kill_difficulty(round_result, kill_time, attacker_idx, victim_idx, window_s=5.0):
-    """
-    Mirror of cs2-demo-analytics/visualization/compute_round_swing.py difficulty:
-    Look at next_kill / next_death predictions in the [kill_time - window_s, kill_time]
-    window, average them, then return (avg_v_kill * avg_a_death) / (avg_a_kill * avg_v_death).
-
-    >1 → attacker won an "uphill" duel the model thought they would lose.
-    <1 → attacker won an expected duel.
-    """
     if attacker_idx is None or victim_idx is None:
-        return 0.0
+        return -1, -1
     if attacker_idx >= 10 or victim_idx >= 10:
-        return 0.0
+        return -1, -1
 
+    duel_prediction = 0
     a_kill = a_death = v_kill = v_death = 0.0
     n = 0
     for state in round_result:
-        sec = float(state.get("round_seconds", 0.0))
+        sec = float(state.get("round_seconds"))
         if sec > kill_time:
             continue
         if sec < kill_time - window_s:
@@ -441,24 +521,27 @@ def compute_kill_difficulty(round_result, kill_time, attacker_idx, victim_idx, w
             v_kill += float(nk[victim_idx])
         if victim_idx < len(nd):
             v_death += float(nd[victim_idx])
+        duel_prediction_mat = state.get("duel", None)
+        if duel_prediction_mat is not None and attacker_idx < len(duel_prediction_mat) and victim_idx < len(duel_prediction_mat[attacker_idx]):
+            duel_prediction += duel_prediction_mat[attacker_idx][victim_idx]
         n += 1
 
     if n == 0:
-        return 0.0
+        return -1, -1
+    duel_prediction = duel_prediction / n
+    
     avg_a_kill = a_kill / n
     avg_a_death = a_death / n
     avg_v_kill = v_kill / n
     avg_v_death = v_death / n
     num = avg_v_kill * avg_a_death
     den = avg_a_kill * avg_v_death
-    return _safe_div(num, den)
+    return _safe_div(num, den), duel_prediction
 
 
 def process_round_json(round_result):
-    """Translate enriched states → round-level dashboard dict (kills, contributions)."""
     processed_json = {}
 
-    # Map player name → index (0..9) so we can resolve kill participants for difficulty.
     name_to_idx = {}
     for idx, p in enumerate(round_result[0].get("players_info", [])):
         name = p.get("name")
@@ -485,9 +568,8 @@ def process_round_json(round_result):
     all_kills = round_result[0]["future_kills"]
 
     team_ct = [p["name"] for p in round_result[0]["players_info"] if p["team_num"] == "CT"]
-    team_t  = [p["name"] for p in round_result[0]["players_info"] if p["team_num"] == "T"]
+    team_t = [p["name"] for p in round_result[0]["players_info"] if p["team_num"] == "T"]
 
-    # Keep round-start inventories so downstream LLM analysis can reference economy/loadout context.
     start_inventory = [
         {
             "player": p.get("name", "Unknown"),
@@ -536,7 +618,6 @@ def process_round_json(round_result):
                         player_data[victim]["kill_contribution"] -= d_win / kill_count
                         kill_impact = d_win / kill_count
                     else:
-                        # CT team kill
                         player_data[killer]["kill_contribution"] += d_win / (kill_count * 2)
                         player_data[victim]["kill_contribution"] += d_win / (kill_count * 2)
                         kill_impact = d_win / kill_count
@@ -550,7 +631,6 @@ def process_round_json(round_result):
                         player_data[victim]["kill_contribution"] += d_win / kill_count
                         kill_impact = -d_win / kill_count
                     else:
-                        # T team kill
                         player_data[killer]["kill_contribution"] -= d_win / (kill_count * 2)
                         player_data[victim]["kill_contribution"] -= d_win / (kill_count * 2)
                         kill_impact = -d_win / kill_count
@@ -559,11 +639,12 @@ def process_round_json(round_result):
                             for p in alive_ct:
                                 player_data[p]["tactical_contribution"] += d_win / (kill_count * len(alive_ct))
 
-                difficulty = compute_kill_difficulty(
+                difficulty, duel_prediction = compute_kill_difficulty(
                     round_result,
                     float(kill["time"]),
                     name_to_idx.get(killer),
                     name_to_idx.get(victim),
+                    window_s = 3.0,
                 )
 
                 processed_json["kills"].append({
@@ -575,6 +656,7 @@ def process_round_json(round_result):
                     "weapon": kill["weapon"],
                     "headshot": bool(kill.get("headshot", False)),
                     "difficulty": difficulty,
+                    "duel_prediction": duel_prediction,
                     "assistedflash": bool(kill.get("assistedflash", False)),
                     "attackerblind": bool(kill.get("attackerblind", False)),
                     "attackerinair": bool(kill.get("attackerinair", False)),
@@ -601,12 +683,7 @@ def process_round_json(round_result):
     return processed_json
 
 
-# ---------------------------------------------------------------------------
-# radar-friendly per-tick view
-# ---------------------------------------------------------------------------
-
 def radar_player_view(players_info):
-    """Slim each player dict down to fields the 2D top-down radar / panels need."""
     out = []
     for p in players_info:
         out.append({
@@ -643,7 +720,6 @@ def build_round_ticks(round_states, duel_fallback):
         if len(alive) < 10:
             alive.extend([False] * (10 - len(alive)))
 
-        # Mark duel cell as "/" whenever either side is dead at this tick.
         duel_marked = []
         for i in range(10):
             row = []
@@ -673,55 +749,38 @@ def build_round_ticks(round_states, duel_fallback):
     return ticks
 
 
-# ---------------------------------------------------------------------------
-# round-level pipeline
-# ---------------------------------------------------------------------------
+def resolve_head_dirs(model_root: Path):
+    head_dirs = {
+        "alive": model_root / "alive",
+        "kill": model_root / "nxt_kill",
+        "death": model_root / "nxt_death",
+        "win": model_root / "win_rate",
+        "duel": model_root / "duel",
+    }
 
-def process_round_states(
-    round_id,
-    round_states,
-    models,
-    configs,
-    tokenizer,
-    valid_maps,
-    device,
-    batch_size,
-    compute_duel,
-    duel_fallback,
-):
-    try:
-        json_bytes = json.dumps(to_jsonable(round_states)).encode()
-        round_tensors, _, _, _, _, _, _ = process_json_bytes(
-            json_bytes, tokenizer, valid_maps
-        )
-        if len(round_tensors) == 0:
-            return {"error": "No valid tensors generated (map unsupported or time range anomalous)"}
+    if not head_dirs["win"].is_dir():
+        raise RuntimeError("win_rate model dir is required under model_root")
 
-        tensor = round_tensors[0]
+    optional = [h for h, p in head_dirs.items() if h != "win" and not p.is_dir()]
+    if optional:
+        print(f"[warn] optional heads missing: {optional}")
 
-        run_multihead(
-            tensor,
-            round_states,
-            models,
-            configs,
-            device,
-            batch_size,
-            compute_duel=compute_duel,
-        )
+    return {k: str(v) if v.is_dir() else None for k, v in head_dirs.items()}
 
-        round_dashboard = process_round_json(round_states)
-        if isinstance(round_dashboard, dict) and "error" in round_dashboard:
-            return round_dashboard
 
-        round_dashboard["map_name"] = round_states[0].get("map_name")
-        round_dashboard["ticks"] = build_round_ticks(round_states, duel_fallback)
-        return round_dashboard
-
-    except Exception as e:
-        return {
-            "error": f"{type(e).__name__}: {str(e)}",
-            "traceback": traceback.format_exc(),
-        }
+def to_jsonable(value):
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().tolist()
+    if isinstance(value, dict):
+        return {k: to_jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [to_jsonable(v) for v in value]
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            pass
+    return value
 
 
 def main():
@@ -732,20 +791,10 @@ def main():
     parser.add_argument("--output", required=True, help="Output JSON file path")
     parser.add_argument("--device", default="cuda", help="Device to run inference on")
     parser.add_argument("--batch_size", type=int, default=32)
-
-    # preferred: single root containing alive / nxt_kill / nxt_death / win_rate / duel
-    parser.add_argument("--model_root",
-                        help="Root dir containing alive/ nxt_kill/ nxt_death/ win_rate/ duel/")
-
-    # per-head overrides (take precedence over --model_root)
-    parser.add_argument("--alive_ckpt_dir")
-    parser.add_argument("--kill_ckpt_dir")
-    parser.add_argument("--death_ckpt_dir")
-    parser.add_argument("--winrate_ckpt_dir")
-    parser.add_argument("--duel_ckpt_dir")
-
-    parser.add_argument("--skip_duel", action="store_true",
-                        help="Skip duel inference (fills 0.5 matrix)")
+    parser.add_argument(
+        "--model_root",
+        help="Root dir containing alive/ nxt_kill/ nxt_death/ win_rate/ duel/",
+    )
 
     args = parser.parse_args()
 
@@ -753,105 +802,80 @@ def main():
     if requested.startswith("cuda") and not torch.cuda.is_available():
         print("[warn] CUDA not available, falling back to CPU")
         requested = "cpu"
-    elif requested == "mps":
-        mps_ok = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
-        if not mps_ok:
-            print("[warn] MPS not available, falling back to CPU")
-            requested = "cpu"
     device = torch.device(requested)
+
     demo_path = Path(args.demo_path)
     output_path = Path(args.output)
 
     if not demo_path.exists():
-        print(f"Error: Demo file not found: {demo_path}")
-        return
+        raise FileNotFoundError(f"Demo file not found: {demo_path}")
+    if not args.model_root:
+        raise RuntimeError("--model_root is required")
 
-    head_dirs = resolve_head_dirs(args)
+    model_root = Path(args.model_root)
+    head_dirs = resolve_head_dirs(model_root)
 
-    print("Loading models...")
-    models: dict = {}
-    configs: dict = {}
-    for head in HEAD_ORDER:
-        d = head_dirs[head]
-        if d is None:
+    models = {}
+    cfgs = {}
+    for head, head_dir in head_dirs.items():
+        if head_dir is None:
             models[head] = None
-            configs[head] = None
+            cfgs[head] = None
             continue
-        m, c = load_model(d, device)
-        models[head] = m
-        configs[head] = c
-    print("Models loaded.")
+        model, cfg, ckpt = load_model_and_cfg(head_dir, device)
+        models[head] = model
+        cfgs[head] = cfg
+        print(f"Loaded {head} from {ckpt}")
 
-    # Consistency checks across whichever heads were actually loaded.
-    loaded_heads = [h for h in HEAD_ORDER if models[h] is not None]
-    ref = loaded_heads[0]
-    for h in loaded_heads[1:]:
-        if configs[h]["data"]["tick_seq_len"] != configs[ref]["data"]["tick_seq_len"]:
-            raise RuntimeError(f"tick_seq_len mismatch ({h} vs {ref})")
-        if configs[h]["data"]["temporal_seq_len"] != configs[ref]["data"]["temporal_seq_len"]:
-            raise RuntimeError(f"temporal_seq_len mismatch ({h} vs {ref})")
-        if configs[h]["model"]["pad_token_id"] != configs[ref]["model"]["pad_token_id"]:
-            raise RuntimeError(f"pad_token_id mismatch ({h} vs {ref})")
-
-    # Tokenizer lives next to any head's config — use the first loaded one.
-    tokenizer_cfg = load_config(find_tokenizer_yaml(head_dirs[ref]))
-    tokenizer = TickTokenizer(tokenizer_cfg)
-    valid_maps = set(tokenizer_cfg["maps"].keys())
-
-    print(f"Processing demo: {demo_path}")
-    print(f"Sampling ticks every 0.25 seconds...")
+    tokenizer_cfg = load_tokenizer_cfg()
+    weapon2idx = build_weapon_index(tokenizer_cfg)
+    projectile2idx = build_projectile_index(tokenizer_cfg)
 
     demo_parser = DemoParser(str(demo_path))
     ticks_by_round = get_important_ticks_by_round(demo_parser, interval=0.25)
-
     ticks_group = [ticks_by_round[r] for r in sorted(ticks_by_round.keys())]
-    print(f"Total rounds with sampled ticks: {len(ticks_group)}")
 
     results_group = extract_states_by_group(str(demo_path), ticks_group)
-    print(f"Extracted states for {len(results_group)} rounds. Starting inference...")
-
-    duel_fallback = [[0.5] * 10 for _ in range(10)]
-    compute_duel = (not args.skip_duel) and models.get("duel") is not None
 
     results = {}
-    for i, round_id in enumerate(
-        tqdm(sorted(ticks_by_round.keys()), desc="rounds")
-    ):
-        round_ticks = ticks_by_round[round_id]
-        round_states = results_group[i]
+    duel_fallback = [[0.5] * 10 for _ in range(10)]
 
-        print(f"Processing round {round_id} with {len(round_ticks)} ticks...")
-
+    for idx, round_id in enumerate(tqdm(sorted(ticks_by_round.keys()), desc="rounds")):
+        round_states = results_group[idx]
         if not round_states:
             results[f"error_round_{round_id}"] = "No states extracted"
-            print(f"  Error in round {round_id}: No states extracted")
             continue
 
-        round_result = process_round_states(
-            round_id,
-            round_states,
-            models,
-            configs,
-            tokenizer,
-            valid_maps,
-            device,
-            batch_size=args.batch_size,
-            compute_duel=compute_duel,
-            duel_fallback=duel_fallback,
-        )
+        try:
+            run_round_inference(
+                round_states,
+                models,
+                cfgs,
+                weapon2idx,
+                projectile2idx,
+                device,
+                args.batch_size,
+            )
+        except Exception as e:
+            results[f"error_round_{round_id}"] = f"{type(e).__name__}: {str(e)}"
+            print(f"Error processing round {round_id}: {e}")
+            continue
 
+        round_result = process_round_json(round_states)
         if isinstance(round_result, dict) and "error" in round_result:
             results[f"error_round_{round_id}"] = round_result["error"]
             print(f"  Error in round {round_id}: {round_result['error']}")
-        else:
-            results[str(round_id)] = round_result
-            n_ticks = len(round_result.get("ticks", []))
-            print(f"  Round {round_id}: {n_ticks} ticks enriched")
+            continue
+
+        round_result["map_name"] = round_states[0].get("map_name")
+        round_result["ticks"] = build_round_ticks(round_states, duel_fallback)
+        results[str(round_id)] = round_result
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     results = to_jsonable(results)
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(results, f)
+        json.dump(results, f, indent=2, ensure_ascii=False)
+
     print(f"Results saved to {output_path}")
 
 
