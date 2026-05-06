@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Callouts Annotator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='callouts_annotator.css') }}" />
+</head>
+<body>
+  <header>
+    <h1>Callouts Annotator</h1>
+    <div class="row">
+      <input id="demo" type="file" accept=".dem" />
+      <button id="load-demo">Load Demo</button>
+      <button id="new">New Polygon</button>
+      <button id="save" class="primary">Save config/callouts/*.yaml</button>
+    </div>
+  </header>
+  <main>
+    <section class="stage">
+      <div class="row status-row">
+        <span id="map-badge" class="badge">map: none</span>
+        <span id="layer-badge" class="badge">layer: upper</span>
+        <span id="sample-badge" class="badge">samples: 0</span>
+        <span id="drawn-badge" class="badge">drawn: 0</span>
+        <span id="status" class="hint"></span>
+      </div>
+      <div class="canvas-box">
+        <canvas id="canvas" width="1024" height="1024"></canvas>
+        <button id="layer-toggle" class="layer-toggle" type="button" hidden>Upper layer</button>
+      </div>
+      <p class="hint">
+        Click map to add polygon points. Shift-click creates a rectangle from the first point.
+        Hover sample points to see demoparser last_place_name and X/Y/Z.
+        Use the layer button to toggle upper/lower overview when the map has both layers.
+      </p>
+      <div class="tooltip" id="tip"></div>
+    </section>
+    <aside>
+      <label>Map <select id="map"></select></label>
+      <label>Annotation language
+        <select id="annotation-lang">
+          <option value="cn">中文 polygons</option>
+          <option value="en">English polygons</option>
+        </select>
+      </label>
+      <label id="poly-name-label">点位名 <input id="poly-name" /></label>
+      <div class="row">
+        <label class="grow">z_min <input id="z-min" type="number" step="1" /></label>
+        <label class="grow">z_max <input id="z-max" type="number" step="1" /></label>
+      </div>
+      <label>World points [[x, y], ...] <textarea id="points"></textarea></label>
+      <div class="row">
+        <button id="apply" class="primary">Apply</button>
+        <button id="delete" class="danger">Delete</button>
+        <button id="clear">Clear draft</button>
+      </div>
+      <h3>Polygons</h3>
+      <div id="polygons" class="list"></div>
+      <h3>last_place_name</h3>
+      <div id="places" class="list"></div>
+    </aside>
+  </main>
+  <script src="{{ url_for('static', filename='callouts_annotator.js') }}"></script>
+</body>
+</html>

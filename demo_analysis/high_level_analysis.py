@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -6,7 +7,8 @@ import yaml
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-CALLOUT_CONFIG_PATH = ROOT_DIR / "config" / "map_callouts.yaml"
+CALLOUT_CONFIG_DIR = ROOT_DIR / "config" / "callouts"
+DEFAULT_NEAREST_THRESHOLD = 300
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:
@@ -83,36 +85,256 @@ def build_team_swings(win_rate: list[dict[str, Any]], horizon: float = 5.0) -> d
     }
 
 
-def load_map_callouts() -> dict[str, Any]:
-    if not CALLOUT_CONFIG_PATH.exists():
-        return {}
-    with CALLOUT_CONFIG_PATH.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    return data if isinstance(data, dict) else {}
+def load_callouts() -> dict[str, Any]:
+    callouts: dict[str, Any] = {"defaults": {"nearest_threshold": DEFAULT_NEAREST_THRESHOLD}, "maps": {}}
+    if not CALLOUT_CONFIG_DIR.exists():
+        return callouts
+    maps = callouts["maps"]
+    for path in sorted(CALLOUT_CONFIG_DIR.glob("*.yaml")):
+        with path.open("r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        if not isinstance(cfg, dict):
+            cfg = {}
+        cfg.setdefault("nearest_threshold", DEFAULT_NEAREST_THRESHOLD)
+        cfg.setdefault("polygons_cn", [])
+        cfg.setdefault("polygons_en", [])
+        maps[path.stem] = cfg
+    return callouts
 
 
-def normalize_callout(
+def callout_map_config(map_name: str | None, callouts: dict[str, Any]) -> dict[str, Any]:
+    maps = callouts.get("maps") or {}
+    cfg = maps.get(str(map_name or ""), {}) if isinstance(maps, dict) else {}
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def callout_threshold(map_name: str | None, callouts: dict[str, Any]) -> float:
+    defaults = callouts.get("defaults") or {}
+    cfg = callout_map_config(map_name, callouts)
+    return safe_float(cfg.get("nearest_threshold", defaults.get("nearest_threshold", 300.0)), 300.0)
+
+
+def coerce_xy(point: Any) -> tuple[float, float] | None:
+    if isinstance(point, dict):
+        x = point.get("x")
+        y = point.get("y")
+    elif isinstance(point, (list, tuple)) and len(point) >= 2:
+        x, y = point[0], point[1]
+    else:
+        return None
+    try:
+        return float(x), float(y)
+    except (TypeError, ValueError):
+        return None
+
+
+def polygon_points(polygon: dict[str, Any]) -> list[tuple[float, float]]:
+    return [
+        xy
+        for xy in (coerce_xy(point) for point in (polygon.get("points") or []))
+        if xy is not None
+    ]
+
+
+def z_matches(polygon: dict[str, Any], z: Any) -> bool:
+    has_z_rule = polygon.get("z_min") is not None or polygon.get("z_max") is not None
+    if not has_z_rule:
+        return True
+    try:
+        z_value = float(z)
+    except (TypeError, ValueError):
+        return False
+    if polygon.get("z_min") is not None and z_value < safe_float(polygon.get("z_min"), z_value):
+        return False
+    if polygon.get("z_max") is not None and z_value > safe_float(polygon.get("z_max"), z_value):
+        return False
+    return True
+
+
+def point_on_segment(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> bool:
+    cross = (px - ax) * (by - ay) - (py - ay) * (bx - ax)
+    if abs(cross) > 1e-7:
+        return False
+    dot = (px - ax) * (px - bx) + (py - ay) * (py - by)
+    return dot <= 1e-7
+
+
+def point_in_polygon(px: float, py: float, points: list[tuple[float, float]]) -> bool:
+    if len(points) < 3:
+        return False
+    inside = False
+    j = len(points) - 1
+    for i, (xi, yi) in enumerate(points):
+        xj, yj = points[j]
+        if point_on_segment(px, py, xi, yi, xj, yj):
+            return True
+        if (yi > py) != (yj > py):
+            x_at_y = (xj - xi) * (py - yi) / ((yj - yi) or 1e-12) + xi
+            if px <= x_at_y:
+                inside = not inside
+        j = i
+    return inside
+
+
+def point_segment_distance(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:
+    dx = bx - ax
+    dy = by - ay
+    if dx == 0.0 and dy == 0.0:
+        return math.hypot(px - ax, py - ay)
+    t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)
+    t = max(0.0, min(1.0, t))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+
+def point_polygon_distance(px: float, py: float, points: list[tuple[float, float]]) -> float:
+    if point_in_polygon(px, py, points):
+        return 0.0
+    if not points:
+        return math.inf
+    if len(points) == 1:
+        return math.hypot(px - points[0][0], py - points[0][1])
+    return min(
+        point_segment_distance(px, py, *points[i], *points[(i + 1) % len(points)])
+        for i in range(len(points))
+    )
+
+
+def polygon_size(points: list[tuple[float, float]]) -> float:
+    if len(points) < 3:
+        return 0.0
+    area = 0.0
+    for i, (x1, y1) in enumerate(points):
+        x2, y2 = points[(i + 1) % len(points)]
+        area += x1 * y2 - x2 * y1
+    return abs(area) / 2.0
+
+
+def polygon_name(polygon: dict[str, Any], lang: str, idx: int) -> str:
+    if lang == "en":
+        return str(polygon.get("name") or polygon.get("name_en") or f"polygon_{idx}")
+    return str(polygon.get("name") or polygon.get("name_cn") or f"polygon_{idx}")
+
+
+def polygon_location_for_list(
     map_name: str | None,
-    raw_place: Any,
+    x: Any,
+    y: Any,
+    z: Any,
+    callouts: dict[str, Any],
+    polygon_key: str,
+    lang: str,
+) -> dict[str, Any] | None:
+    try:
+        px = float(x)
+        py = float(y)
+    except (TypeError, ValueError):
+        return None
+
+    map_cfg = callout_map_config(map_name, callouts)
+    polygons = map_cfg.get(polygon_key)
+    if polygons is None and polygon_key == "polygons_cn":
+        polygons = map_cfg.get("polygons")
+    polygons = polygons or []
+    if not isinstance(polygons, list):
+        return None
+
+    candidates: list[tuple[int, dict[str, Any], list[tuple[float, float]]]] = []
+    for idx, polygon in enumerate(polygons):
+        if not isinstance(polygon, dict) or not z_matches(polygon, z):
+            continue
+        points = polygon_points(polygon)
+        if len(points) < 2:
+            continue
+        candidates.append((idx, polygon, points))
+
+    threshold = callout_threshold(map_name, callouts)
+    matches: list[tuple[dict[str, Any], int]] = []
+    for idx, polygon, points in candidates:
+        distance = point_polygon_distance(px, py, points)
+        if distance == 0.0 or distance < threshold:
+            matches.append((
+                {
+                    "name": polygon_name(polygon, lang, idx),
+                    "distance": round(distance, 3),
+                    "size": round(polygon_size(points), 3),
+                },
+                idx,
+            ))
+
+    if matches:
+        matches.sort(
+            key=lambda item: (
+                safe_float(item[0].get("distance")),
+                safe_float(item[0].get("size")),
+                item[1],
+            )
+        )
+        best = matches[0][0]
+        return {
+            "callout_source": "polygon"
+            if safe_float(best.get("distance")) == 0.0
+            else "near_polygon",
+            "callout_candidates": [match for match, _idx in matches],
+        }
+    return None
+
+
+def polygon_location(
+    map_name: str | None,
+    x: Any,
+    y: Any,
+    z: Any,
+    callouts: dict[str, Any],
+) -> dict[str, Any] | None:
+    cn = polygon_location_for_list(map_name, x, y, z, callouts, "polygons_cn", "cn")
+    en = polygon_location_for_list(map_name, x, y, z, callouts, "polygons_en", "en")
+    if cn is None and en is None:
+        return None
+    base = cn or en
+    assert base is not None
+    callout_candidates_cn = (cn or {}).get("callout_candidates") or []
+    callout_candidates_en = (en or {}).get("callout_candidates") or []
+    return {
+        "callout_candidates": callout_candidates_cn or callout_candidates_en,
+        "callout_candidates_cn": callout_candidates_cn,
+        "callout_candidates_en": callout_candidates_en,
+        "callout_source": base.get("callout_source", "polygon"),
+    }
+
+
+def normalize_location(
+    map_name: str | None,
+    player: dict[str, Any] | None,
     callouts: dict[str, Any],
 ) -> dict[str, Any]:
+    player = player or {}
+    raw_place = player.get("last_place_name")
     raw = "" if raw_place is None else str(raw_place).strip()
-    if not raw:
-        return {"raw": None, "name": "数据未提供", "callout_source": "missing"}
+    x = player.get("X")
+    y = player.get("Y")
+    z = player.get("Z")
 
-    aliases: dict[str, str] = {}
-    for section in ("default", map_name or ""):
-        cfg = callouts.get(section, {}) if section else {}
-        aliases.update(cfg.get("aliases", {}) or {})
+    loc = polygon_location(map_name, x, y, z, callouts)
+    if loc is None:
+        if raw:
+            loc = {
+                "name": raw,
+                "callout_source": "raw",
+            }
+        else:
+            loc = {
+                "name": "数据未提供",
+                "callout_source": "missing",
+            }
 
-    compact = raw.replace(" ", "").replace("_", "")
-    lookup = {str(k): str(v) for k, v in aliases.items()}
-    lookup.update({str(k).replace(" ", "").replace("_", ""): str(v) for k, v in aliases.items()})
-    if raw in lookup:
-        return {"raw": raw, "name": lookup[raw], "callout_source": "mapped"}
-    if compact in lookup:
-        return {"raw": raw, "name": lookup[compact], "callout_source": "mapped"}
-    return {"raw": raw, "name": raw, "callout_source": "raw"}
+    loc.update({
+        "raw": raw or None,
+        "raw_place": raw or None,
+        "x": x,
+        "y": y,
+        "z": z,
+    })
+    return loc
 
 
 def nearest_point(points: list[dict[str, Any]], t: float) -> dict[str, Any] | None:
@@ -191,8 +413,8 @@ def summarize_inventory(items: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def build_tactical_rounds(rounds: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int]]:
-    callouts = load_map_callouts()
-    coverage = {"mapped": 0, "raw": 0, "missing": 0}
+    callouts = load_callouts()
+    coverage = {"polygon": 0, "near_polygon": 0, "raw": 0, "missing": 0}
     tactical_rounds: list[dict[str, Any]] = []
 
     for rd in rounds:
@@ -217,8 +439,9 @@ def build_tactical_rounds(rounds: list[dict[str, Any]]) -> tuple[list[dict[str, 
 
         def location_for(tick: dict[str, Any] | None, name: str) -> dict[str, Any]:
             p = player_at(tick, name)
-            loc = normalize_callout(map_name, (p or {}).get("last_place_name"), callouts)
-            coverage[loc["callout_source"]] += 1
+            loc = normalize_location(map_name, p, callouts)
+            source = loc.get("callout_source", "missing")
+            coverage[source] = coverage.get(source, 0) + 1
             return loc
 
         def wr_at(t: float) -> float:

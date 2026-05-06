@@ -471,7 +471,7 @@ function signedColor(signed, scale = 0.2) {
 
 function difficultyCell(value) {
   const num = Number(value || 0);
-  if (!Number.isFinite(num)) {
+  if (!Number.isFinite(num) || num < 0) {
     return `<span class="mono contribution-cell table-meta-text">-</span>`;
   }
   const color = signedColor(1 - num, 1.5);
