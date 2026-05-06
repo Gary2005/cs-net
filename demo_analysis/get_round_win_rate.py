@@ -506,7 +506,7 @@ def compute_kill_difficulty(round_result, kill_time, attacker_idx, victim_idx, w
     a_kill = a_death = v_kill = v_death = 0.0
     n = 0
     for state in round_result:
-        sec = float(state.get("round_seconds"))
+        sec = float(state.get("round_seconds", 0.0))
         if sec > kill_time:
             continue
         if sec < kill_time - window_s:

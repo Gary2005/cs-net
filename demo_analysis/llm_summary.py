@@ -105,6 +105,11 @@ def build_llm_payload(
     source_rounds = dashboard.get("rounds", [])
     output_lang = "en" if (language or "").strip().lower() == "en" else "zh"
 
+    def difficulty_value(raw: Any) -> float | None:
+        # compute_kill_difficulty returns -1 as a sentinel when data is unavailable
+        v = safe_float(raw, -1.0)
+        return None if v < 0 else round(v, 3)
+
     def localize_location(loc: Any) -> Any:
         if not isinstance(loc, dict):
             return loc
@@ -126,6 +131,8 @@ def build_llm_payload(
             updated["killer_location"] = localize_location(updated["killer_location"])
         if "victim_location" in updated:
             updated["victim_location"] = localize_location(updated["victim_location"])
+        if "difficulty" in updated:
+            updated["difficulty"] = difficulty_value(updated["difficulty"])
         return updated
 
     def localize_timeline(timeline: Any) -> list[Any]:
@@ -343,7 +350,7 @@ def build_llm_payload(
                     "weapon": kill.get("weapon", "Unknown"),
                     "hs": bool(kill.get("headshot", False)),
                     "assister": kill.get("assister"),
-                    "difficulty": round(safe_float(kill.get("difficulty", 0.0)), 3),
+                    "difficulty": difficulty_value(kill.get("difficulty")),
                     "wr_delta_pct": round(delta * 100.0, 1),
                 }
             )
@@ -473,7 +480,7 @@ def build_llm_payload(
             "attacker": k.get("attacker"),
             "victim": k.get("victim"),
             "swing_pct": signed_percent(k.get("swing", 0.0)),
-            "difficulty": round(safe_float(k.get("difficulty", 0.0)), 3),
+            "difficulty": difficulty_value(k.get("difficulty")),
         }
         for k in (advanced.get("kill_ranking") or [])[:MAX_KILL_RANKING_ENTRIES]
     ]
