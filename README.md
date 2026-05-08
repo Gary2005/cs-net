@@ -191,7 +191,18 @@ The original upstream license is reproduced verbatim at
 and applies to every file in that directory. If you reuse or redistribute the
 viewer portion of this repository, please preserve that notice.
 
+## ⭐️ Star History
+
+<a href="https://www.star-history.com/?repos=Gary2005%2Fcs-net&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&legend=top-left" />
+ </picture>
+</a>
+
 ## 🤝 Contributors
 
 - [Gary2005](https://github.com/Gary2005)
 - [czdzx](https://github.com/czdzx)
+- [Yianlaen](https://github.com/Yianlaen)

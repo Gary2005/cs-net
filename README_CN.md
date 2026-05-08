@@ -26,6 +26,7 @@
 - [Web App 使用方法](#web-app-使用方法)
 - [Web App 功能](#web-app-功能)
 - [致谢](#致谢)
+- [星标历史](#星标历史)
 - [贡献者](#贡献者)
 
 ---
@@ -160,11 +161,22 @@ http://127.0.0.1:7860
 
 ## 致谢
 
-Web App 中的 2D 回放器（`demo_analysis/static/viewer/` 下的全部文件）来自 **[sparkoo/csgo-2d-demo-viewer](https://github.com/sparkoo/csgo-2d-demo-viewer)**（作者 **Michal Vala**，MIT License，版权归 © 2023 Michal Vala 所有）。我们只是把它的静态资源路径接到 Flask 的 `/viewer/` 路由下，并把 CS-NET 模型输出的逐 tick 预测接入它的时间线。**回放器本身的 demo 解析、地图渲染和交互都由上游作者实现，相关技术信誉均归上游。**
+Web App 中的 2D 回放器（`demo_analysis/static/viewer/` 下的全部文件）是对优秀开源项目 **[sparkoo/csgo-2d-demo-viewer](https://github.com/sparkoo/csgo-2d-demo-viewer)** 的轻度改造版本，作者为 **Michal Vala**，采用 MIT License 发布（© 2023 Michal Vala）。回放器的解析、渲染和交互能力都来自上游，我们只是把它的静态资源路径接到 Flask 的 `/viewer/` 路由下，并将 CS-NET 的逐 tick 预测叠加到时间线上。**这些技术成果与使用体验的核心贡献均应归功于上游作者。**
 
-该部分文件保留了原 MIT 许可证原文，见 [`demo_analysis/static/viewer/LICENSE`](demo_analysis/static/viewer/LICENSE)。如果你要进一步转发或再分发这部分代码，请一并保留该 LICENSE 文件与版权声明，以避免违反 MIT 协议。
+原始 MIT 许可证已原样保留在 [`demo_analysis/static/viewer/LICENSE`](demo_analysis/static/viewer/LICENSE)。如果你要进一步转发或再分发这部分代码，请一并保留该 LICENSE 文件与版权声明，以避免违反 MIT 协议。
+
+## 星标历史
+
+<a href="https://www.star-history.com/?repos=Gary2005%2Fcs-net&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&legend=top-left" />
+ </picture>
+</a>
 
 ## 贡献者
 
 - [Gary2005](https://github.com/Gary2005)
 - [czdzx](https://github.com/czdzx)
+- [Yianlaen](https://github.com/Yianlaen)
