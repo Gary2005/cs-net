@@ -151,8 +151,8 @@
     </section>
 
     <section class="panel llm hidden" id="llm-view">
-      <h2 data-i18n="section_llm">8. 语言模型总结</h2>
-      <div class="grid two-col">
+      <h2 data-i18n="section_llm">8. AI 数据分析师</h2>
+      <div class="chat-config grid two-col">
         <label>
           <span data-i18n="api_key">API Key</span>
           <input type="password" id="llm-api-key" placeholder="sk-..." />
@@ -169,13 +169,15 @@
           <span data-i18n="temperature">Temperature</span>
           <input type="number" id="llm-temperature" step="0.1" min="0" max="1.5" value="0.95" />
         </label>
-        <label>
-          <span data-i18n="max_detailed_rounds">最多详细回合数</span>
-          <input type="number" id="llm-max-detailed-rounds" step="1" min="0" value="8" />
-        </label>
       </div>
-      <button id="llm-btn" type="button" data-i18n="llm_btn">生成 AI 复盘</button>
-      <article id="llm-output" class="llm-output" data-i18n="llm_empty">暂无总结</article>
+      <button id="chat-init-btn" type="button" data-i18n="chat_init_btn">开始分析对话</button>
+      <div id="chat-area" class="chat-area hidden">
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" data-i18n-placeholder="chat_placeholder" placeholder="输入问题，如：哪个玩家表现最好？哪一回合最关键？" />
+          <button id="chat-send-btn" type="button" data-i18n="chat_send">发送</button>
+        </div>
+      </div>
     </section>
   </main>
 

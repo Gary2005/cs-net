@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -20,6 +21,22 @@ from flask import (
 
 from demo_analysis import high_level_analysis
 from demo_analysis import llm_summary as llm_summary_module
+from agent_framework import Message
+from agent_framework.openai import OpenAIChatCompletionClient
+
+
+def _sync_stream(stream):
+    """Wrap an async stream iterator into a sync generator."""
+    loop = asyncio.new_event_loop()
+    try:
+        while True:
+            try:
+                yield loop.run_until_complete(stream.__anext__())
+            except StopAsyncIteration:
+                break
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
 
 
 os.environ["PYTHONUTF8"] = "1"
@@ -51,6 +68,8 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 ANALYSIS_CACHE: dict[str, dict[str, Any]] = {}
 ANALYSIS_JOBS: dict[str, dict[str, Any]] = {}
 ANALYSIS_LOCK = threading.Lock()
+CHAT_SESSIONS: dict[str, dict[str, Any]] = {}
+CHAT_LOCK = threading.Lock()
 
 VIEWER_DIR = Path(__file__).resolve().parent / "static" / "viewer"
 
@@ -595,48 +614,48 @@ def analyze_status(job_id: str):
     return jsonify(payload)
 
 
-@app.post("/api/llm_summary")
-def llm_summary():
-    body = request.get_json(silent=True) or {}
-    analysis_id = body.get("analysis_id", "")
-    api_key = body.get("api_key", "").strip()
-    model_name = body.get("model_name", "").strip()
-    base_url = body.get("base_url", "https://api.openai.com/v1").strip()
-    temperature = safe_float(body.get("temperature", 0.95), 0.95)
-    language = body.get("language", "zh").strip().lower()
-    max_detailed_rounds = safe_nonnegative_int(
-        body.get("max_detailed_rounds"),
-        llm_summary_module.MAX_DETAILED_TACTICAL_ROUNDS,
-    )
+def _build_chat_system_prompt(dashboard: dict[str, Any], language: str) -> str:
+    """Build a system prompt that sets up a CS data analyst persona with full match data."""
+    payload = llm_summary_module.build_llm_payload(dashboard, language=language)
+    data_json = json.dumps(payload, ensure_ascii=False)
 
-    if not analysis_id or analysis_id not in ANALYSIS_CACHE:
-        return jsonify({"error": "无效的 analysis_id，请先完成 DEM 分析"}), 400
-    if not api_key:
-        return jsonify({"error": "请提供 API Key"}), 400
-    if not model_name:
-        return jsonify({"error": "请提供模型名称"}), 400
+    whitelist = payload.get("whitelist", {}) or {}
+    team1_players = whitelist.get("team1_players", []) or []
+    team2_players = whitelist.get("team2_players", []) or []
+    all_players = sorted(set(team1_players) | set(team2_players))
 
-    dashboard = ANALYSIS_CACHE[analysis_id]["dashboard"]
-    config = llm_summary_module.LlmSummaryConfig(
-        api_key=api_key,
-        model_name=model_name,
-        base_url=base_url,
-        temperature=temperature,
-        language=language,
-    )
-    try:
-        content = llm_summary_module.llm_summary_sync(
-            dashboard,
-            config,
-            max_detailed_rounds=max_detailed_rounds,
+    if language == "en":
+        return (
+            "You are a professional CS2 tactical data analyst. Your job is to help the user "
+            "understand match data and answer their questions.\n\n"
+            "Rules:\n"
+            "- You have the complete structured match data (JSON below). Answer any question "
+            "about the match, teams, or players.\n"
+            "- Base all answers on the data. Do NOT fabricate information not in the JSON.\n"
+            f"- Valid player names: {all_players}\n"
+            f"- team1 roster: {team1_players}\n"
+            f"- team2 roster: {team2_players}\n"
+            "- Answer in concise English using markdown formatting.\n"
+            "- If asked about information not in the data, honestly say it's unavailable.\n\n"
+            f"Match data (JSON):\n{data_json}"
         )
-        return jsonify({"summary": content})
-    except Exception as exc:
-        return jsonify({"error": f"请求 LLM 接口异常: {exc}"}), 500
+    return (
+        "你是专业的 CS2 战术数据分析师，帮助用户理解比赛数据并回答相关问题。\n\n"
+        "规则：\n"
+        "- 你拥有这场比赛完整的结构化数据（下方 JSON），可以回答关于比赛、队伍、玩家的任何问题。\n"
+        "- 回答必须基于数据，不要编造 JSON 中没有的信息。\n"
+        f"- 合法玩家名：{all_players}\n"
+        f"- team1 阵容：{team1_players}\n"
+        f"- team2 阵容：{team2_players}\n"
+        "- 用简洁的中文回答，使用 markdown 格式。\n"
+        "- 如果用户问到你不知道的信息，诚实说明数据中未提供。\n\n"
+        f"比赛数据 (JSON)：\n{data_json}"
+    )
 
 
-@app.post("/api/llm_summary_stream")
-def llm_summary_stream():
+@app.post("/api/chat/init")
+def chat_init():
+    """Initialize a chat session and return an initial match summary."""
     body = request.get_json(silent=True) or {}
     analysis_id = body.get("analysis_id", "")
     api_key = body.get("api_key", "").strip()
@@ -644,10 +663,6 @@ def llm_summary_stream():
     base_url = body.get("base_url", "https://api.openai.com/v1").strip()
     temperature = safe_float(body.get("temperature", 0.95), 0.95)
     language = body.get("language", "zh").strip().lower()
-    max_detailed_rounds = safe_nonnegative_int(
-        body.get("max_detailed_rounds"),
-        llm_summary_module.MAX_DETAILED_TACTICAL_ROUNDS,
-    )
 
     if not analysis_id or analysis_id not in ANALYSIS_CACHE:
         return jsonify({"error": "无效的 analysis_id，请先完成 DEM 分析"}), 400
@@ -657,26 +672,114 @@ def llm_summary_stream():
         return jsonify({"error": "请提供模型名称"}), 400
 
     dashboard = ANALYSIS_CACHE[analysis_id]["dashboard"]
-    config = llm_summary_module.LlmSummaryConfig(
-        api_key=api_key,
-        model_name=model_name,
-        base_url=base_url,
-        temperature=temperature,
-        language=language,
+    system_prompt = _build_chat_system_prompt(dashboard, language)
+
+    first_message = (
+        "请先简要总结这场比赛的整体情况（比分、胜负、关键趋势等），然后告诉玩家你可以回答哪些方面的问题。"
+        if language != "en"
+        else "Please start with a brief summary of this match (score, winner, key trends), "
+        "then tell the user what kinds of questions you can answer."
     )
+
+    session_id = uuid.uuid4().hex
+    with CHAT_LOCK:
+        CHAT_SESSIONS[session_id] = {
+            "system_prompt": system_prompt,
+            "messages": [
+                {"role": "user", "content": first_message},
+            ],
+            "api_key": api_key,
+            "model_name": model_name,
+            "base_url": base_url,
+            "temperature": temperature,
+        }
 
     @stream_with_context
-    def generate_text_stream():
+    def generate():
         try:
-            yield from llm_summary_module.llm_summary_stream_sync(
-                dashboard,
-                config,
-                max_detailed_rounds=max_detailed_rounds,
+            client = OpenAIChatCompletionClient(
+                base_url=llm_summary_module._normalize_base_url(base_url),
+                api_key=api_key,
+                model=model_name,
             )
-        except Exception as exc:
-            yield f"\n\n[LLM error] {exc}"
+            messages = [
+                Message("system", [system_prompt]),
+                Message("user", [first_message]),
+            ]
+            stream = client.get_response(messages, stream=True, options={"temperature": temperature})
+            full_text = ""
+            for chunk in _sync_stream(stream):
+                text = getattr(chunk, "text", "")
+                if text:
+                    full_text += text
+                    yield text
 
-    return Response(generate_text_stream(), content_type="text/plain; charset=utf-8")
+            with CHAT_LOCK:
+                sess = CHAT_SESSIONS.get(session_id)
+                if sess:
+                    sess["messages"].append({"role": "assistant", "content": full_text})
+        except Exception as exc:
+            yield f"\n\n[Error] {exc}"
+
+    return Response(
+        generate(),
+        content_type="text/plain; charset=utf-8",
+        headers={"X-Session-Id": session_id},
+    )
+
+
+@app.post("/api/chat/message")
+def chat_message():
+    """Send a follow-up message and stream the response."""
+    body = request.get_json(silent=True) or {}
+    session_id = body.get("session_id", "").strip()
+    message = body.get("message", "").strip()
+
+    if not session_id:
+        return jsonify({"error": "缺少 session_id"}), 400
+    if not message:
+        return jsonify({"error": "请输入消息"}), 400
+
+    with CHAT_LOCK:
+        sess = CHAT_SESSIONS.get(session_id)
+        if not sess:
+            return jsonify({"error": "会话不存在或已过期，请重新初始化"}), 404
+
+        sess["messages"].append({"role": "user", "content": message})
+        api_key = sess["api_key"]
+        model_name = sess["model_name"]
+        base_url = sess["base_url"]
+        temperature = sess["temperature"]
+        system_prompt = sess["system_prompt"]
+
+        api_messages = [Message("system", [system_prompt])]
+        for m in sess["messages"]:
+            api_messages.append(Message(m["role"], [m["content"]]))
+
+    @stream_with_context
+    def generate():
+        try:
+            client = OpenAIChatCompletionClient(
+                base_url=llm_summary_module._normalize_base_url(base_url),
+                api_key=api_key,
+                model=model_name,
+            )
+            stream = client.get_response(api_messages, stream=True, options={"temperature": temperature})
+            full_text = ""
+            for chunk in _sync_stream(stream):
+                text = getattr(chunk, "text", "")
+                if text:
+                    full_text += text
+                    yield text
+
+            with CHAT_LOCK:
+                s = CHAT_SESSIONS.get(session_id)
+                if s:
+                    s["messages"].append({"role": "assistant", "content": full_text})
+        except Exception as exc:
+            yield f"\n\n[Error] {exc}"
+
+    return Response(generate(), content_type="text/plain; charset=utf-8")
 
 
 if __name__ == "__main__":

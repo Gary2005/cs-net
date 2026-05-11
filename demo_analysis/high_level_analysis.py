@@ -574,6 +574,9 @@ def build_advanced_metrics(rounds: list[dict[str, Any]]) -> dict[str, Any]:
                 "easy_attempts": 0,
                 "highlights": 0,
                 "rounds": 0,
+                "duel_diff_sum": 0.0,
+                "duel_count": 0,
+                "hard_duel_count": 0,
             }
         elif agg[name]["team"] == "Unknown" and team_hint != "Unknown":
             agg[name]["team"] = team_hint
@@ -625,6 +628,18 @@ def build_advanced_metrics(rounds: list[dict[str, Any]]) -> dict[str, Any]:
                 attacker_entry["easy_kills"] += 1
                 victim_entry["hard_attempts"] += 1
 
+            if difficulty > 0.0:
+                attacker_entry["duel_diff_sum"] += difficulty
+                attacker_entry["duel_count"] += 1
+                if difficulty > 1.0:
+                    attacker_entry["hard_duel_count"] += 1
+
+                victim_diff = 1.0 / difficulty
+                victim_entry["duel_diff_sum"] += victim_diff
+                victim_entry["duel_count"] += 1
+                if victim_diff > 1.0:
+                    victim_entry["hard_duel_count"] += 1
+
         for name, idx in name_to_idx.items():
             entry = ensure(name, team_of(name))
             entry["rounds"] += 1
@@ -654,6 +669,7 @@ def build_advanced_metrics(rounds: list[dict[str, Any]]) -> dict[str, Any]:
         rounds_n = max(1, a["rounds"])
         hard_n = a["hard_attempts"]
         easy_n = a["easy_attempts"]
+        duel_n = a["duel_count"]
         player_stats.append(
             {
                 "player": name,
@@ -664,9 +680,12 @@ def build_advanced_metrics(rounds: list[dict[str, Any]]) -> dict[str, Any]:
                 "hard_win_rate": (a["hard_kills"] / hard_n) if hard_n > 0 else 0.0,
                 "easy_win_rate": (a["easy_kills"] / easy_n) if easy_n > 0 else 0.0,
                 "highlight_rate": a["highlights"] / rounds_n,
+                "avg_duel_difficulty": (a["duel_diff_sum"] / duel_n) if duel_n > 0 else 0.0,
+                "hard_duel_ratio": (a["hard_duel_count"] / duel_n) if duel_n > 0 else 0.0,
                 "rounds": int(a["rounds"]),
                 "hard_attempts": int(hard_n),
                 "easy_attempts": int(easy_n),
+                "duel_count": int(duel_n),
             }
         )
 

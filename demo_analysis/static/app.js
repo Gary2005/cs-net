@@ -25,13 +25,15 @@ const refs = {
   roundSummaryTable: document.getElementById("round-summary-table"),
   overallSummaryTable: document.getElementById("overall-summary-table"),
   matchBadge: document.getElementById("match-badge"),
-  llmBtn: document.getElementById("llm-btn"),
-  llmOut: document.getElementById("llm-output"),
   llmApiKey: document.getElementById("llm-api-key"),
   llmModel: document.getElementById("llm-model"),
   llmBaseUrl: document.getElementById("llm-base-url"),
   llmTemperature: document.getElementById("llm-temperature"),
-  llmMaxDetailedRounds: document.getElementById("llm-max-detailed-rounds"),
+  chatInitBtn: document.getElementById("chat-init-btn"),
+  chatArea: document.getElementById("chat-area"),
+  chatMessages: document.getElementById("chat-messages"),
+  chatInput: document.getElementById("chat-input"),
+  chatSendBtn: document.getElementById("chat-send-btn"),
   viewerLaunchView: document.getElementById("viewer-launch-view"),
   viewerOpen: document.getElementById("viewer-open"),
   advancedView: document.getElementById("advanced-metrics-view"),
@@ -82,6 +84,8 @@ const I18N = {
     col_hard_win: "困难对枪胜率",
     col_easy_win: "简单对枪胜率",
     col_highlight: "高光回合占比",
+    col_avg_duel_diff: "平均对枪难度",
+    col_hard_duel_ratio: "困难对枪占比",
     term_swing_help: "Swing：该次击杀对局势（胜率曲线）的影响幅度。绝对值越大，代表越关键。",
     term_difficulty_help: "难度：对枪难度系数。>1 通常表示在模型看来更难的对枪，<1 表示相对更容易。",
     term_avg_kill_opp_help: "平均击杀机会：该玩家在各个 tick 成为“下一击杀者”的平均概率。",
@@ -90,18 +94,22 @@ const I18N = {
     term_hard_win_help: "困难对枪胜率：在高难度对枪（difficulty>1）中的获胜比例。",
     term_easy_win_help: "简单对枪胜率：在低难度对枪（0<difficulty<1）中的获胜比例。",
     term_highlight_help: "高光回合占比：该玩家在回合总结中 total_contribution 达到阈值的回合占比。当前阈值为 total_contribution >= 0.20（20%）。",
+    term_avg_duel_diff_help: "平均对枪难度：每次对枪从该玩家视角计算难度（击杀方=难度值，阵亡方=1/难度值），取平均值。>1 表示整体处于劣势对枪，<1 表示整体处于优势对枪。",
+    term_hard_duel_ratio_help: "困难对枪占比：该玩家经历的对枪中，难度>1（劣势对枪）的比例。",
     term_avg_kill_help: "平均 Kill：该玩家跨回合的平均击杀贡献（kill_contribution）。",
     term_avg_tactical_help: "平均 Tactical：该玩家跨回合的平均战术贡献（tactical_contribution）。",
     term_avg_total_help: "平均 Total：该玩家跨回合的平均总贡献（kill+tactical）。",
-    section_llm: "8. 语言模型总结",
+    section_llm: "8. AI 数据分析师",
     api_key: "API Key",
     model_name: "模型名",
     model_name_placeholder: "gpt-4.1 / deepseek-chat / qwen-max",
     base_url: "Base URL (OpenAI 兼容)",
     temperature: "Temperature",
-    max_detailed_rounds: "最多详细回合数",
-    llm_btn: "生成 AI 复盘",
-    llm_empty: "暂无总结",
+    chat_init_btn: "开始分析对话",
+    chat_placeholder: "输入问题，如：哪个玩家表现最好？",
+    chat_send: "发送",
+    chat_waiting: "请先完成 DEM 分析",
+    chat_init_failed: "初始化失败: {error}",
     no_data: "暂无数据",
     team1: "team1",
     team2: "team2",
@@ -133,13 +141,9 @@ const I18N = {
     status_current_round: "当前回合: R{round}",
     status_logs: "日志:",
     status_no_logs: "(暂无)",
-    llm_need_analysis: "请先完成 DEM 分析",
-    llm_need_fields: "请填写 API Key 和模型名",
-    llm_generating: "LLM 正在生成复盘，请稍候...",
-    llm_failed: "生成失败: {error}",
-    llm_empty_result: "模型返回为空",
-    llm_call_failed: "LLM 调用失败",
-    browser_no_stream: "当前浏览器不支持流式读取",
+    chat_need_fields: "请填写 API Key 和模型名",
+    chat_generating: "AI 分析师正在生成回复...",
+    chat_send_failed: "发送失败: {error}",
     download_json_btn: "下载解析结果 JSON",
     load_json_title: "或直接加载已解析的 JSON 结果",
     load_json_file: "JSON 结果文件",
@@ -182,6 +186,8 @@ const I18N = {
     col_hard_win: "Hard-Duel Win",
     col_easy_win: "Easy-Duel Win",
     col_highlight: "Highlight Rate",
+    col_avg_duel_diff: "Avg Duel Difficulty",
+    col_hard_duel_ratio: "Hard Duel Ratio",
     term_swing_help: "Swing: impact magnitude of a kill on the win-rate trajectory. Larger absolute value means more decisive.",
     term_difficulty_help: "Difficulty: duel difficulty coefficient. >1 is typically harder in model expectation, <1 is easier.",
     term_avg_kill_opp_help: "Avg Kill Opportunity: mean probability that this player gets the next kill across ticks.",
@@ -190,18 +196,22 @@ const I18N = {
     term_hard_win_help: "Hard-Duel Win: win rate in hard duels (difficulty>1).",
     term_easy_win_help: "Easy-Duel Win: win rate in easy duels (0<difficulty<1).",
     term_highlight_help: "Highlight Rate: fraction of rounds where total_contribution reaches the threshold. Current threshold: total_contribution >= 0.20 (20%).",
+    term_avg_duel_diff_help: "Avg Duel Difficulty: difficulty from this player's perspective averaged over all duels (killer uses raw value, victim uses 1/value). >1 means overall disadvantaged, <1 means overall advantaged.",
+    term_hard_duel_ratio_help: "Hard Duel Ratio: fraction of duels where difficulty > 1 (disadvantaged) for this player.",
     term_avg_kill_help: "Avg Kill: cross-round average kill contribution (kill_contribution).",
     term_avg_tactical_help: "Avg Tactical: cross-round average tactical contribution (tactical_contribution).",
     term_avg_total_help: "Avg Total: cross-round average total contribution (kill + tactical).",
-    section_llm: "8. LLM Summary",
+    section_llm: "8. AI Data Analyst",
     api_key: "API Key",
     model_name: "Model Name",
     model_name_placeholder: "gpt-4.1 / deepseek-chat / qwen-max",
     base_url: "Base URL (OpenAI-compatible)",
     temperature: "Temperature",
-    max_detailed_rounds: "Max Detailed Rounds",
-    llm_btn: "Generate AI Review",
-    llm_empty: "No summary yet",
+    chat_init_btn: "Start Analysis Chat",
+    chat_placeholder: "Ask anything, e.g. Who was the best player?",
+    chat_send: "Send",
+    chat_waiting: "Please finish DEM analysis first",
+    chat_init_failed: "Init failed: {error}",
     no_data: "No data",
     team1: "team1",
     team2: "team2",
@@ -233,13 +243,9 @@ const I18N = {
     status_current_round: "Current round: R{round}",
     status_logs: "Logs:",
     status_no_logs: "(none)",
-    llm_need_analysis: "Please finish DEM analysis first",
-    llm_need_fields: "Please provide API Key and model name",
-    llm_generating: "LLM is generating the review, please wait...",
-    llm_failed: "Generation failed: {error}",
-    llm_empty_result: "Model returned empty content",
-    llm_call_failed: "LLM call failed",
-    browser_no_stream: "This browser does not support streaming reads",
+    chat_need_fields: "Please provide API Key and model name",
+    chat_generating: "AI analyst is generating response...",
+    chat_send_failed: "Send failed: {error}",
     download_json_btn: "Download Parsed JSON Result",
     load_json_title: "Or Load Pre-Parsed JSON Result",
     load_json_file: "JSON Result File",
@@ -328,7 +334,6 @@ function getCurrentUserPrefs() {
     llm_model: refs.llmModel?.value || "",
     llm_base_url: refs.llmBaseUrl?.value || "",
     llm_temperature: refs.llmTemperature?.value || "",
-    llm_max_detailed_rounds: refs.llmMaxDetailedRounds?.value || "",
   };
 }
 
@@ -377,9 +382,6 @@ function restoreUserPrefs() {
   if (typeof prefs.llm_temperature === "string" && refs.llmTemperature) {
     refs.llmTemperature.value = prefs.llm_temperature;
   }
-  if (typeof prefs.llm_max_detailed_rounds === "string" && refs.llmMaxDetailedRounds) {
-    refs.llmMaxDetailedRounds.value = prefs.llm_max_detailed_rounds;
-  }
 }
 
 function bindUserPrefsPersistence() {
@@ -392,7 +394,6 @@ function bindUserPrefsPersistence() {
     refs.llmModel,
     refs.llmBaseUrl,
     refs.llmTemperature,
-    refs.llmMaxDetailedRounds,
   ];
 
   fields.forEach((field) => {
@@ -406,24 +407,41 @@ function logStatus(text) {
   refs.statusLog.textContent = text;
 }
 
-function renderLlmOutput(text) {
+function renderMarkdown(element, text) {
   const content = String(text || "");
   if (!content) {
-    refs.llmOut.textContent = "";
+    element.textContent = "";
     return;
   }
-
   if (window.marked && typeof window.marked.parse === "function") {
     const rawHtml = window.marked.parse(content, { gfm: true, breaks: true });
     if (window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
-      refs.llmOut.innerHTML = window.DOMPurify.sanitize(rawHtml);
+      element.innerHTML = window.DOMPurify.sanitize(rawHtml);
     } else {
-      refs.llmOut.innerHTML = rawHtml;
+      element.innerHTML = rawHtml;
     }
     return;
   }
+  element.textContent = content;
+}
 
-  refs.llmOut.textContent = content;
+let chatSessionId = null;
+
+function addChatMessage(role, text) {
+  const wrapper = document.createElement("div");
+  wrapper.className = `chat-msg chat-msg-${role}`;
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble";
+  renderMarkdown(bubble, text);
+  wrapper.appendChild(bubble);
+  refs.chatMessages.appendChild(wrapper);
+  refs.chatMessages.scrollTop = refs.chatMessages.scrollHeight;
+  return bubble;
+}
+
+function clearChat() {
+  refs.chatMessages.innerHTML = "";
+  chatSessionId = null;
 }
 
 function n4(value) {
@@ -903,6 +921,8 @@ function renderAdvancedMetrics() {
     { key: "hard_win_rate", label: withTermHelp(t("col_hard_win"), t("term_hard_win_help")), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
     { key: "easy_win_rate", label: withTermHelp(t("col_easy_win"), t("term_easy_win_help")), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
     { key: "highlight_rate", label: withTermHelp(t("col_highlight"), t("term_highlight_help")), render: (v) => rateCell(v, { center: 0.1, scale: 0.2 }) },
+    { key: "avg_duel_difficulty", label: withTermHelp(t("col_avg_duel_diff"), t("term_avg_duel_diff_help")), render: (v) => difficultyCell(v) },
+    { key: "hard_duel_ratio", label: withTermHelp(t("col_hard_duel_ratio"), t("term_hard_duel_ratio_help")), render: (v) => rateCell(v, { center: 0.5, scale: 0.5 }) },
     { key: "avg_kill_contribution", label: withTermHelp(t("col_avg_kill"), t("term_avg_kill_help")), render: (v) => contributionCell(v) },
     { key: "avg_tactical_contribution", label: withTermHelp(t("col_avg_tactical"), t("term_avg_tactical_help")), render: (v) => contributionCell(v) },
     { key: "avg_total_contribution", label: withTermHelp(t("col_avg_total"), t("term_avg_total_help")), render: (v) => contributionCell(v) },
@@ -1104,9 +1124,52 @@ if (refs.loadJsonForm) {
   });
 }
 
-refs.llmBtn.addEventListener("click", async () => {
+async function streamChatResponse(url, body, onChunk) {
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    let errMsg = "request failed";
+    try {
+      const errData = await resp.json();
+      errMsg = errData.error || errMsg;
+    } catch {
+      const plainText = await resp.text();
+      if (plainText) errMsg = plainText;
+    }
+    throw new Error(errMsg);
+  }
+
+  if (!resp.body) {
+    throw new Error("This browser does not support streaming reads");
+  }
+
+  // Read session_id from header
+  const sid = resp.headers.get("X-Session-Id");
+  if (sid) chatSessionId = sid;
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let fullText = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    fullText += decoder.decode(value, { stream: true });
+    onChunk(fullText);
+  }
+
+  fullText += decoder.decode();
+  onChunk(fullText);
+  return fullText;
+}
+
+refs.chatInitBtn.addEventListener("click", async () => {
   if (!state.analysisId) {
-    renderLlmOutput(t("llm_need_analysis"));
+    logStatus(t("chat_waiting"));
     return;
   }
 
@@ -1114,70 +1177,63 @@ refs.llmBtn.addEventListener("click", async () => {
   const modelName = refs.llmModel.value.trim();
   const baseUrl = refs.llmBaseUrl.value.trim();
   const temperature = Number(refs.llmTemperature.value || 0.95);
-  const rawMaxDetailedRounds = Number(refs.llmMaxDetailedRounds?.value || 8);
-  const maxDetailedRounds = Number.isFinite(rawMaxDetailedRounds)
-    ? Math.max(0, Math.floor(rawMaxDetailedRounds))
-    : 8;
   const language = currentLang();
 
   if (!apiKey || !modelName) {
-    renderLlmOutput(t("llm_need_fields"));
+    logStatus(t("chat_need_fields"));
     return;
   }
 
   saveUserPrefs();
-  refs.llmBtn.disabled = true;
-  renderLlmOutput(t("llm_generating"));
+  refs.chatInitBtn.disabled = true;
+  clearChat();
+  refs.chatArea.classList.remove("hidden");
+
+  const bubble = addChatMessage("assistant", t("chat_generating"));
 
   try {
-    const resp = await fetch("/api/llm_summary_stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        analysis_id: state.analysisId,
-        api_key: apiKey,
-        model_name: modelName,
-        base_url: baseUrl,
-        temperature,
-        max_detailed_rounds: maxDetailedRounds,
-        language,
-      }),
-    });
-
-    if (!resp.ok) {
-      let errMsg = t("llm_call_failed");
-      try {
-        const errData = await resp.json();
-        errMsg = errData.error || errMsg;
-      } catch {
-        const plainText = await resp.text();
-        if (plainText) errMsg = plainText;
-      }
-      throw new Error(errMsg);
-    }
-
-    if (!resp.body) {
-      throw new Error(t("browser_no_stream"));
-    }
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let fullText = "";
-
-    renderLlmOutput("");
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      fullText += decoder.decode(value, { stream: true });
-      renderLlmOutput(fullText);
-    }
-
-    fullText += decoder.decode();
-    renderLlmOutput(fullText || t("llm_empty_result"));
+    await streamChatResponse(
+      "/api/chat/init",
+      { analysis_id: state.analysisId, api_key: apiKey, model_name: modelName, base_url: baseUrl, temperature, language },
+      (text) => { renderMarkdown(bubble, text); }
+    );
   } catch (err) {
-    renderLlmOutput(t("llm_failed", { error: err.message }));
+    bubble.textContent = t("chat_init_failed", { error: err.message });
   } finally {
-    refs.llmBtn.disabled = false;
+    refs.chatInitBtn.disabled = false;
+  }
+});
+
+async function sendChatMessage() {
+  const message = refs.chatInput.value.trim();
+  if (!message || !chatSessionId) return;
+
+  refs.chatInput.value = "";
+  refs.chatSendBtn.disabled = true;
+  refs.chatInput.disabled = true;
+
+  addChatMessage("user", message);
+  const bubble = addChatMessage("assistant", t("chat_generating"));
+
+  try {
+    await streamChatResponse(
+      "/api/chat/message",
+      { session_id: chatSessionId, message },
+      (text) => { renderMarkdown(bubble, text); }
+    );
+  } catch (err) {
+    bubble.textContent = t("chat_send_failed", { error: err.message });
+  } finally {
+    refs.chatSendBtn.disabled = false;
+    refs.chatInput.disabled = false;
+    refs.chatInput.focus();
+  }
+}
+
+refs.chatSendBtn.addEventListener("click", sendChatMessage);
+refs.chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
   }
 });

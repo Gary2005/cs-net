@@ -494,15 +494,21 @@ def build_llm_payload(
             "hard_win_rate": round(safe_float(p.get("hard_win_rate", 0.0)), 3),
             "easy_win_rate": round(safe_float(p.get("easy_win_rate", 0.0)), 3),
             "highlight_rate": round(safe_float(p.get("highlight_rate", 0.0)), 3),
+            "avg_duel_difficulty": round(safe_float(p.get("avg_duel_difficulty", 0.0)), 3),
+            "hard_duel_ratio": round(safe_float(p.get("hard_duel_ratio", 0.0)), 3),
+            "duel_count": int(safe_float(p.get("duel_count", 0))),
             "avg_kill_opp_label": "平均击杀机会",
             "avg_death_opp_label": "平均阵亡威胁",
             "avg_survive_chance_label": "平均存活率",
             "hard_duel_win_rate_label": "困难枪胜率",
             "easy_duel_win_rate_label": "简单枪胜率",
             "highlight_rate_label": "高光回合占比",
+            "avg_duel_difficulty_label": "平均对枪难度",
+            "hard_duel_ratio_label": "困难对枪占比",
             "hard_duel_win_rate_pct": percent_label(p.get("hard_win_rate", 0.0)),
             "easy_duel_win_rate_pct": percent_label(p.get("easy_win_rate", 0.0)),
             "highlight_rate_pct": percent_label(p.get("highlight_rate", 0.0)),
+            "hard_duel_ratio_pct": percent_label(p.get("hard_duel_ratio", 0.0)),
         }
         for p in (advanced.get("player_stats") or [])
     ]
