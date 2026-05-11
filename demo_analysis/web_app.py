@@ -441,6 +441,67 @@ def serve_uploaded_demo(run_id: str):
     )
 
 
+@app.get("/api/download_result/<analysis_id>")
+def download_result(analysis_id: str):
+    """Download the raw parsed JSON for a completed analysis."""
+    if not re.fullmatch(r"[0-9a-fA-F]{8,64}", analysis_id):
+        return jsonify({"error": "bad analysis_id"}), 400
+    entry = ANALYSIS_CACHE.get(analysis_id)
+    if not entry:
+        return jsonify({"error": "analysis not found"}), 404
+    raw = entry.get("raw")
+    if raw is None:
+        return jsonify({"error": "raw results not available"}), 404
+    return jsonify(raw)
+
+
+@app.post("/api/load_json")
+def load_json_result():
+    """Load a pre-parsed JSON result file and build the dashboard from it."""
+    if _has_running_jobs():
+        return jsonify({"error": "已有任务正在运行，请等待完成后再操作"}), 409
+
+    json_file = request.files.get("json_file")
+    if json_file is None or json_file.filename == "":
+        return jsonify({"error": "请上传 JSON 文件"}), 400
+
+    try:
+        data = json.load(json_file)
+    except json.JSONDecodeError as exc:
+        return jsonify({"error": f"JSON 解析失败: {exc}"}), 400
+
+    if not isinstance(data, dict):
+        return jsonify({"error": "JSON 根节点必须是对象"}), 400
+
+    # Detect format: dashboard payload has "rounds" as a list
+    if "rounds" in data and isinstance(data.get("rounds"), list):
+        dashboard = data
+        raw = data
+    else:
+        raw = data
+        try:
+            dashboard = high_level_analysis.build_dashboard_payload(raw)
+        except Exception as exc:
+            return jsonify({"error": f"无法解析此 JSON 为有效的分析结果: {exc}"}), 400
+
+    analysis_id = uuid.uuid4().hex
+    ANALYSIS_CACHE[analysis_id] = {
+        "dashboard": dashboard,
+        "raw": raw,
+        "source_file": json_file.filename,
+        "result_file": None,
+        "stdout": "Loaded from uploaded JSON file",
+    }
+
+    return jsonify(
+        {
+            "analysis_id": analysis_id,
+            "dashboard": dashboard,
+            "run_id": None,
+        }
+    )
+
+
 @app.post("/api/analyze")
 def analyze_demo():
     dem_file = request.files.get("demo_file")

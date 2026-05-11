@@ -37,6 +37,10 @@ const refs = {
   advancedView: document.getElementById("advanced-metrics-view"),
   advancedBody: document.getElementById("advanced-metrics-body"),
   advancedToggle: document.getElementById("advanced-toggle"),
+  downloadJsonBtn: document.getElementById("download-json-btn"),
+  loadJsonForm: document.getElementById("load-json-form"),
+  loadJsonBtn: document.getElementById("load-json-btn"),
+  jsonFile: document.getElementById("json-file"),
 };
 
 const USER_PREFS_KEY = "csnet.user.preferences.v1";
@@ -136,6 +140,11 @@ const I18N = {
     llm_empty_result: "模型返回为空",
     llm_call_failed: "LLM 调用失败",
     browser_no_stream: "当前浏览器不支持流式读取",
+    download_json_btn: "下载解析结果 JSON",
+    load_json_title: "或直接加载已解析的 JSON 结果",
+    load_json_file: "JSON 结果文件",
+    load_json_btn: "加载 JSON",
+    load_json_hint: "如果你之前跑过分析并保存了 JSON，可直接上传查看结果，无需重新解析 demo。",
   },
   en: {
     ui_language: "Language (界面语言)",
@@ -231,6 +240,11 @@ const I18N = {
     llm_empty_result: "Model returned empty content",
     llm_call_failed: "LLM call failed",
     browser_no_stream: "This browser does not support streaming reads",
+    download_json_btn: "Download Parsed JSON Result",
+    load_json_title: "Or Load Pre-Parsed JSON Result",
+    load_json_file: "JSON Result File",
+    load_json_btn: "Load JSON",
+    load_json_hint: "If you've previously run an analysis and saved the JSON, upload it here to view results without re-parsing the demo.",
   },
 };
 
@@ -917,6 +931,7 @@ function renderDashboard() {
   refs.llmView.classList.remove("hidden");
   if (refs.viewerLaunchView) refs.viewerLaunchView.classList.remove("hidden");
   if (refs.advancedView) refs.advancedView.classList.remove("hidden");
+  if (refs.downloadJsonBtn) refs.downloadJsonBtn.classList.remove("hidden");
 
   renderRoundTabs();
   renderCurrentRound();
@@ -1017,6 +1032,7 @@ if (refs.appLanguage) {
 refs.analyzeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   refs.analyzeBtn.disabled = true;
+  if (refs.downloadJsonBtn) refs.downloadJsonBtn.classList.add("hidden");
   logStatus(t("status_submitting"));
 
   try {
@@ -1038,6 +1054,55 @@ refs.analyzeForm.addEventListener("submit", async (event) => {
     refs.analyzeBtn.disabled = false;
   }
 });
+
+if (refs.downloadJsonBtn) {
+  refs.downloadJsonBtn.addEventListener("click", () => {
+    if (!state.analysisId) return;
+    const url = `/api/download_result/${encodeURIComponent(state.analysisId)}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `csnet_result_${state.analysisId.slice(0, 8)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+}
+
+if (refs.loadJsonForm) {
+  refs.loadJsonForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const file = refs.jsonFile?.files?.[0];
+    if (!file) {
+      logStatus(t("status_failed", { error: "请选择 JSON 文件" }));
+      return;
+    }
+
+    refs.loadJsonBtn.disabled = true;
+    logStatus(t("status_submitting"));
+
+    try {
+      const formData = new FormData();
+      formData.append("json_file", file);
+      const resp = await fetch("/api/load_json", { method: "POST", body: formData });
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.error || "加载失败");
+      }
+
+      state.analysisId = data.analysis_id;
+      state.dashboard = data.dashboard;
+      state.selectedRoundIndex = 0;
+      state.runId = data.run_id || null;
+
+      renderDashboard();
+      logStatus("JSON 加载完成");
+    } catch (err) {
+      logStatus(t("status_failed", { error: err.message }));
+    } finally {
+      refs.loadJsonBtn.disabled = false;
+    }
+  });
+}
 
 refs.llmBtn.addEventListener("click", async () => {
   if (!state.analysisId) {

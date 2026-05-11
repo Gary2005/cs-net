@@ -786,7 +786,7 @@ def extract_states_by_group(demo_path: str, ticks_group: list[list[int]]) -> lis
             results_group.append(results)
 
         except Exception as e:
-            print(f"Error processing round {info['round']}: {e}")
+            print(f"Error processing a round: {e}")
             results_group.append([])
 
     return results_group

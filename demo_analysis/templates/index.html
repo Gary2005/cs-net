@@ -63,6 +63,17 @@
         </div>
         <p class="hint" data-i18n="analyze_hint">进度说明: 解析 demo 一般需要 30~60 秒，运行模型通常不到 1 分钟。分析中会显示当前阶段和正在处理的回合。</p>
         <button id="analyze-btn" type="submit" data-i18n="analyze_btn">开始分析</button>
+        <button id="download-json-btn" type="button" class="hidden ghost-btn" data-i18n="download_json_btn">下载解析结果 JSON</button>
+      </form>
+      <form id="load-json-form" class="load-json-form">
+        <hr />
+        <h3 data-i18n="load_json_title">或直接加载已解析的 JSON 结果</h3>
+        <label>
+          <span data-i18n="load_json_file">JSON 结果文件</span>
+          <input type="file" name="json_file" id="json-file" accept=".json" />
+        </label>
+        <p class="hint" data-i18n="load_json_hint">如果你之前跑过分析并保存了 JSON，可直接上传查看结果，无需重新解析 demo。</p>
+        <button id="load-json-btn" type="submit" data-i18n="load_json_btn">加载 JSON</button>
       </form>
       <pre id="status-log" class="status-log" data-i18n="status_waiting">等待上传 DEM...</pre>
     </section>
