@@ -8,7 +8,7 @@ Usage:
 import sys
 from pathlib import Path
 
-_root = Path(__file__).resolve().parent
+_root = Path(SPECPATH).resolve()  # SPECPATH is already the directory
 
 # Collect all model weight files (.pt, .json, .txt) under cs-net-models/.
 model_datas = []
@@ -78,6 +78,7 @@ a = Analysis(
         "huggingface_hub",
         "agent_framework",
         "agent_framework.openai",
+        "agent_framework_openai",
         "demoparser2",
         "polars",
         "wandb",

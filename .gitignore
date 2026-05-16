@@ -24,3 +24,5 @@ cs-net-models/
 *.dem
 examples/test.dem
 dataset/test
+build/
+dist/
