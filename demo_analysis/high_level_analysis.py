@@ -6,7 +6,12 @@ from typing import Any
 import yaml
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
+import sys
+
+if getattr(sys, "frozen", False):
+    ROOT_DIR = Path(sys._MEIPASS)
+else:
+    ROOT_DIR = Path(__file__).resolve().parents[1]
 CALLOUT_CONFIG_DIR = ROOT_DIR / "config" / "callouts"
 DEFAULT_NEAREST_THRESHOLD = 300
 

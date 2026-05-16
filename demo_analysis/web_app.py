@@ -55,10 +55,18 @@ if hasattr(sys.stderr, "reconfigure"):
         pass
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
+if getattr(sys, "frozen", False):
+    ROOT_DIR = Path(sys._MEIPASS)
+else:
+    ROOT_DIR = Path(__file__).resolve().parents[1]
+
+# Allow launcher to override writable directories via env vars.
+_UPLOAD_OVERRIDE = os.environ.get("CSNET_UPLOAD_DIR")
+_OUTPUT_OVERRIDE = os.environ.get("CSNET_OUTPUT_DIR")
+
 ASSETS_DIR = ROOT_DIR / "assets"
-UPLOAD_DIR = ROOT_DIR / "demo_analysis" / "uploads"
-OUTPUT_DIR = ROOT_DIR / "demo_analysis" / "outputs"
+UPLOAD_DIR = Path(_UPLOAD_OVERRIDE) if _UPLOAD_OVERRIDE else (ROOT_DIR / "demo_analysis" / "uploads")
+OUTPUT_DIR = Path(_OUTPUT_OVERRIDE) if _OUTPUT_OVERRIDE else (ROOT_DIR / "demo_analysis" / "outputs")
 MODEL_ROOT = ROOT_DIR / "cs-net-models"
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -71,7 +79,10 @@ ANALYSIS_LOCK = threading.Lock()
 CHAT_SESSIONS: dict[str, dict[str, Any]] = {}
 CHAT_LOCK = threading.Lock()
 
-VIEWER_DIR = Path(__file__).resolve().parent / "static" / "viewer"
+if getattr(sys, "frozen", False):
+    VIEWER_DIR = Path(sys._MEIPASS) / "demo_analysis" / "static" / "viewer"
+else:
+    VIEWER_DIR = Path(__file__).resolve().parent / "static" / "viewer"
 
 
 def _has_running_jobs() -> bool:
