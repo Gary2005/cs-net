@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CS-Net Round Win Rate Analyzer</title>
+  <title>CS-Net Demo Analyzer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -14,21 +14,21 @@
   <div class="noise"></div>
   <main class="app-shell">
     <header class="hero">
-      <a class="hero-brand" href="https://github.com/Gary2005/cs-net" target="_blank" rel="noopener noreferrer" aria-label="打开 CS-Net GitHub 仓库">
-        <img class="hero-logo" src="{{ url_for('asset_file', filename='logo.svg') }}" alt="CS-Net Logo" />
-        <span class="hero-brand-name">CS-NET</span>
-      </a>
       <div class="hero-lang">
         <label>
-          <span data-i18n="ui_language">界面语言 (language)</span>
+          <span data-i18n="ui_language">界面语言</span>
           <select id="app-language">
             <option value="zh" selected>中文</option>
             <option value="en">English</option>
           </select>
         </label>
       </div>
-      <p class="eyebrow">CS2 DEM INTELLIGENCE</p>
-      <h1>Round Win Rate Analyzer</h1>
+      <a class="hero-brand" href="https://github.com/Gary2005/cs-net" target="_blank" rel="noopener noreferrer" aria-label="打开 CS-Net GitHub 仓库">
+        <img class="hero-logo" src="{{ url_for('asset_file', filename='logo.svg') }}" alt="CS-Net Logo" />
+        <span class="hero-brand-name">CS-NET</span>
+      </a>
+      <p class="eyebrow">CS2 Demo Intelligence</p>
+      <h1>CS-Net Demo Analyzer</h1>
       <p class="subtitle" data-i18n="subtitle">上传 DEM 后自动计算每回合胜率、击杀影响和玩家贡献，并生成可交互复盘与 LLM 解读。</p>
     </header>
 
@@ -62,8 +62,10 @@
           </label>
         </div>
         <p class="hint" data-i18n="analyze_hint">进度说明: 解析 demo 一般需要 30~60 秒，运行模型通常不到 1 分钟。分析中会显示当前阶段和正在处理的回合。</p>
-        <button id="analyze-btn" type="submit" data-i18n="analyze_btn">开始分析</button>
-        <button id="download-json-btn" type="button" class="hidden ghost-btn" data-i18n="download_json_btn">下载解析结果 JSON</button>
+        <div class="btn-row">
+          <button id="analyze-btn" type="submit" data-i18n="analyze_btn">开始分析</button>
+          <button id="download-json-btn" type="button" class="hidden ghost-btn" data-i18n="download_json_btn">下载解析结果 JSON</button>
+        </div>
       </form>
       <form id="load-json-form" class="load-json-form">
         <hr />

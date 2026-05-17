@@ -405,6 +405,7 @@ function bindUserPrefsPersistence() {
 
 function logStatus(text) {
   refs.statusLog.textContent = text;
+  refs.statusLog.classList.toggle("has-content", !!text);
 }
 
 function renderMarkdown(element, text) {
