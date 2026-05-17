@@ -202,6 +202,96 @@
     section { padding: 48px 16px; }
     .hero { padding-top: 100px; padding-bottom: 60px; }
   }
+
+  /* ── Screenshot Carousel ── */
+  .carousel-section { position: relative; margin-top: 40px; }
+  .carousel-track-wrap {
+    overflow-x: auto; overflow-y: visible;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 8px 0 16px;
+  }
+  .carousel-track-wrap::-webkit-scrollbar { display: none; }
+  .carousel-track {
+    display: flex; gap: 16px;
+    padding: 0 calc((100% - 720px) / 2);
+    width: max-content;
+  }
+  .carousel-card {
+    flex: 0 0 720px; width: 720px;
+    scroll-snap-align: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color .3s, box-shadow .3s;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .carousel-card:hover {
+    border-color: var(--green);
+    box-shadow: 0 12px 40px rgba(0,0,0,.12);
+  }
+  .carousel-img-wrap {
+    aspect-ratio: 16 / 10;
+    background: #1e293b;
+    overflow: hidden;
+  }
+  .carousel-img-wrap img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform .5s ease;
+  }
+  .carousel-card:hover .carousel-img-wrap img { transform: scale(1.06); }
+  .carousel-label {
+    padding: 14px 20px;
+    font-size: 0.88rem; font-weight: 600;
+    color: var(--text);
+    text-align: center;
+  }
+  .carousel-btn {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    z-index: 10;
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text);
+    font-size: 1.4rem;
+    transition: all .2s;
+  }
+  .carousel-btn:hover {
+    border-color: var(--green); color: var(--green);
+    box-shadow: 0 4px 20px rgba(0,0,0,.12);
+  }
+  .carousel-prev { left: -60px; }
+  .carousel-next { right: -60px; }
+  .carousel-dots {
+    display: flex; gap: 8px; justify-content: center; margin-top: 20px;
+  }
+  .carousel-dots button {
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-alt);
+    cursor: pointer; padding: 0;
+    transition: all .2s;
+  }
+  .carousel-dots button.active {
+    background: var(--green); border-color: var(--green);
+    transform: scale(1.3);
+  }
+
+  @media (max-width: 900px) {
+    .carousel-card { flex: 0 0 calc(100vw - 64px); width: calc(100vw - 64px); }
+    .carousel-track { padding: 0 32px; }
+    .carousel-btn { display: none; }
+  }
+
 </style>
 </head>
 <body>
@@ -229,6 +319,7 @@
       <ul class="nav-links">
         <li><a href="#tasks"><span class="zh">预测任务</span><span class="en">Tasks</span></a></li>
         <li><a href="#features"><span class="zh">功能</span><span class="en">Features</span></a></li>
+        <li><a href="#screenshots"><span class="zh">截图</span><span class="en">Screenshots</span></a></li>
         <li><a href="#download"><span class="zh">下载</span><span class="en">Download</span></a></li>
         <li><a href="#tutorial"><span class="zh">教程</span><span class="en">Tutorial</span></a></li>
         <li><a href="https://github.com/Gary2005/cs-net" target="_blank" title="GitHub" style="display:flex;align-items:center;gap:5px">
@@ -374,6 +465,55 @@
   </div>
 </section>
 
+<!-- ─── Screenshots ──────────────────────────── -->
+<section id="screenshots">
+  <div class="container">
+    <div class="section-label">Screenshots</div>
+    <h2 class="section-title"><span class="zh">界面截图</span><span class="en">App Screenshots</span></h2>
+    <p class="section-sub">
+      <span class="zh">左右滑动浏览，悬浮放大查看细节，点击查看原图。</span>
+      <span class="en">Swipe to browse, hover to zoom, click to view full size.</span>
+    </p>
+    <div class="carousel-section">
+      <button class="carousel-btn carousel-prev" id="carousel-prev" aria-label="Previous">&#8249;</button>
+      <button class="carousel-btn carousel-next" id="carousel-next" aria-label="Next">&#8250;</button>
+      <div class="carousel-track-wrap" id="carousel-track">
+        <div class="carousel-track">
+          <div class="carousel-card" data-src="../assets/screenshot/回合胜率曲线.png" data-label="Round Win Rate Curve">
+            <div class="carousel-img-wrap"><img src="../assets/screenshot/回合胜率曲线.png" alt="回合胜率曲线" loading="lazy"></div>
+            <div class="carousel-label"><span class="zh">回合胜率曲线</span><span class="en">Round Win Rate Curve</span></div>
+          </div>
+          <div class="carousel-card" data-src="../assets/screenshot/2d回放.png" data-label="2D Replay Viewer">
+            <div class="carousel-img-wrap"><img src="../assets/screenshot/2d回放.png" alt="2D 回放" loading="lazy"></div>
+            <div class="carousel-label"><span class="zh">2D 回放器</span><span class="en">2D Replay Viewer</span></div>
+          </div>
+          <div class="carousel-card" data-src="../assets/screenshot/击杀信息.png" data-label="Kill Information">
+            <div class="carousel-img-wrap"><img src="../assets/screenshot/击杀信息.png" alt="击杀信息" loading="lazy"></div>
+            <div class="carousel-label"><span class="zh">击杀信息</span><span class="en">Kill Information</span></div>
+          </div>
+          <div class="carousel-card" data-src="../assets/screenshot/回合贡献.png" data-label="Round Contribution">
+            <div class="carousel-img-wrap"><img src="../assets/screenshot/回合贡献.png" alt="回合贡献" loading="lazy"></div>
+            <div class="carousel-label"><span class="zh">回合贡献</span><span class="en">Round Contribution</span></div>
+          </div>
+          <div class="carousel-card" data-src="../assets/screenshot/整场贡献.png" data-label="Match Contribution">
+            <div class="carousel-img-wrap"><img src="../assets/screenshot/整场贡献.png" alt="整场贡献" loading="lazy"></div>
+            <div class="carousel-label"><span class="zh">整场贡献</span><span class="en">Match Contribution</span></div>
+          </div>
+          <div class="carousel-card" data-src="../assets/screenshot/高阶数据.png" data-label="Advanced Stats">
+            <div class="carousel-img-wrap"><img src="../assets/screenshot/高阶数据.png" alt="高阶数据" loading="lazy"></div>
+            <div class="carousel-label"><span class="zh">高阶数据</span><span class="en">Advanced Stats</span></div>
+          </div>
+          <div class="carousel-card" data-src="../assets/screenshot/ai分析师对话.png" data-label="AI Analyst Chat">
+            <div class="carousel-img-wrap"><img src="../assets/screenshot/ai分析师对话.png" alt="AI 分析师对话" loading="lazy"></div>
+            <div class="carousel-label"><span class="zh">AI 分析师对话</span><span class="en">AI Analyst Chat</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="carousel-dots" id="carousel-dots"></div>
+    </div>
+  </div>
+</section>
+
 <!-- ─── Download ────────────────────────────── -->
 <section class="download-section" id="download">
   <div class="container" style="text-align:center">
@@ -510,6 +650,103 @@ pip install -r requirements.txt</pre>
     }
   })();
 </script>
+
+
+<!-- ─── Lightbox ────────────────────────────── -->
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lightbox-close">&times;</button>
+  <img src="" alt="" id="lightbox-img">
+  <div class="lightbox-caption" id="lightbox-caption"></div>
+</div>
+
+<script>
+  (function() {
+    // ── Lightbox ──
+    var lb = document.getElementById('lightbox');
+    var lbImg = document.getElementById('lightbox-img');
+    var caption = document.getElementById('lightbox-caption');
+    var cards = document.querySelectorAll('.carousel-card');
+    cards.forEach(function(card) {
+      card.addEventListener('click', function() {
+        lbImg.src = card.dataset.src;
+        lbImg.alt = card.dataset.label;
+        caption.textContent = card.dataset.label;
+        lb.classList.add('open');
+        document.body.style.overflow = 'hidden';
+      });
+    });
+    document.getElementById('lightbox-close').addEventListener('click', closeLb);
+    lb.addEventListener('click', function(e) {
+      if (e.target === lb) closeLb();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && lb.classList.contains('open')) closeLb();
+    });
+    function closeLb() {
+      lb.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    // ── Carousel ──
+    var track = document.getElementById('carousel-track');
+    var prevBtn = document.getElementById('carousel-prev');
+    var nextBtn = document.getElementById('carousel-next');
+    var dotsContainer = document.getElementById('carousel-dots');
+    var total = cards.length;
+    var index = 0;
+
+    // Create dots
+    for (var i = 0; i < total; i++) {
+      var dot = document.createElement('button');
+      dot.setAttribute('aria-label', 'Slide ' + (i + 1));
+      (function(idx) {
+        dot.addEventListener('click', function() { goTo(idx); });
+      })(i);
+      dotsContainer.appendChild(dot);
+    }
+    var dots = dotsContainer.querySelectorAll('button');
+
+    function updateDots() {
+      dots.forEach(function(d, i) { d.classList.toggle('active', i === index); });
+    }
+
+    function goTo(i) {
+      index = Math.max(0, Math.min(i, total - 1));
+      cards[index].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      updateDots();
+    }
+
+    prevBtn.addEventListener('click', function() { goTo(index - 1); });
+    nextBtn.addEventListener('click', function() { goTo(index + 1); });
+
+    // Track scroll position to update active dot
+    var scrollTimeout;
+    track.parentElement.addEventListener('scroll', function() {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(function() {
+        var container = track.parentElement;
+        var center = container.scrollLeft + container.offsetWidth / 2;
+        var best = 0, bestDist = Infinity;
+        cards.forEach(function(card, i) {
+          var cardCenter = card.offsetLeft + card.offsetWidth / 2;
+          var dist = Math.abs(cardCenter - center);
+          if (dist < bestDist) { bestDist = dist; best = i; }
+        });
+        if (best !== index) { index = best; updateDots(); }
+      }, 80);
+    });
+
+    // Keyboard nav
+    document.addEventListener('keydown', function(e) {
+      if (lb.classList.contains('open')) return;
+      if (e.key === 'ArrowLeft') { goTo(index - 1); }
+      if (e.key === 'ArrowRight') { goTo(index + 1); }
+    });
+
+    updateDots();
+  })();
+</script>
+
 
 </body>
 </html>
