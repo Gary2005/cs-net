@@ -3,6 +3,8 @@ name: Build Windows EXE
 on:
   push:
     tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
@@ -41,3 +43,15 @@ jobs:
           name: cs-net-windows
           path: dist/cs-net/
           retention-days: 30
+
+      - name: Zip for release
+        if: github.event_name == 'release'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/cs-net/* -DestinationPath cs-net-windows.zip
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cs-net-windows.zip
