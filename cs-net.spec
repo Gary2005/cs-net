@@ -26,6 +26,16 @@ if callouts_dir.is_dir():
     for f in callouts_dir.glob("*.yaml"):
         callout_datas.append((str(f), "config/callouts"))
 
+# Collect model configs (model3_*.yaml) and tokenizer config.
+config_datas = []
+config_dir = _root / "config"
+if config_dir.is_dir():
+    for f in config_dir.glob("model3_*.yaml"):
+        config_datas.append((str(f), "config"))
+tokenizer_cfg = _root / "demoparser_utils" / "tokenizer.yaml"
+if tokenizer_cfg.is_file():
+    config_datas.append((str(tokenizer_cfg), "demoparser_utils"))
+
 # Collect assets.
 asset_datas = []
 assets_dir = _root / "assets"
@@ -61,6 +71,7 @@ a = Analysis(
         # Model weights, configs, assets.
         + model_datas
         + callout_datas
+        + config_datas
         + asset_datas
     ),
     hiddenimports=[
