@@ -10,9 +10,7 @@ download_list_hltv.txt
 *.zip
 *.mp4
 cs_state_vis.mp4
-*.pt
 wandb/
-*.pth
 test/
 checkpoints_*/
 processed_jsons.txt
@@ -20,7 +18,6 @@ processed_jsons.txt
 blast_pred.tar.gz
 checkpoints_pretraining_v2.tar.gz
 matches_urls.txt
-cs-net-models/
 *.dem
 examples/test.dem
 dataset/test
