@@ -85,6 +85,9 @@ a = Analysis(
         "peft",
         "accelerate",
         "safetensors",
+        # Subprocess modules spawned by launcher in frozen mode.
+        "runpy",
+        "demo_analysis.get_round_win_rate",
     ],
     hookspath=[],
     hooksconfig={},

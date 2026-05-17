@@ -3,6 +3,10 @@ CS-Net desktop launcher.
 
 In dev mode: runs like `python demo_analysis/web_app.py`.
 In frozen mode (PyInstaller): resolves bundled data paths and starts the app.
+
+When called with `-m <module>` (subprocess spawn by web_app analysis), it runs that
+module instead of starting the web server — this is the frozen equivalent of
+`python -m demo_analysis.get_round_win_rate`.
 """
 
 import os
@@ -10,6 +14,11 @@ import sys
 import threading
 import webbrowser
 from pathlib import Path
+
+
+def _is_subprocess_call() -> bool:
+    """Detect whether this is a subprocess spawn (e.g. analysis worker)."""
+    return len(sys.argv) > 1 and sys.argv[1] == "-m"
 
 
 def _resolve_base_dir() -> Path:
@@ -44,6 +53,17 @@ def _patch_paths() -> None:
 
 
 def main() -> None:
+    # In frozen mode, `sys.executable -m <module>` spawns cs-net.exe again.
+    # Handle that by running the module directly instead of starting the web server.
+    if _is_subprocess_call():
+        import runpy
+
+        module = sys.argv[2]
+        # Remove launcher's own arguments so the target module sees its own argv.
+        sys.argv = sys.argv[2:]
+        runpy.run_module(module, run_name="__main__")
+        return
+
     _patch_paths()
 
     # Import after path patching so module-level ROOT_DIR resolution picks up our env vars.
