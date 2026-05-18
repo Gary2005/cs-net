@@ -292,6 +292,39 @@
     .carousel-btn { display: none; }
   }
 
+
+	  /* ── Lightbox ── */
+	  .lightbox {
+	    position: fixed; inset: 0; z-index: 999;
+	    background: rgba(0, 0, 0, 0.88);
+	    display: flex; flex-direction: column;
+	    align-items: center; justify-content: center;
+	    opacity: 0; pointer-events: none;
+	    transition: opacity .3s;
+	  }
+	  .lightbox.open {
+	    opacity: 1; pointer-events: auto;
+	  }
+	  .lightbox-close {
+	    position: absolute; top: 20px; right: 28px;
+	    background: none; border: none;
+	    color: #fff; font-size: 2.4rem;
+	    cursor: pointer; z-index: 1001;
+	    line-height: 1; opacity: .7;
+	    transition: opacity .2s;
+	  }
+	  .lightbox-close:hover { opacity: 1; }
+	  #lightbox-img {
+	    max-width: 90vw; max-height: 80vh;
+	    object-fit: contain;
+	    border-radius: 8px;
+	    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+	  }
+	  .lightbox-caption {
+	    margin-top: 16px; color: #94a3b8;
+	    font-size: 0.9rem;
+	  }
+
 </style>
 </head>
 <body>
