@@ -7,6 +7,13 @@ const state = {
   advancedExpanded: false,
 };
 
+const playback = {
+  isPlaying: false,
+  tickIdx: 0,
+  speed: 1,
+  timer: null,
+};
+
 const refs = {
   analyzeForm: document.getElementById("analyze-form"),
   analyzeBtn: document.getElementById("analyze-btn"),
@@ -34,13 +41,11 @@ const refs = {
   chatMessages: document.getElementById("chat-messages"),
   chatInput: document.getElementById("chat-input"),
   chatSendBtn: document.getElementById("chat-send-btn"),
-  viewerLaunchView: document.getElementById("viewer-launch-view"),
-  viewerOpen: document.getElementById("viewer-open"),
+  tickView: document.getElementById("tick-view"),
   advancedView: document.getElementById("advanced-metrics-view"),
   advancedBody: document.getElementById("advanced-metrics-body"),
   advancedToggle: document.getElementById("advanced-toggle"),
   downloadJsonBtn: document.getElementById("download-json-btn"),
-  loadJsonForm: document.getElementById("load-json-form"),
   loadJsonBtn: document.getElementById("load-json-btn"),
   jsonFile: document.getElementById("json-file"),
 };
@@ -554,8 +559,8 @@ function playerCell(player, row) {
 }
 
 function teamForPlayer(round, player) {
-  if ((round.team1_players || []).includes(player)) return "team1";
-  if ((round.team2_players || []).includes(player)) return "team2";
+  if ((round.ct_players || []).includes(player)) return "CT";
+  if ((round.t_players || []).includes(player)) return "T";
   return "?";
 }
 
@@ -602,22 +607,22 @@ function buildTableHtml(rows, columns) {
   return `<div class="table-wrap"><table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
-function renderTeamSplitTables(container, rows, columns, layout = "row") {
-  const team1Rows = (rows || []).filter((r) => r.team === "team1");
-  const team2Rows = (rows || []).filter((r) => r.team === "team2");
+function renderTeamSplitTables(container, rows, columns, layout = "row", teamA = "CT", teamALabel = "CT (蓝)", teamB = "T", teamBLabel = "T (黄)") {
+  const aRows = (rows || []).filter((r) => r.team === teamA);
+  const bRows = (rows || []).filter((r) => r.team === teamB);
 
-  const team1Html = buildTableHtml(team1Rows, columns);
-  const team2Html = buildTableHtml(team2Rows, columns);
+  const aHtml = buildTableHtml(aRows, columns);
+  const bHtml = buildTableHtml(bRows, columns);
 
   container.innerHTML = [
     `<div class="team-split-grid ${layout === "stack" ? "stack" : ""}">`,
     '<section class="team-split-card">',
-    `<h4>${t("team1")}</h4>`,
-    team1Html,
+    `<h4>${teamALabel}</h4>`,
+    aHtml,
     '</section>',
     '<section class="team-split-card">',
-    `<h4>${t("team2")}</h4>`,
-    team2Html,
+    `<h4>${teamBLabel}</h4>`,
+    bHtml,
     '</section>',
     '</div>',
   ].join("");
@@ -650,7 +655,7 @@ function buildKillPoints(round) {
       weapon: k.weapon,
       kill_impact: Number(k.kill_impact || 0),
       killerTeam,
-      color: killerTeam === "team1" ? "#5ec8ff" : "#ff8a38",
+      color: killerTeam === "CT" ? "#5ec8ff" : "#ff8a38",
     };
   });
 }
@@ -718,7 +723,7 @@ function renderOverallSummary() {
     { key: "avg_tactical_contribution", label: t("col_avg_tactical"), render: (v) => contributionCell(v) },
     { key: "avg_total_contribution", label: t("col_avg_total"), render: (v) => contributionCell(v) },
     { key: "rounds", label: t("col_rounds"), render: (v) => `<span class="mono table-meta-text">${v}</span>` },
-  ], "stack");
+  ], "stack", "team1", t("team1"), "team2", t("team2"));
 
   refs.matchBadge.textContent = t("match_badge", {
     team1Label: t("team1"),
@@ -775,6 +780,16 @@ function renderCurrentRound() {
         const wr = linePoint.value[1];
 
         renderHoverContrib(round, idx);
+
+        // Sync radar to the hovered time (only when paused).
+        if (!playback.isPlaying) {
+          const radarWrapper = document.getElementById("radar-wrapper");
+          if (radarWrapper && round) {
+            const nearestTick = window.CSNetRadar.pickTick(round, sec);
+            const mapName = round.map_name || "de_dust2";
+            window.CSNetRadar.renderRadar(radarWrapper, mapName, nearestTick, round);
+          }
+        }
 
         return [
           `<strong>${t("chart_round")} ${round.round_id} · ${sec.toFixed(2)}s</strong>`,
@@ -849,26 +864,23 @@ function renderCurrentRound() {
   state.chart.setOption(option, true);
   renderRoundSummary(round);
   renderHoverContrib(round, 0);
+
+  // Initialize radar + playback for this round's first tick.
+  const radarWrapper = document.getElementById("radar-wrapper");
+  const ticks = round.ticks || [];
+  playback.tickIdx = 0;
+  if (radarWrapper && round) {
+    const mapName = round.map_name || "de_dust2";
+    const firstTick = ticks[0] || null;
+    window.CSNetRadar.clearSelection(radarWrapper);
+    window.CSNetRadar.renderRadar(radarWrapper, mapName, firstTick, round);
+  }
+  updatePlaybackUI();
+  updateChartMarker(null);
 }
 
 function renderViewerLink() {
-  if (!refs.viewerOpen) return;
-  if (!state.runId) {
-    refs.viewerOpen.classList.add("disabled");
-    refs.viewerOpen.removeAttribute("href");
-    return;
-  }
-  refs.viewerOpen.classList.remove("disabled");
-  const demoUrl = `${window.location.origin}/api/demo_file/${encodeURIComponent(state.runId)}.dem`;
-  const params = [
-    `demourl=${encodeURIComponent(demoUrl)}`,
-    "directfetch=1",
-  ];
-  if (state.analysisId) {
-    const timelineUrl = `${window.location.origin}/api/winrate_timeline/${encodeURIComponent(state.analysisId)}`;
-    params.push(`winrateurl=${encodeURIComponent(timelineUrl)}`);
-  }
-  refs.viewerOpen.setAttribute("href", `/viewer/player?${params.join("&")}`);
+  // Viewer link hidden in new layout; kept for potential future use.
 }
 
 function fmtPercent2(v) {
@@ -946,18 +958,13 @@ function renderAdvancedMetrics() {
 }
 
 function renderDashboard() {
-  refs.roundView.classList.remove("hidden");
-  refs.roundSummaryView.classList.remove("hidden");
-  refs.overallSummaryView.classList.remove("hidden");
-  refs.llmView.classList.remove("hidden");
-  if (refs.viewerLaunchView) refs.viewerLaunchView.classList.remove("hidden");
-  if (refs.advancedView) refs.advancedView.classList.remove("hidden");
+  const appMain = document.getElementById("app-main");
+  if (appMain) appMain.classList.remove("hidden");
   if (refs.downloadJsonBtn) refs.downloadJsonBtn.classList.remove("hidden");
 
   renderRoundTabs();
   renderCurrentRound();
   renderOverallSummary();
-  renderViewerLink();
   renderAdvancedMetrics();
 
   const errors = state.dashboard?.errors || {};
@@ -1039,6 +1046,24 @@ if (refs.advancedToggle) {
   });
 }
 
+// Tab switching in right column
+(function initTabs() {
+  const tabNav = document.getElementById("tab-nav");
+  if (!tabNav) return;
+  tabNav.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabNav.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const tabId = "tab-" + btn.dataset.tab;
+      document.querySelectorAll("#tab-panels .tab-panel").forEach((p) => p.classList.remove("active"));
+      const panel = document.getElementById(tabId);
+      if (panel) panel.classList.add("active");
+      // Resize chart in case it was hidden
+      setTimeout(() => { if (state.chart) state.chart.resize(); }, 100);
+    });
+  });
+})();
+
 restoreUserPrefs();
 bindUserPrefsPersistence();
 applyLanguage();
@@ -1089,14 +1114,12 @@ if (refs.downloadJsonBtn) {
   });
 }
 
-if (refs.loadJsonForm) {
-  refs.loadJsonForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+// Load JSON: button triggers hidden file input
+if (refs.loadJsonBtn && refs.jsonFile) {
+  refs.loadJsonBtn.addEventListener("click", () => refs.jsonFile.click());
+  refs.jsonFile.addEventListener("change", async () => {
     const file = refs.jsonFile?.files?.[0];
-    if (!file) {
-      logStatus(t("status_failed", { error: "请选择 JSON 文件" }));
-      return;
-    }
+    if (!file) return;
 
     refs.loadJsonBtn.disabled = true;
     logStatus(t("status_submitting"));
@@ -1121,6 +1144,7 @@ if (refs.loadJsonForm) {
       logStatus(t("status_failed", { error: err.message }));
     } finally {
       refs.loadJsonBtn.disabled = false;
+      refs.jsonFile.value = "";
     }
   });
 }
@@ -1238,3 +1262,159 @@ refs.chatInput.addEventListener("keydown", (e) => {
     sendChatMessage();
   }
 });
+
+// ============================================================
+//  Playback controls
+// ============================================================
+
+function getCurrentTicks() {
+  const round = state.dashboard?.rounds?.[state.selectedRoundIndex];
+  return round?.ticks || [];
+}
+
+function currentTick() {
+  const ticks = getCurrentTicks();
+  return ticks[playback.tickIdx] || null;
+}
+
+function renderPlaybackTick() {
+  const tick = currentTick();
+  const round = state.dashboard?.rounds?.[state.selectedRoundIndex];
+  if (!tick || !round) return;
+  const radarWrapper = document.getElementById("radar-wrapper");
+  if (radarWrapper) {
+    const mapName = round.map_name || "de_dust2";
+    window.CSNetRadar.renderRadar(radarWrapper, mapName, tick, round);
+  }
+  updateChartMarker(tick.round_seconds);
+}
+
+function updatePlaybackUI() {
+  const ticks = getCurrentTicks();
+  const elPlay = document.getElementById("pb-play");
+  const elTime = document.getElementById("pb-time");
+  const elSlider = document.getElementById("pb-slider");
+
+  if (elPlay) {
+    elPlay.textContent = playback.isPlaying ? "⏸" : "▶";
+    elPlay.classList.toggle("playing", playback.isPlaying);
+  }
+  if (elTime && ticks.length > 0) {
+    const cur = currentTick();
+    const last = ticks[ticks.length - 1];
+    const fmt = (s) => {
+      const m = Math.floor((s || 0) / 60);
+      const sec = Math.floor((s || 0) % 60);
+      return String(m).padStart(2, "0") + ":" + String(sec).padStart(2, "0");
+    };
+    elTime.textContent = fmt(cur?.round_seconds) + " / " + fmt(last?.round_seconds);
+  }
+  if (elSlider && ticks.length > 1) {
+    elSlider.max = ticks.length - 1;
+    elSlider.value = playback.tickIdx;
+  }
+}
+
+function updateChartMarker(seconds) {
+  if (!state.chart) return;
+  state.chart.setOption({
+    series: [
+      {
+        markLine: seconds != null ? {
+          silent: true, symbol: "none", animation: false,
+          lineStyle: { color: "#ffffff", width: 2, type: "dashed", opacity: 0.55 },
+          data: [{ xAxis: seconds, label: { show: false } }],
+        } : { data: [] },
+      },
+      {},
+    ],
+  });
+}
+
+function _scheduleNext() {
+  if (!playback.isPlaying) return;
+  const ticks = getCurrentTicks();
+  if (playback.tickIdx >= ticks.length - 1) {
+    pause();
+    return;
+  }
+  const curSec = Number(ticks[playback.tickIdx]?.round_seconds || 0);
+  const nxtSec = Number(ticks[playback.tickIdx + 1]?.round_seconds || curSec);
+  const gameDelta = Math.max(nxtSec - curSec, 0.01);
+  const ms = Math.round((gameDelta * 1000) / playback.speed);
+  playback.timer = setTimeout(() => {
+    playback.tickIdx++;
+    renderPlaybackTick();
+    updatePlaybackUI();
+    _scheduleNext();
+  }, ms);
+}
+
+function play() {
+  if (playback.isPlaying) return;
+  const ticks = getCurrentTicks();
+  if (ticks.length === 0) return;
+  if (playback.tickIdx >= ticks.length - 1) playback.tickIdx = 0;
+  playback.isPlaying = true;
+  updatePlaybackUI();
+  // Render current tick immediately, then schedule next
+  renderPlaybackTick();
+  _scheduleNext();
+}
+
+function pause() {
+  playback.isPlaying = false;
+  if (playback.timer) { clearTimeout(playback.timer); playback.timer = null; }
+  updatePlaybackUI();
+}
+
+function togglePlay() {
+  if (playback.isPlaying) pause(); else play();
+}
+
+function rewind() {
+  const wasPlaying = playback.isPlaying;
+  pause();
+  playback.tickIdx = 0;
+  renderPlaybackTick();
+  updatePlaybackUI();
+  if (wasPlaying) play();
+}
+
+function forward() {
+  pause();
+  const ticks = getCurrentTicks();
+  playback.tickIdx = Math.max(0, ticks.length - 1);
+  renderPlaybackTick();
+  updatePlaybackUI();
+}
+
+function seekTo(idx) {
+  const wasPlaying = playback.isPlaying;
+  pause();
+  playback.tickIdx = Math.max(0, Math.min(idx, getCurrentTicks().length - 1));
+  renderPlaybackTick();
+  updatePlaybackUI();
+  if (wasPlaying) play();
+}
+
+// Wire playback buttons
+(function initPlayback() {
+  const elPlay = document.getElementById("pb-play");
+  const elRewind = document.getElementById("pb-rewind");
+  const elForward = document.getElementById("pb-forward");
+  const elSlider = document.getElementById("pb-slider");
+  const elSpeed = document.getElementById("pb-speed");
+
+  if (elPlay) elPlay.addEventListener("click", togglePlay);
+  if (elRewind) elRewind.addEventListener("click", rewind);
+  if (elForward) elForward.addEventListener("click", forward);
+  if (elSlider) {
+    elSlider.addEventListener("input", () => seekTo(Number(elSlider.value)));
+  }
+  if (elSpeed) {
+    elSpeed.addEventListener("change", () => {
+      playback.speed = Number(elSpeed.value);
+    });
+  }
+})();

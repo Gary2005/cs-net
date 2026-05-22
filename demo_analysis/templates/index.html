@@ -12,179 +12,176 @@
 </head>
 <body>
   <div class="noise"></div>
-  <main class="app-shell">
-    <header class="hero">
-      <div class="hero-lang">
-        <label>
-          <span data-i18n="ui_language">界面语言</span>
-          <select id="app-language">
-            <option value="zh" selected>中文</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-      </div>
-      <a class="hero-brand" href="https://github.com/Gary2005/cs-net" target="_blank" rel="noopener noreferrer" aria-label="打开 CS-Net GitHub 仓库">
-        <img class="hero-logo" src="{{ url_for('asset_file', filename='logo.svg') }}" alt="CS-Net Logo" />
-        <span class="hero-brand-name">CS-NET</span>
-      </a>
-      <p class="eyebrow">CS2 Demo Intelligence</p>
-      <h1>CS-Net Demo Analyzer</h1>
-      <p class="subtitle" data-i18n="subtitle">上传 DEM 后自动计算每回合胜率、击杀影响和玩家贡献，并生成可交互复盘与 LLM 解读。</p>
-    </header>
+  <div class="app-shell">
 
-    <section class="panel controls">
-      <h2 data-i18n="section_run">1. 运行分析</h2>
-      <form id="analyze-form">
-        <div class="grid two-col">
-          <label>
-            <span data-i18n="dem_file">DEM 文件</span>
-            <input type="file" name="demo_file" id="demo-file" accept=".dem" required />
-          </label>
-          <label>
-            <span data-i18n="model_path">模型根目录</span>
-            <input type="text" name="model_path" id="model-path" value="{{ default_model_path }}" list="model-path-list" autocomplete="off" data-i18n-placeholder="model_path_placeholder" placeholder="请输入模型根目录，例如 /Users/.../cs-net-models (需包含 alive / nxt_kill / nxt_death / win_rate / duel 子目录)" required />
+    <!-- === Header === -->
+    <header class="app-header">
+      <div class="header-top">
+        <a class="header-brand" href="https://github.com/Gary2005/cs-net" target="_blank" rel="noopener">
+          <img class="header-logo" src="{{ url_for('asset_file', filename='logo.svg') }}" alt="" />
+          <div>
+            <div class="header-name">CS-NET</div>
+            <div class="header-label">CS2 Demo Analyzer</div>
+          </div>
+        </a>
+        <span class="lang-wrap">🌐 <select id="app-language" class="lang-select">
+          <option value="zh" selected>中文</option>
+          <option value="en">English</option>
+        </select></span>
+      </div>
+
+      <form id="analyze-form" class="header-form">
+        <div class="upload-zone" id="upload-zone">
+          <div class="upload-icon">📁</div>
+          <div class="upload-text">选择 .dem 文件或拖拽到此处</div>
+          <input type="file" name="demo_file" id="demo-file" accept=".dem" required />
+        </div>
+
+        <div class="settings-row">
+          <div class="setting">
+            <label>模型目录</label>
+            <input type="text" name="model_path" id="model-path" value="{{ default_model_path }}" list="model-path-list" autocomplete="off" placeholder="cs-net-models 根目录" />
             <datalist id="model-path-list">
               {% for p in model_options %}
               <option value="{{ p }}"></option>
               {% endfor %}
             </datalist>
-          </label>
-          <label>
-            <span data-i18n="device">设备</span>
+          </div>
+          <div class="setting">
+            <label>设备</label>
             <select name="device" id="device">
               <option value="cuda" {% if default_device == "cuda" %}selected{% endif %}>cuda</option>
               <option value="cpu" {% if default_device == "cpu" %}selected{% endif %}>cpu</option>
             </select>
-          </label>
-          <label>
-            <span data-i18n="batch_size">Batch Size</span>
+          </div>
+          <div class="setting">
+            <label>Batch Size</label>
             <input type="number" name="batch_size" id="batch-size" value="256" min="1" max="512" />
-          </label>
-        </div>
-        <p class="hint" data-i18n="analyze_hint">进度说明: 解析 demo 一般需要 30~60 秒，运行模型通常不到 1 分钟。分析中会显示当前阶段和正在处理的回合。</p>
-        <div class="btn-row">
-          <button id="analyze-btn" type="submit" data-i18n="analyze_btn">开始分析</button>
-          <button id="download-json-btn" type="button" class="hidden ghost-btn" data-i18n="download_json_btn">下载解析结果 JSON</button>
-        </div>
-      </form>
-      <form id="load-json-form" class="load-json-form">
-        <hr />
-        <h3 data-i18n="load_json_title">或直接加载已解析的 JSON 结果</h3>
-        <label>
-          <span data-i18n="load_json_file">JSON 结果文件</span>
-          <input type="file" name="json_file" id="json-file" accept=".json" />
-        </label>
-        <p class="hint" data-i18n="load_json_hint">如果你之前跑过分析并保存了 JSON，可直接上传查看结果，无需重新解析 demo。</p>
-        <button id="load-json-btn" type="submit" data-i18n="load_json_btn">加载 JSON</button>
-      </form>
-      <pre id="status-log" class="status-log" data-i18n="status_waiting">等待上传 DEM...</pre>
-    </section>
-
-    <section class="panel round-view hidden" id="round-view">
-      <div class="panel-head">
-        <h2 data-i18n="section_round_trend">2. 回合走势</h2>
-        <div id="match-badge" class="match-badge"></div>
-      </div>
-      <div id="round-tabs" class="round-tabs"></div>
-      <div id="chart" class="chart"></div>
-      <p class="hint" data-i18n="radar_hint">悬停胜率曲线的某个时刻，下方雷达与指标面板会同步刷新。</p>
-      <div id="hover-player-stats" class="hover-player-stats"></div>
-    </section>
-
-    <section class="panel viewer-launch hidden" id="viewer-launch-view">
-      <div class="panel-head">
-        <h2 data-i18n="section_viewer">3. 2D 回放器</h2>
-        <a id="viewer-open" class="viewer-link" href="#" target="_blank" rel="noopener noreferrer" data-i18n="viewer_open">打开 2D 回放</a>
-      </div>
-      <p class="hint" data-i18n="viewer_hint">在新标签页打开同一 demo 的 2D 回放（基于 third_party/csgo-2d-demo-viewer-dev，包含烟雾/闪光/手雷弹道）。</p>
-    </section>
-
-    <section class="panel tick-view hidden" id="tick-view">
-      <div class="panel-head">
-        <h2 data-i18n="section_tick_state">4. 回合实时态势</h2>
-        <div id="tick-time-badge" class="match-badge"></div>
-      </div>
-      <div class="tick-grid">
-        <div class="radar-card">
-          <h3 data-i18n="radar_title">2D 雷达</h3>
-          <div class="radar-wrapper" id="radar-wrapper"></div>
-          <div class="radar-legend">
-            <span class="legend-item"><span class="swatch team1"></span><span data-i18n="team1">team1</span></span>
-            <span class="legend-item"><span class="swatch team2"></span><span data-i18n="team2">team2</span></span>
-            <span class="legend-item"><span class="swatch dead"></span><span data-i18n="legend_dead">已阵亡</span></span>
-            <span class="legend-item"><span class="swatch flashed"></span><span data-i18n="legend_flashed">被闪</span></span>
           </div>
         </div>
-        <div class="metric-card">
-          <h3 data-i18n="metric_alive">存活概率 (5s 内仍存活)</h3>
-          <div id="metric-alive" class="metric-container"></div>
+
+        <div class="actions-row">
+          <button id="analyze-btn" type="submit">▶ 开始分析</button>
+          <div class="actions-sub">
+            <button id="load-json-btn" type="button" class="link-btn">加载 JSON</button>
+            <button id="download-json-btn" type="button" class="link-btn hidden">下载 JSON</button>
+            <input type="file" name="json_file" id="json-file" accept=".json" hidden />
+          </div>
         </div>
-        <div class="metric-card">
-          <h3 data-i18n="metric_next_kill">下一击杀者分布</h3>
-          <div id="metric-next-kill" class="metric-container"></div>
+      </form>
+    </header>
+
+    <!-- === Main Grid (hidden until analysis done) === -->
+    <div class="app-main hidden" id="app-main">
+
+      <!-- Left Column: Radar → Playback → Chart -->
+      <div class="main-left">
+        <div class="left-top">
+          <div id="match-badge" class="match-badge"></div>
+          <div id="round-tabs" class="round-tabs"></div>
         </div>
-        <div class="metric-card">
-          <h3 data-i18n="metric_next_death">下一阵亡者分布</h3>
-          <div id="metric-next-death" class="metric-container"></div>
+
+        <div class="radar-section" id="tick-view">
+          <div class="radar-wrapper" id="radar-wrapper"></div>
+          <div class="radar-legend">
+            <span class="legend-item"><span class="swatch ct"></span>CT</span>
+            <span class="legend-item"><span class="swatch t"></span>T</span>
+            <span class="legend-item"><span class="swatch dead"></span>阵亡</span>
+            <span class="legend-item"><span class="swatch flashed"></span>被闪</span>
+            <span class="legend-item"><span class="swatch duel-line"></span>对决连线</span>
+            <span class="legend-item"><span class="swatch util-smoke"></span>烟雾</span>
+            <span class="legend-item"><span class="swatch util-fire"></span>燃烧</span>
+            <span class="legend-item"><span class="swatch util-nade"></span>手雷</span>
+          </div>
         </div>
-        <div class="metric-card duel-card">
-          <h3 data-i18n="metric_duel">对决矩阵 (CT vs T)</h3>
-          <div id="metric-duel" class="metric-container"></div>
+
+        <!-- Playback Controls -->
+        <div class="playback-bar" id="playback-bar">
+          <button id="pb-rewind" class="pb-btn" title="跳到开头">⏮</button>
+          <button id="pb-play" class="pb-btn pb-play" title="播放 / 暂停">▶</button>
+          <button id="pb-forward" class="pb-btn" title="跳到结尾">⏭</button>
+          <span id="pb-time" class="pb-time">00:00 / 00:00</span>
+          <input type="range" id="pb-slider" class="pb-slider" min="0" max="100" value="0" />
+          <select id="pb-speed" class="pb-speed">
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1x</option>
+            <option value="2">2x</option>
+          </select>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Chart + Tabbed Data Panels -->
+      <div class="main-right">
+        <div id="chart" class="chart"></div>
+
+        <nav class="tab-nav" id="tab-nav">
+          <button class="tab-btn active" data-tab="hover">悬停数据</button>
+          <button class="tab-btn" data-tab="round">回合总结</button>
+          <button class="tab-btn" data-tab="overall">全场平均</button>
+          <button class="tab-btn" data-tab="advanced">高级指标</button>
+          <button class="tab-btn" data-tab="chat">AI 对话</button>
+        </nav>
+
+        <div class="tab-panels" id="tab-panels">
+          <!-- Hover Stats -->
+          <div class="tab-panel active" id="tab-hover">
+            <div id="hover-player-stats" class="hover-player-stats"></div>
+          </div>
+
+          <!-- Round Summary -->
+          <div class="tab-panel" id="tab-round">
+            <div id="round-summary-view">
+              <div id="round-summary-table"></div>
+            </div>
+          </div>
+
+          <!-- Overall Summary -->
+          <div class="tab-panel" id="tab-overall">
+            <div id="overall-summary-view">
+              <div id="overall-summary-table"></div>
+            </div>
+          </div>
+
+          <!-- Advanced Metrics -->
+          <div class="tab-panel" id="tab-advanced">
+            <div id="advanced-metrics-view">
+              <button id="advanced-toggle" type="button" class="ghost-btn">展开/收起</button>
+              <div id="advanced-metrics-body" class="advanced-body"></div>
+            </div>
+          </div>
+
+          <!-- AI Chat -->
+          <div class="tab-panel" id="tab-chat">
+            <div id="llm-view">
+              <div class="chat-config">
+                <label><span>API Key</span><input type="password" id="llm-api-key" placeholder="sk-..." /></label>
+                <label><span>模型</span><input type="text" id="llm-model" placeholder="gpt-4.1 / deepseek-chat / qwen-max" /></label>
+                <label><span>Base URL</span><input type="text" id="llm-base-url" value="https://api.openai.com/v1" /></label>
+                <label><span>Temperature</span><input type="number" id="llm-temperature" step="0.1" min="0" max="1.5" value="0.95" /></label>
+              </div>
+              <button id="chat-init-btn" type="button">开始分析对话</button>
+              <div id="chat-area" class="chat-area hidden">
+                <div id="chat-messages" class="chat-messages"></div>
+                <div class="chat-input-row">
+                  <input type="text" id="chat-input" placeholder="输入问题，如：哪个玩家表现最好？" />
+                  <button id="chat-send-btn" type="button">发送</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
 
-    <section class="panel summary hidden" id="round-summary-view">
-      <h2 data-i18n="section_round_summary">5. 当前回合最终贡献</h2>
-      <div id="round-summary-table"></div>
-    </section>
+    <!-- === Status Bar === -->
+    <pre id="status-log" class="status-bar">等待上传 DEM...</pre>
 
-    <section class="panel summary hidden" id="overall-summary-view">
-      <h2 data-i18n="section_overall_summary">6. 全场平均贡献</h2>
-      <div id="overall-summary-table"></div>
-    </section>
-
-    <section class="panel summary hidden" id="advanced-metrics-view">
-      <div class="panel-head">
-        <h2 data-i18n="section_advanced">7. 高级指标</h2>
-        <button id="advanced-toggle" type="button" class="ghost-btn" data-i18n="advanced_toggle">展开/收起</button>
-      </div>
-      <div id="advanced-metrics-body" class="advanced-body"></div>
-    </section>
-
-    <section class="panel llm hidden" id="llm-view">
-      <h2 data-i18n="section_llm">8. AI 数据分析师</h2>
-      <div class="chat-config grid two-col">
-        <label>
-          <span data-i18n="api_key">API Key</span>
-          <input type="password" id="llm-api-key" placeholder="sk-..." />
-        </label>
-        <label>
-          <span data-i18n="model_name">模型名</span>
-          <input type="text" id="llm-model" data-i18n-placeholder="model_name_placeholder" placeholder="gpt-4.1 / deepseek-chat / qwen-max" />
-        </label>
-        <label>
-          <span data-i18n="base_url">Base URL (OpenAI 兼容)</span>
-          <input type="text" id="llm-base-url" value="https://api.openai.com/v1" />
-        </label>
-        <label>
-          <span data-i18n="temperature">Temperature</span>
-          <input type="number" id="llm-temperature" step="0.1" min="0" max="1.5" value="0.95" />
-        </label>
-      </div>
-      <button id="chat-init-btn" type="button" data-i18n="chat_init_btn">开始分析对话</button>
-      <div id="chat-area" class="chat-area hidden">
-        <div id="chat-messages" class="chat-messages"></div>
-        <div class="chat-input-row">
-          <input type="text" id="chat-input" data-i18n-placeholder="chat_placeholder" placeholder="输入问题，如：哪个玩家表现最好？哪一回合最关键？" />
-          <button id="chat-send-btn" type="button" data-i18n="chat_send">发送</button>
-        </div>
-      </div>
-    </section>
-  </main>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script src="{{ url_for('static', filename='radar.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
