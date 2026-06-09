@@ -183,13 +183,23 @@ def get_important_ticks_by_round(parser: DemoParser, interval=0.5):
 
     return ticks_by_round
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', '1'):
+        return True
+    if v.lower() in ('no', 'false', 'f', '0'):
+        return False
+    raise argparse.ArgumentTypeError(f"Boolean value expected, got {v}")
+    
 def main():
     parser = argparse.ArgumentParser(description="Process a CS demo into JSON states")
     parser.add_argument("-path", type=str, required=True, help="Path to .demo file")
     parser.add_argument("-interval", type=float, default=0.5, help="Sampling interval in seconds")
     parser.add_argument("-out", type=str, required=True, help="Output JSON file path")
-    parser.add_argument("-debug", type=bool, required=False, default=0, help="Output processing information")
-    parser.add_argument("-compression", type=bool, required=False, default=0, help="Use compression for JSON output")
+    parser.add_argument("-debug", type=str2bool, nargs='?', const=True, default=False, help="Output processing information")
+    parser.add_argument("-compression", type=str2bool, nargs='?', const=True, default=False, help="Use compression for JSON output")
+
 
     args = parser.parse_args()
 
