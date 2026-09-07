@@ -27,8 +27,8 @@ FILES = [
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--repo-id", default="Gary2005/cs-net-v4",
-                    help="Hugging Face 仓库（默认 Gary2005/cs-net-v4）")
+    ap.add_argument("--repo-id", default="gary2oos/cs-net-v4",
+                    help="Hugging Face 仓库（默认 gary2oos/cs-net-v4）")
     ap.add_argument("--out-dir", default="checkpoints",
                     help="保存目录（默认 checkpoints/，已在 .gitignore 中）")
     ap.add_argument("--pretrain-only", action="store_true",

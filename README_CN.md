@@ -65,7 +65,7 @@ python scripts/download_checkpoints.py --pretrain-only    # 只下路径预测�
 或直接用 `hf` CLI：
 
 ```bash
-hf download Gary2005/cs-net-v4 --local-dir checkpoints
+hf download gary2oos/cs-net-v4 --local-dir checkpoints
 ```
 
 ### 验证模型能正确加载

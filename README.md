@@ -67,7 +67,7 @@ python scripts/download_checkpoints.py --pretrain-only   # path prediction only
 Or directly with the `hf` CLI:
 
 ```bash
-hf download Gary2005/cs-net-v4 --local-dir checkpoints
+hf download gary2oos/cs-net-v4 --local-dir checkpoints
 ```
 
 ### Verify the checkpoints load
