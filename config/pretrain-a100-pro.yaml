@@ -1,0 +1,58 @@
+# CS2 Pretraining — 单卡 A100 80GB（Pro 大模型版）
+# 与 pretrain-a100.yaml 的唯一区别：模型 61.8M → 138.7M（d_model 512→768、d_ff 2048→3072、
+# heads 8→12，层数不变；实测参数量 138.74M）。
+# 每步计算量 ≈ ×2.2 → 训练时间约 1 周（total_steps 600k，lr 3e-4、warmup 800）。
+# 用法: python scripts/pretrain.py --config config/pretrain-a100-pro.yaml
+
+# ── 数据（与 base 一致）─────────────────────────────────────────────────────
+data_dir: /cephfs/yixu/gary/dataset
+n_ticks: 16             # 输入/输出窗口 tick 数（16 = 4 秒 @ 0.25s/tick）
+stride: 16               # 滑动步长（重叠率 0%）
+jitter: true            # 窗口起始位置 + 步长随机抖动
+shuffle_buffer: 2000
+max_samples: 0          # 0 = 全部
+keep_ratio: 0.5         # 序列保留比例（0,1]：每步从 B*T*10 个序列任务中随机保留的比例；<1 省 decoder 计算
+
+# ── 训练 ──────────────────────────────────────────────────────────────────
+device: cuda
+batch_size: 14          # 显存充裕（138.7M + BF16 训练峰值 < 25GB）；如需提速可试 16-20
+grad_accum_steps: 1
+num_workers: 8
+
+# ── 优化开关（--no-xxx 可关闭）────────────────────────────────────────────
+use_amp: true           # BF16 混合精度
+use_tf32: true          # TF32 + cudnn.benchmark
+use_compile: true       # torch.compile
+epochs: 80              # 数据多 → 放宽 epoch 上限，让 total_steps 主导（base 50 可能先撞 epoch）
+lr: 3.0e-4              # lr（与 base 相同）
+warmup_steps: 800      # 大模型 warmup 加长（base 500 → 800）
+total_steps: 600000
+max_grad_norm: 1.0
+
+save_dir: /cephfs/yixu/gary/checkpoints/pretrain_pro
+resume: ""
+log_interval: 50
+save_interval: 100000  
+val_interval: 4000
+
+# ── 模型架构（Pro：138.7M 实测，≈2.2× base）──────────────────────────────
+d_model: 768
+n_spatial_layers: 5
+n_temporal_layers: 3
+n_decoder_layers: 6
+n_depth_ray_layers: 3
+n_heads: 12             # d_k = 768/12 = 64
+d_ff: 3072
+dropout: 0.1
+
+# ── 离散 Token 化（与 base 一致）───────────────────────────────────────────
+move_range: 128.0       # d_forward/right/up 最大移动距离
+move_grid_size: 4.0     # 移动 token 分辨率 (单位/token)
+angle_grid_size: 5.0    # 角度 token 分辨率 (度/token)
+use_residual_correction: true  # 残差修正；关闭可加速数据加载
+
+# ── Wandb ─────────────────────────────────────────────────────────────────
+wandb: true
+wandb_project: cs2-pretrain-v4
+wandb_name: pretrain_pro
+wandb_entity: null

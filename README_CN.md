@@ -1,183 +1,184 @@
 <p align="center">
-  <img src="assets/logo.svg" width="120" height="120" alt="cs-net-logo">
+  <img src="visualizer/static/logo.svg" width="120" height="120" alt="cs-net-logo">
 </p>
 
-<h1 align="center">CS-NET</h1>
+<h1 align="center">CS-NET v4</h1>
 
 <p align="center">
-  <strong>面向 Counter-Strike 比赛数据分析的深度学习框架</strong>
+  <strong>基于 Transformer 的 CS2 路径预测与局面预测框架</strong>
 </p>
 
 <p align="center">
   <a href="README.md">English</a>
+  ·
+  <a href="#-模型权重">模型权重</a>
+  ·
+  <a href="#-快速开始">快速开始</a>
+  ·
+  <a href="#-训练">训练</a>
+  ·
+  <a href="#-文档">文档</a>
 </p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python">
-  <img src="https://img.shields.io/badge/Framework-PyTorch-ee4c2c.svg" alt="PyTorch">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
-</p>
-
-## 快速导航
-
-- [项目概览](#项目概览)
-- [预测任务](#预测任务)
-- [快速开始](#快速开始)
-- [Web App 使用方法](#web-app-使用方法)
-- [Web App 功能](#web-app-功能)
-- [致谢](#致谢)
-- [星标历史](#星标历史)
-- [贡献者](#贡献者)
 
 ---
 
-## 项目概览
+## 本仓库包含什么
 
-CS-NET 是一个基于 **Transformer** 的深度学习框架，用于分析 Counter-Strike 2 的比赛回放（`.dem` demo 文件）。它会解析比赛录像，把游戏状态转换成 token 序列，再交给预训练的 Transformer 模型做多种实时预测。
+CS-NET v4 是 CS2（反恐精英 2）深度学习框架的开源版本，包含三部分：
 
-一句话概括：**给模型一段比赛回放，它能告诉你接下来谁会赢、谁会死，以及谁最可能拿到下一次击杀。**
+| 组件 | 说明 | 入口 |
+|---|---|---|
+| **路径预测模型** | 预训练 Transformer：输入 16 tick 完整局面窗口（10 玩家 + 炸弹 + 投掷物 + 射线深度图），**自回归预测每个玩家未来的移动路径**（世界坐标），以离散移动/角度 token 表示。 | `scripts/pretrain_model.py`、`scripts/prediction_engine.py`、`scripts/pretrain.py` |
+| **spatial-only 模型** | 最简下游任务族：仅凭**单个 tick** 的完整局面，预测每玩家**胜率 / 回合末存活 / 未来击杀**概率。每个模型 = 预训练 embedder + spatial transformer + 线性头（无路径、无历史窗口），一个任务一个 checkpoint。 | `scripts/spatial_only_predictor.py`、`scripts/downstream-spatial-only/finetune_spatial_only.py` |
+| **3D 可视化工具** | Flask Web 应用：上传 `.dem` / `.json` / `.json.gz` 录像，3D 平滑回放（Three.js + 地图 OBJ），上传 checkpoint 可视化 **AI 预测路径 vs 真实路径**，加载 spatial-only 模型后整回合实时查看每玩家概率曲线。 | `visualizer/server.py` |
 
-## 预测任务
+```
+demo (.dem) ──demo_parser──▶ 回合 JSON ──create_training_data──▶ round WDS
+round WDS ──create_pretrain_data──▶ 窗口 WDS ──pretrain.py──▶ 路径预测 ckpt
+round WDS + 路径 ckpt ──finetune_spatial_only.py──▶ winrate / alive_end / future_kill
+任意录像 ──visualizer/server.py──▶ 3D 回放 + AI 路径预测 + spatial-only 曲线
+```
 
-| 任务 | 说明 | 输出 |
-|------|------|------|
-| **胜率预测** | 当前回合 team1（按攻防映射）赢下本局的概率 | 0 到 1 之间的标量 |
-| **存活预测** | 每个玩家在接下来 5 秒内仍然存活的概率 | 10 个玩家分别对应一个概率 |
-| **下一次击杀预测** | 谁最可能拿到下一次击杀 | 10+1 类的概率分布 |
-| **下一次阵亡预测** | 谁最可能成为下一次阵亡者 | 10+1 类的概率分布 |
-| **决斗预测** | 任意 CT-T 玩家对之间的 1v1 胜率 | 5x5 概率矩阵 |
+## 模型权重
+
+Pro 架构（d_model=768，138.7M 参数）的已训练模型可在
+[Releases](../../releases) 页面下载：
+
+| 文件 | 任务 | 说明 |
+|---|---|---|
+| `cs-net-v4-pro.pt` | 路径预测（预训练） | 600k 步；完整模型（`model` + `global_step` 键） |
+| `pretrain-v4-pro-win_rate.pt` | spatial-only `winrate` | `{task, model_state, head_state, config}` |
+| `pretrain-v4-pro-alive_end.pt` | spatial-only `alive_end` | 同格式 |
+| `pretrain-v4-pro-future_kill.pt` | spatial-only `future_kill` | 同格式 |
+
+> spatial-only checkpoint 只含 embedder + spatial transformer 权重（外加线性头），
+> 因此远小于完整路径预测模型。模型架构必须与 `config/pretrain-a100-pro.yaml` 一致。
 
 ## 快速开始
 
-### 1. 配置环境
-
-创建 Python 环境并安装依赖：
+### 1. 环境
 
 ```bash
-conda create -n cs-net python=3.10
-conda activate cs-net
+conda create -n cs2demo python=3.10
+conda activate cs2demo
 pip install -r requirements.txt
 ```
 
-### 2. 下载预训练模型
+用 `python scripts/check_env.py` 验证环境。推理支持 CPU / MPS / CUDA。
 
-将所有预训练模型和分词器下载到 `./cs-net-models/`：
-
-模型权重也可以在这里获取：https://huggingface.co/gary2oos/CS-Net-V3
+### 2. 3D 可视化工具 + AI 路径预测
 
 ```bash
-python -m scripts.download_model
+# 启动并预加载本地 checkpoint（路径预测 + spatial-only 模型目录）
+python visualizer/server.py --port 5000 \
+    --checkpoint /path/to/cs-net-v4-pro.pt \
+    --spatial-model-dir /path/to/spatial-ckpts \
+    --device cpu            # 或 mps / cuda
 ```
 
-### 3. 将 Demo 转换为 JSON
+打开 `http://127.0.0.1:5000/`，把 `.dem`/`.json`/`.json.gz` 录像拖进页面即可；
+也可把录像放到 `examples/demo` / `examples/json` 下使用内置示例列表。
+模型 checkpoint 也可以在页面内上传，不必走命令行参数。
 
-使用 `process_demo` 脚本把 demo 文件解析为结构化 JSON：
+完整功能与 API 列表见 [visualizer/README.md](visualizer/README.md)。
 
-`examples/test.dem` 故意没有包含在仓库中，因为 demo 文件通常非常大。
-你需要自己下载一个 `.dem` 文件（例如来自 HLTV），并替换输入路径。
+### 3. 路径预测推理（库 / CLI）
+
+```python
+from scripts.prediction_engine import PredictionEngine
+
+engine = PredictionEngine(
+    "config/pretrain-a100-pro.yaml",
+    "cs-net-v4-pro.pt",
+    device="cpu",
+    maps_dir="maps/optimized_obj_files",
+)
+result = engine.predict_at_tick(sample, query_tick=120)
+# result["trajectories"][p] = {"pred_traj": [...], "gt_traj": [...], ...}（世界坐标）
+```
+
+`sample` 是 `scripts/training_data/round_processor.py`（`process_round`）产出的
+回合级 dict，与训练数据格式一致。
+
+另有独立测试 CLI（读取 round 级 WDS shard）：
 
 ```bash
-python -m data.process_demo \
-  -path examples/test.dem \
-  -interval 0.25 \
-  -out examples/test.json
+python scripts/prediction_engine.py \
+    --config config/pretrain-a100-pro.yaml \
+    --checkpoint /path/to/cs-net-v4-pro.pt \
+    --data-dir /path/to/round_wds \
+    --tick 200 --device cpu
 ```
 
-### 4. 下载测试数据
+### 4. spatial-only 推理
 
-为了复现下面的校准 / 评估结果，先下载测试分片：
+```python
+from scripts.spatial_only_predictor import SpatialOnlyPredictor
+
+predictor = SpatialOnlyPredictor("/path/to/spatial-ckpts", device="cpu")
+out = predictor.predict_round_full(sample)   # 逐 tick 每玩家概率
+```
+
+模型目录按 ckpt 内 `task` 字段（`winrate` / `alive_end` / `future_kill`）自动发现，
+每个任务加载一个模型。
+
+## 训练
+
+两个训练脚本均为 config 驱动（命令行参数可覆盖 yaml）：
 
 ```bash
-python -m scripts.download_data
+# 预训练（路径预测）— A100 80GB 配置，600k 步
+python scripts/pretrain.py --config config/pretrain-a100-pro.yaml
+
+# spatial-only 下游微调（一次一个任务）
+python scripts/downstream-spatial-only/finetune_spatial_only.py \
+    --config config/finetune-spatial-only-a100.yaml \
+    --checkpoint /path/to/cs-net-v4-pro.pt \
+    --task winrate
 ```
 
-这个脚本会从 Hugging Face 下载 `test/shards-00000.tar`，并保存到 `./dataset/test/`。
+详细文档：
+- [docs/pretrain.md](docs/pretrain.md) — 预训练数据管线与训练
+- [docs/training-data-format.md](docs/training-data-format.md) — round 级 WDS 格式
+- [docs/torch-dataset.md](docs/torch-dataset.md) — 窗口数据集 / collate 内部实现
+- [docs/demo-json-format.md](docs/demo-json-format.md) — 回合 JSON 格式（可视化工具输入）
+- [scripts/downstream-spatial-only/README.md](scripts/downstream-spatial-only/README.md) — spatial-only 微调指南
 
-### 5. 进行 Temperature Scaling 校准
+数据管线入口：
+- `demo_parser/` — `.dem` → 回合 JSON（`python -m demo_parser` 或 `scripts/demo_to_json.py`）
+- `scripts/create_training_data.py` — 回合 JSON → round 级 WebDataset shards
+- `scripts/create_pretrain_data.py` — round shards → 定长窗口 shards
 
-可以用下面的命令对 model3.0 的各个 head 做校准：
+## 仓库结构
 
-```bash
-python -m scripts.train3_t_scaling --dataset_path dataset --device cpu
+```
+config/                          # 训练配置（Pro 架构）
+demo_parser/                     # .dem → 回合 JSON
+maps/optimized_obj_files/        # 优化后的地图 OBJ（可视化 + 深度图）
+replay_tool/filter.py            # JSON 后处理（可视化工具共用）
+scripts/
+  pretrain_model.py              # CS2PretrainModel / PretrainConfig
+  prediction_engine.py           # 路径预测推理引擎
+  pretrain.py                    # 预训练入口
+  create_pretrain_data.py        # 窗口 shard 生成
+  test_pretrain.py               # 单 sample teacher-forcing / AR 评估
+  evaluate_pretrain.py           # 多样本评估
+  spatial_only_predictor.py      # spatial-only 推理（可视化工具共用）
+  create_training_data.py        # round shard 生成
+  evaluate_demos.py              # demo 级评估（可视化工具扫描功能使用）
+  training_data/                 # config / 深度图 / 特征 / 标签 / WDS IO / 数据集
+  downstream-spatial-only/       # spatial-only 微调
+visualizer/                      # Flask 3D 回放 + 预测 Web 应用
+docs/                            # 详细中文文档
 ```
 
-在当前测试分片上的结果如下：
+## 说明
 
-| 任务 | T | 校准前 Loss | 校准前 ECE | 校准前 Acc | 校准后 Loss | 校准后 ECE | 校准后 Acc |
-|------|---|-------------|------------|------------|------------|-----------|-----------|
-| Alive | 1.193158 | 0.431486 | 0.028640 | 0.774641 | 0.429344 | 0.021371 | 0.774641 |
-| Duel | 1.146975 | 0.633122 | 0.017835 | 0.632217 | 0.632133 | 0.014517 | 0.632217 |
-| Next Death | 1.493995 | 1.785793 | 0.077382 | 0.342485 | 1.741089 | 0.012107 | 0.342485 |
-| Next Kill | 1.602551 | 1.801647 | 0.102502 | 0.339024 | 1.736153 | 0.012922 | 0.339024 |
-| Win Rate | 1.061342 | 0.467820 | 0.029351 | 0.754566 | 0.467459 | 0.029516 | 0.754566 |
+- 所有输入窗口为 16 tick = 4 秒（0.25s/tick）；demo 解析固定 `interval=0.25` 与训练一致。
+- 数据管线使用世界对齐（v5）坐标系；预测引擎会自动转换旧 v4 标签。
+- `maps/optimized_obj_files/` 下的地图 OBJ 已针对可视化（Three.js）与射线深度
+  （Open3D）做过优化。
 
-## Web App 使用方法
+## License
 
-CS-NET 现在内置了一个交互式网页分析面板，可以直接上传 demo，并完成模型分析和基于 LLM 的赛后复盘。
-
-> **署名说明**
-> 内置的 2D 查看器改编自 [`sparkoo/csgo-2d-demo-viewer`](https://github.com/sparkoo/csgo-2d-demo-viewer)。
-> 我们在上游 MIT 协议下使用该项目，并将其适配为 CS-NET 的 Flask 路由与模型预测叠加显示。
-
-### 1. 启动 Web App
-
-```bash
-python -m demo_analysis.web_app
-```
-
-然后打开：
-
-```text
-http://127.0.0.1:7860
-```
-
-### 2. 在界面中分析 demo
-
-1. 上传 .dem 文件。
-2. 选择 **模型根目录**（通常是 `cs-net-models/`）。网页会一次性从根目录下加载 `alive / nxt_kill / nxt_death / win_rate / duel` 五个预测头，不需要再分别指定各自的子目录。
-3. 选择推理设备（cpu / cuda / mps）。
-4. 点击开始分析。
-
-### 3. 生成 LLM 复盘
-
-1. 填写 API Key、模型名和 Base URL（OpenAI 兼容）。
-2. 选择界面语言（中文 / English）。
-3. 点击生成 AI 复盘。
-
-## Web App 功能
-
-- 中英文双语界面与双语 LLM 输出。
-- 回合胜率曲线 + 击杀事件标记。
-- 鼠标悬停时间线即可查看该时刻的玩家贡献。
-- **实时 2D 雷达**：鼠标在胜率曲线上移动时同步刷新，在真实地图 overview 上画出每个玩家的位置、阵营颜色、存活状态以及是否刚被闪。
-- **逐 tick 指标面板**：四个预测头的输出完整展开，包括 5 秒内存活概率、下一击杀者分布、下一阵亡者分布，以及 CT vs T 的 5×5 对决胜率矩阵。
-- **高级指标面板**：跨整场比赛聚合每个玩家的平均 kill / death / survive 概率、硬仗胜率（模型原本认为他会输的 1v1）、易仗胜率（模型原本看好他的 1v1）、highlight 率，以及按 |swing| 排序的关键击杀榜。
-- **一键打开 2D 回放器**：在新标签页直接播放同一段 demo，包含烟雾 / 闪光 / 手雷弹道，并将 CS-NET 的胜率曲线叠加到 viewer 的时间线上。
-- 当前回合最终贡献表 + 全场平均贡献表。
-- MVP / SVP 标记。
-- LLM 总结支持流式输出与 Markdown 渲染。
-- 自动记住用户输入（浏览器本地存储）：API Key、模型名、Base URL、Temperature、设备、模型目录、Batch Size、语言。
-- 为 LLM 提供攻防上下文，降低幻觉：每回合攻防归属、上下半场 CT/T 归属与分半比分。
-
-## 致谢
-
-Web App 中的 2D 回放器（`demo_analysis/static/viewer/` 下的全部文件）是对优秀开源项目 **[sparkoo/csgo-2d-demo-viewer](https://github.com/sparkoo/csgo-2d-demo-viewer)** 的轻度改造版本，作者为 **Michal Vala**，采用 MIT License 发布（© 2023 Michal Vala）。回放器的解析、渲染和交互能力都来自上游，我们只是把它的静态资源路径接到 Flask 的 `/viewer/` 路由下，并将 CS-NET 的逐 tick 预测叠加到时间线上。**这些技术成果与使用体验的核心贡献均应归功于上游作者。**
-
-原始 MIT 许可证已原样保留在 [`demo_analysis/static/viewer/LICENSE`](demo_analysis/static/viewer/LICENSE)。如果你要进一步转发或再分发这部分代码，请一并保留该 LICENSE 文件与版权声明，以避免违反 MIT 协议。
-
-## 星标历史
-
-<a href="https://www.star-history.com/?repos=Gary2005%2Fcs-net&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&legend=top-left" />
- </picture>
-</a>
-
-## 贡献者
-
-- [Gary2005](https://github.com/Gary2005)
-- [czdzx](https://github.com/czdzx)
-- [Yianlaen](https://github.com/Yianlaen)
-- [likedeedlit-eng](https://github.com/likedeedlit-eng)
+[MIT](LICENSE)

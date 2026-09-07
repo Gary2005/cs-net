@@ -1,14 +1,10 @@
---extra-index-url https://download.pytorch.org/whl/cu126
-demoparser2
-Flask
-huggingface_hub
-matplotlib
 numpy
-agent-framework-openai
-python-snappy
-PyYAML
 torch
-tqdm
-wandb
 webdataset
 zstandard
+open3d
+tqdm
+demoparser2
+flask
+matplotlib
+pyyaml

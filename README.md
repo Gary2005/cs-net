@@ -1,209 +1,190 @@
 <p align="center">
-  <img src="assets/logo.svg" width="120" height="120" alt="cs-net-logo">
+  <img src="visualizer/static/logo.svg" width="120" height="120" alt="cs-net-logo">
 </p>
 
-<h1 align="center">CS-NET</h1>
+<h1 align="center">CS-NET v4</h1>
 
 <p align="center">
-  <strong>A deep learning framework for Counter-Strike match data analysis</strong>
+  <strong>Transformer-based path prediction &amp; game-state forecasting for Counter-Strike 2</strong>
 </p>
 
 <p align="center">
   <a href="README_CN.md">中文文档</a>
+  ·
+  <a href="#-model-checkpoints">Model Checkpoints</a>
+  ·
+  <a href="#-quick-start">Quick Start</a>
+  ·
+  <a href="#-training">Training</a>
+  ·
+  <a href="#-docs">Docs</a>
 </p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python">
-  <img src="https://img.shields.io/badge/Framework-PyTorch-ee4c2c.svg" alt="PyTorch">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
-</p>
-
-## Quick Links
-
-- [Project Overview](#-project-overview)
-- [Prediction Tasks](#prediction-tasks)
-- [Quick Start](#-quick-start)
-- [Web App Usage](#-web-app-usage)
-- [Web App Features](#-web-app-features)
-- [Acknowledgements](#-acknowledgements)
-- [Contributors](#-contributors)
 
 ---
 
-## 📌 Project Overview
+## What's in this repo
 
-CS-NET is a **Transformer**-based deep learning framework for analyzing Counter-Strike 2 match replays (`.dem` demo files). It parses match recordings, converts game states into token sequences, and uses pre-trained Transformer models for multiple real-time predictions.
+CS-NET v4 is an open-source release of the CS2 (Counter-Strike 2) deep learning
+stack, containing three pieces:
 
-In short: **given a match replay, the model tells you who will win, who will die, and who is most likely to get the next kill.**
+| Component | Description | Entry point |
+|---|---|---|
+| **Path prediction model** | Pre-trained Transformer that takes a 16-tick window of the full game state (10 players + bomb + projectiles + raycast depth maps) and **auto-regressively predicts each player's future movement path** (world coordinates), tokenized as discrete move/angle tokens. | `scripts/pretrain_model.py`, `scripts/prediction_engine.py`, `scripts/pretrain.py` |
+| **Spatial-only models** | The minimal downstream task family: from a **single tick** of the full game state, predict per-player **winrate / alive-at-round-end / future kill** probabilities. Each model = pre-trained embedder + spatial transformer + linear head (no path, no history window). One checkpoint per task. | `scripts/spatial_only_predictor.py`, `scripts/downstream-spatial-only/finetune_spatial_only.py` |
+| **3D visualizer** | Flask web app: upload a `.dem` / `.json` / `.json.gz` replay, watch a smooth 3D replay (Three.js + map OBJ models), upload a checkpoint to visualize **AI-predicted paths vs. ground truth**, and load the spatial-only models to get live per-player probability curves across the whole round. | `visualizer/server.py` |
 
-### Prediction Tasks
+```
+demo (.dem) ──demo_parser──▶ round JSON ──create_training_data──▶ round WDS shards
+round WDS ──create_pretrain_data──▶ window WDS ──pretrain.py──▶ path prediction ckpt
+round WDS + path ckpt ──finetune_spatial_only.py──▶ winrate / alive_end / future_kill ckpts
+any replay ──visualizer/server.py──▶ 3D replay + AI path prediction + spatial-only curves
+```
 
-| Task | Description | Output |
-|------|-------------|--------|
-| **Win Rate Prediction** | Probability of team1 (mapped from CT/T by side) winning the current round | Scalar in [0, 1] |
-| **Alive Prediction** | Per-player probability of surviving the next 5 seconds | One probability per player |
-| **Next Kill Prediction** | Which player is most likely to get the next kill | Probability distribution over 10+1 classes |
-| **Next Death Prediction** | Which player is most likely to die next | Probability distribution over 10+1 classes |
-| **Duel Prediction** | 1v1 win probability for any CT-T player pair | 5x5 probability matrix |
+## Model checkpoints
 
-## 🚀 Quick Start
+Trained models for the Pro architecture (d_model=768, 138.7M params) can be
+downloaded from the [releases](../../releases) page:
 
-### 1. Setup Environment
+| File | Task | Notes |
+|---|---|---|
+| `cs-net-v4-pro.pt` | Path prediction (pre-training) | 600k steps; full model (`model` + `global_step` keys) |
+| `pretrain-v4-pro-win_rate.pt` | spatial-only `winrate` | `{task, model_state, head_state, config}` |
+| `pretrain-v4-pro-alive_end.pt` | spatial-only `alive_end` | same format |
+| `pretrain-v4-pro-future_kill.pt` | spatial-only `future_kill` | same format |
 
-Create a Python environment and install dependencies:
+> The spatial-only checkpoints only contain the embedder + spatial transformer
+> weights (plus a linear head), so they are much smaller than the full path
+> prediction checkpoint. The model architecture must match `config/pretrain-a100-pro.yaml`.
+
+## Quick Start
+
+### 1. Environment
 
 ```bash
-conda create -n cs-net python=3.10
-conda activate cs-net
+conda create -n cs2demo python=3.10
+conda activate cs2demo
 pip install -r requirements.txt
 ```
 
-### 2. Download Pre-trained Models
+Verify with `python scripts/check_env.py`. The visualizer needs Flask and a
+browser; inference needs a working PyTorch build (CPU / MPS / CUDA all work).
 
-Download all pre-trained models and tokenizers to `./cs-net-models/`:
-
-Model weights are also available here: https://huggingface.co/gary2oos/CS-Net-V3
-
-```bash
-python -m scripts.download_model
-```
-
-### 3. Convert Demo to JSON
-
-Process a Counter-Strike demo file (.dem) into structured JSON format:
-
-`examples/test.dem` is intentionally NOT included in this repository because demo files are too large.
-You must download a `.dem` file yourself (for example from HLTV) and replace the input path.
+### 2. 3D visualizer + AI path prediction
 
 ```bash
-python -m data.process_demo \
-  -path examples/test.dem \
-  -interval 0.25 \
-  -out examples/test.json
+# Start with local checkpoints preloaded (path prediction + spatial-only models)
+python visualizer/server.py --port 5000 \
+    --checkpoint /path/to/cs-net-v4-pro.pt \
+    --spatial-model-dir /path/to/spatial-ckpts \
+    --device cpu            # or mps / cuda
 ```
 
-### 4. Download Test Data
+Open `http://127.0.0.1:5000/`, then either drag a `.dem`/`.json`/`.json.gz`
+replay onto the page, or use the built-in example files (put replays under
+`examples/demo` / `examples/json`). Model checkpoints can also be uploaded
+through the UI instead of passing them on the command line.
 
-To reproduce the calibration/evaluation numbers below, download the test shard first:
+See [visualizer/README.md](visualizer/README.md) for the full feature list and API.
+
+### 3. Path prediction inference (library / CLI)
+
+```python
+from scripts.prediction_engine import PredictionEngine
+
+engine = PredictionEngine(
+    "config/pretrain-a100-pro.yaml",
+    "cs-net-v4-pro.pt",
+    device="cpu",
+    maps_dir="maps/optimized_obj_files",
+)
+result = engine.predict_at_tick(sample, query_tick=120)
+# result["trajectories"][p] = {"pred_traj": [...], "gt_traj": [...], ...} (world coords)
+```
+
+`sample` is a round-level dict produced by `scripts/training_data/round_processor.py`
+(`process_round`) from parsed round JSON — the same format used for training.
+
+A standalone test CLI is also available (reads a round-level WDS shard):
 
 ```bash
-python -m scripts.download_data
+python scripts/prediction_engine.py \
+    --config config/pretrain-a100-pro.yaml \
+    --checkpoint /path/to/cs-net-v4-pro.pt \
+    --data-dir /path/to/round_wds \
+    --tick 200 --device cpu
 ```
 
-This script downloads `test/shards-00000.tar` from Hugging Face and stores it under `./dataset/test/`.
+### 4. Spatial-only inference
 
-### 5. Calibrate Temperature Scaling
+```python
+from scripts.spatial_only_predictor import SpatialOnlyPredictor
 
-You can calibrate the model3.0 heads with:
+predictor = SpatialOnlyPredictor("/path/to/spatial-ckpts", device="cpu")
+out = predictor.predict_round_full(sample)   # per-tick per-player probabilities
+```
+
+The model directory is scanned for `.pt` files carrying a `task` field
+(`winrate` / `alive_end` / `future_kill`); one model is loaded per task.
+
+## Training
+
+Both training scripts are config-driven (CLI overrides yaml):
 
 ```bash
-python -m scripts.train3_t_scaling --dataset_path dataset --device cpu
+# Pre-training (path prediction) — A100 80GB config, 600k steps
+python scripts/pretrain.py --config config/pretrain-a100-pro.yaml
+
+# spatial-only downstream fine-tuning (one task per run)
+python scripts/downstream-spatial-only/finetune_spatial_only.py \
+    --config config/finetune-spatial-only-a100.yaml \
+    --checkpoint /path/to/cs-net-v4-pro.pt \
+    --task winrate
 ```
 
-On the current test shard, the calibration results are:
+Detailed docs:
+- [docs/pretrain.md](docs/pretrain.md) — pre-training data pipeline & training
+- [docs/training-data-format.md](docs/training-data-format.md) — round-level WDS format
+- [docs/torch-dataset.md](docs/torch-dataset.md) — window dataset / collate internals
+- [docs/demo-json-format.md](docs/demo-json-format.md) — the round JSON format (visualizer input)
+- [scripts/downstream-spatial-only/README.md](scripts/downstream-spatial-only/README.md) — spatial-only fine-tuning guide
 
-| Task | T | Before Loss | Before ECE | Before Acc | After Loss | After ECE | After Acc |
-|------|---|-------------|------------|------------|------------|-----------|-----------|
-| Alive | 1.193158 | 0.431486 | 0.028640 | 0.774641 | 0.429344 | 0.021371 | 0.774641 |
-| Duel | 1.146975 | 0.633122 | 0.017835 | 0.632217 | 0.632133 | 0.014517 | 0.632217 |
-| Next Death | 1.493995 | 1.785793 | 0.077382 | 0.342485 | 1.741089 | 0.012107 | 0.342485 |
-| Next Kill | 1.602551 | 1.801647 | 0.102502 | 0.339024 | 1.736153 | 0.012922 | 0.339024 |
-| Win Rate | 1.061342 | 0.467820 | 0.029351 | 0.754566 | 0.467459 | 0.029516 | 0.754566 |
+Data pipeline entry points:
+- `demo_parser/` — parse `.dem` files to round JSON (`python -m demo_parser` or `scripts/demo_to_json.py`)
+- `scripts/create_training_data.py` — round JSON → round-level WebDataset shards
+- `scripts/create_pretrain_data.py` — round shards → fixed-length window shards
 
-## 🌐 Web App Usage
+## Repository layout
 
-CS-NET now includes an interactive web app for demo analysis and LLM-based post-game summary.
-
-> **Attribution Notice**
-> The built-in 2D viewer is a modified integration of
-> [`sparkoo/csgo-2d-demo-viewer`](https://github.com/sparkoo/csgo-2d-demo-viewer).
-> We use the upstream project under the MIT License and adapt it for CS-NET's
-> Flask routes and model-prediction overlays.
-
-### 1. Start the web app
-
-```bash
-python -m demo_analysis.web_app
+```
+config/                          # training configs (Pro architecture)
+demo_parser/                     # .dem → round JSON
+maps/optimized_obj_files/        # optimized OBJ map geometry (visualizer + depth maps)
+replay_tool/filter.py            # JSON post-processing (shared by visualizer)
+scripts/
+  pretrain_model.py              # CS2PretrainModel / PretrainConfig
+  prediction_engine.py           # path prediction inference engine
+  pretrain.py                    # pre-training entry
+  create_pretrain_data.py        # window shard creation
+  test_pretrain.py               # single-sample teacher-forcing / AR evaluation
+  evaluate_pretrain.py           # multi-sample evaluation
+  spatial_only_predictor.py      # spatial-only inference (shared by visualizer)
+  create_training_data.py        # round shard creation
+  evaluate_demos.py              # demo-level evaluation (used by visualizer scanning)
+  training_data/                 # config / depth maps / features / labels / WDS IO / datasets
+  downstream-spatial-only/       # spatial-only fine-tuning
+visualizer/                      # Flask 3D replay + prediction web app
+docs/                            # detailed Chinese documentation
 ```
 
-Then open:
+## Notes
 
-```text
-http://127.0.0.1:7860
-```
+- All input windows are 16 ticks = 4 seconds at 0.25 s/tick; demo parsing is
+  fixed at `interval=0.25` to match training.
+- The data pipeline uses world-aligned (v5) coordinates; the prediction engine
+  transparently converts legacy v4 labels.
+- Map OBJ files under `maps/optimized_obj_files/` are pre-optimized for both the
+  visualizer (Three.js) and raycast depth computation (Open3D).
 
-### 2. Analyze a demo in UI
+## License
 
-1. Upload a .dem file.
-2. Select the **model root directory** (normally `cs-net-models/`). The web app
-   loads all five prediction heads (`alive`, `nxt_kill`, `nxt_death`,
-   `win_rate`, `duel`) from their subdirectories in one go.
-3. Select device (cpu / cuda).
-4. Click Start Analysis.
-
-### 3. Generate LLM summary
-
-1. Fill API Key, model name, and Base URL (OpenAI-compatible).
-2. Choose app language (Chinese / English).
-3. Click Generate AI Review.
-
-## ✨ Web App Features
-
-- Bilingual UI and bilingual LLM output (Chinese / English).
-- Round-by-round win-rate curve with kill markers.
-- Hover-to-inspect player contribution at each timeline point.
-- **Live 2D radar** that syncs with the win-rate curve — player positions,
-  team colour, alive/dead state, and "recently flashed" flag are drawn on the
-  real minimap overview for every tick the cursor touches.
-- **Per-tick metric panels** driven by all four prediction heads:
-  5-second survival probability, next-kill distribution, next-death
-  distribution, and the full 5×5 CT-vs-T duel matrix.
-- **Advanced metrics table** aggregated across the whole match: per-player
-  average kill/death/survival probability, hard-duel win rate (fights the
-  model thought they would lose), easy-duel win rate (fights they were
-  favoured in), highlight rate, plus a |swing|-sorted ranking of the most
-  impactful kills.
-- **One-click 2D replay viewer** — launches a bundled build of
-  [`sparkoo/csgo-2d-demo-viewer`](https://github.com/sparkoo/csgo-2d-demo-viewer)
-  in a new tab with the same demo, adding smoke/flash/grenade trajectories
-  and an in-page timeline overlaid with CS-NET's predictions.
-- Current round final contribution table + full match average contribution table.
-- MVP and SVP badges.
-- LLM summary supports streaming output and Markdown rendering.
-- Auto-save user settings in browser local storage:
-  API Key, model name, base URL, temperature, device, model path, batch size, language.
-- Team-side context for LLM:
-  per-round attack/defense roles, first-half/second-half side assignment and half scores.
-
-## 🙏 Acknowledgements
-
-The bundled 2D replay viewer under `demo_analysis/static/viewer/` is a lightly
-modified build of the excellent open-source project
-**[sparkoo/csgo-2d-demo-viewer](https://github.com/sparkoo/csgo-2d-demo-viewer)**
-by **Michal Vala**, distributed under the MIT License (© 2023 Michal Vala).
-All credit for the viewer's parsing, rendering, and UX belongs to the upstream
-authors — CS-NET only rewires its asset paths and feeds in the
-per-tick predictions from our models. Huge thanks to Michal and the upstream
-contributors for making such a polished tool available to the community.
-
-The original upstream license is reproduced verbatim at
-[`demo_analysis/static/viewer/LICENSE`](demo_analysis/static/viewer/LICENSE)
-and applies to every file in that directory. If you reuse or redistribute the
-viewer portion of this repository, please preserve that notice.
-
-## ⭐️ Star History
-
-<a href="https://www.star-history.com/?repos=Gary2005%2Fcs-net&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Gary2005/cs-net&type=date&legend=top-left" />
- </picture>
-</a>
-
-## 🤝 Contributors
-
-- [Gary2005](https://github.com/Gary2005)
-- [czdzx](https://github.com/czdzx)
-- [Yianlaen](https://github.com/Yianlaen)
-- [likedeedlit-eng](https://github.com/likedeedlit-eng)
+[MIT](LICENSE)

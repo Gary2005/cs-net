@@ -1,0 +1,64 @@
+# CS2 spatial-only 下游任务微调 — 单卡 A100 80GB
+# 用法: python scripts/downstream-spatial-only/finetune_spatial_only.py \
+#           --config config/finetune-spatial-only-a100.yaml
+# 说明: 基于 config/pretrain-a100-pro.yaml（模型架构与预训练 Pro 一致，d_model=768），
+#       追加微调专属参数（task / 训练调度）。CLI 参数可覆盖任意字段。
+# 特点: 不看路径 / 不用窗口 —— 每个 sample 是单个 tick 的完整局面，
+#       只微调 embedder + SpatialTransformer（全量），每玩家过一个全连接 → 1 个 logit。
+
+# ── 数据（round 级 WDS，每个 sample = 单个 tick，无窗口）────────────────────
+data_dir: /cephfs/yixu/gary/dataset
+split: train                # train | test | both
+shuffle_buffer: 20000       # tick 级 shuffle buffer
+tick_stride: 1              # tick 采样步长（1 = 每 tick 都取；2 = 隔一个取一个）
+keep_ratio: 0.05            # 训练保留比例：每个 tick 以 keep_ratio 概率保留
+max_samples: 0              # 0 = 全部（调试时可设小值）
+
+# ── 模型架构（与 pretrain-a100-pro.yaml 保持一致，必须匹配 checkpoint）───────
+d_model: 768
+n_spatial_layers: 5
+n_temporal_layers: 3
+n_decoder_layers: 6
+n_depth_ray_layers: 3
+n_heads: 12
+d_ff: 3072
+dropout: 0.1
+move_range: 128.0
+move_grid_size: 4.0
+angle_grid_size: 5.0
+use_residual_correction: true
+
+# ── 预训练 checkpoint（spatial-only 的底座）───────────────────────────────
+checkpoint: /cephfs/yixu/gary/checkpoints/pretrain_pro/final.pt
+
+# ── 任务（一个模型只训练一个任务）──────────────────────────────────────────
+task: winrate               # winrate | alive_end | future_kill
+
+# ── 训练 ───────────────────────────────────────────────────────────────────
+device: cuda
+batch_size: 1024            
+num_workers: 8
+lr: 1.0e-4                  # 全量微调建议 1e-4（LoRA 才用 3e-4）
+warmup_steps: 200
+lr_schedule: cosine         # cosine（长训练衰减到 0）/ constant（短训练保持）
+max_steps: 3000            # 0 = 跑完数据（cosine 退化为 warmup 后常数）
+grad_clip: 1.0
+log_interval: 50
+seed: 0
+
+# ── 训练加速（与 pretrain.py 一致）────────────────────────────────────────
+use_amp: true               # BF16 混合精度（autocast，无需 GradScaler）
+use_tf32: true              # TF32 + cudnn.benchmark
+use_compile: true           # torch.compile（A100 编译后训练加速明显）
+
+# ── 周期保存 / 验证 ───────────────────────────────────────────────────────
+save_interval: 5000         # 每 N 步保存 step_{global_step}.pt（0 = 关闭，仅结束保存一次）
+val_interval: 200           # 每 N 步在 test 集上验证（val/loss、val/acc、ct_winrate）（0 = 关闭）
+val_max_samples: 40960       # 每次 val 最多跑多少个 test tick
+
+# ── 保存与 Wandb ──────────────────────────────────────────────────────────
+save_dir: /cephfs/yixu/gary/checkpoints/finetune_spatial_only
+wandb: true
+wandb_project: cs2-downstream-spatial
+wandb_name: null            # 默认 {task}_spatial_only_d{d_model}
+wandb_entity: null

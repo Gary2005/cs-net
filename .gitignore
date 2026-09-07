@@ -1,25 +1,34 @@
-demo/
-*.csv
-*.json
-__pycache__/
-*.rar
+# macOS
 .DS_Store
-out/
-download_list.txt
-download_list_hltv.txt
-*.zip
-*.mp4
-cs_state_vis.mp4
+
+# IDE
+.vscode/
+.idea/
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Checkpoints & model weights
+*.pt
+*.pth
+checkpoints/
+outputs/
+
+# Large/generated data
+maps/obj_files/
+examples/demo/
+examples/json/
+examples/dataset/
+data/
+dataset/
+matches.json
+tmp/
+out
 wandb/
-test/
-checkpoints_*/
-processed_jsons.txt
-.tools
-blast_pred.tar.gz
-checkpoints_pretraining_v2.tar.gz
-matches_urls.txt
-*.dem
-examples/test.dem
-dataset/test
-build/
-dist/
+
+# Logs / artifacts
+*.log
+attn_weights.html

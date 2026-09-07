@@ -1,0 +1,55 @@
+# CS2 Pretraining — 单卡 A100 80GB（升级版）
+# 用法: python scripts/pretrain.py --config config/pretrain-a100.yaml
+
+# ── 数据 ──────────────────────────────────────────────────────────────────
+data_dir: /cephfs/yixu/gary/dataset
+n_ticks: 16             # 输入/输出窗口 tick 数（16 = 4 秒 @ 0.25s/tick）
+stride: 8               # 滑动步长（重叠率 50%）
+jitter: true            # 窗口起始位置 + 步长随机抖动
+shuffle_buffer: 2000
+max_samples: 0          # 0 = 全部
+keep_ratio: 1.0         # 序列保留比例（0,1]：每步从 B*T*10 个序列任务中随机保留的比例；<1 省 decoder 计算
+
+# ── 训练 ──────────────────────────────────────────────────────────────────
+device: cuda
+batch_size: 14           
+grad_accum_steps: 1      # batch*16*10=3840 条轨迹，无需累积
+num_workers: 8
+
+# ── 优化开关（--no-xxx 可关闭）────────────────────────────────────────────
+use_amp: true             # BF16 混合精度
+use_tf32: true            # TF32 + cudnn.benchmark
+use_compile: true        # torch.compile（A100 上编译后训练加速明显）
+epochs: 50
+lr: 3.0e-4
+warmup_steps: 500
+total_steps: 300000        # warmup 后 cosine decay 到 0
+max_grad_norm: 1.0
+
+save_dir: /cephfs/yixu/gary/checkpoints/pretrain_61
+resume: ""
+log_interval: 50
+save_interval: 5000
+val_interval: 2000
+
+# ── 模型架构 ──────────────────────────────────────────────────────────────
+d_model: 512
+n_spatial_layers: 5
+n_temporal_layers: 3
+n_decoder_layers: 6
+n_depth_ray_layers: 3
+n_heads: 8
+d_ff: 2048
+dropout: 0.1
+
+# ── 离散 Token 化 ────────────────────────────────────────────────────────────
+move_range: 128.0        # d_forward/right/up 最大移动距离
+move_grid_size: 4.0      # 移动 token 分辨率 (单位/token)
+angle_grid_size: 5.0     # 角度 token 分辨率 (度/token)
+use_residual_correction: true  # 残差修正；关闭可加速数据加载
+
+# ── Wandb ─────────────────────────────────────────────────────────────────
+wandb: true
+wandb_project: cs2-pretrain-v4
+wandb_name: null
+wandb_entity: null
