@@ -54,6 +54,31 @@ Pro 架构（d_model=768，138.7M 参数）的已训练模型可在
 > spatial-only checkpoint 只含 embedder + spatial transformer 权重（外加线性头），
 > 因此远小于完整路径预测模型。模型架构必须与 `config/pretrain-a100-pro.yaml` 一致。
 
+### 下载
+
+```bash
+pip install huggingface_hub
+python scripts/download_checkpoints.py                    # 全部 4 个 ckpt → checkpoints/
+python scripts/download_checkpoints.py --pretrain-only    # 只下路径预测模型
+```
+
+或直接用 `hf` CLI：
+
+```bash
+hf download Gary2005/cs-net-v4 --local-dir checkpoints
+```
+
+### 验证模型能正确加载
+
+```bash
+python scripts/test_checkpoints.py --models-dir checkpoints
+```
+
+该测试会：按 config 构建模型并加载每个 checkpoint，检查架构完全匹配
+（无 missing / unexpected 键）、所有权重有限值，并对 spatial-only 模型
+跑一遍合成回合的逐 tick 推理。加 `--forward` 可额外对路径预测模型跑一次
+合成局面的 16 tick 自回归推理（CPU 约 1-3 分钟）。
+
 ## 快速开始
 
 ### 1. 环境

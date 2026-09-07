@@ -56,6 +56,32 @@ downloaded from the [releases](../../releases) page:
 > weights (plus a linear head), so they are much smaller than the full path
 > prediction checkpoint. The model architecture must match `config/pretrain-a100-pro.yaml`.
 
+### Download
+
+```bash
+pip install huggingface_hub
+python scripts/download_checkpoints.py          # all 4 checkpoints → checkpoints/
+python scripts/download_checkpoints.py --pretrain-only   # path prediction only
+```
+
+Or directly with the `hf` CLI:
+
+```bash
+hf download Gary2005/cs-net-v4 --local-dir checkpoints
+```
+
+### Verify the checkpoints load
+
+```bash
+python scripts/test_checkpoints.py --models-dir checkpoints
+```
+
+The test builds the model from the config, loads each checkpoint, checks the
+architecture matches exactly (no missing/unexpected keys), verifies all weights
+are finite, and runs a synthetic full-round inference for the spatial-only
+models. Add `--forward` to also run one 16-tick autoregressive path prediction
+on a synthetic game state (CPU: 1–3 min).
+
 ## Quick Start
 
 ### 1. Environment

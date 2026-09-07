@@ -8,3 +8,4 @@ demoparser2
 flask
 matplotlib
 pyyaml
+huggingface_hub  # 仅下载/验证模型 checkpoint 需要
