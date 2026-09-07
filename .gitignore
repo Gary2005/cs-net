@@ -20,7 +20,8 @@ outputs/
 # Large/generated data
 maps/obj_files/
 examples/demo/
-examples/json/
+examples/json/*
+!examples/json/test.json.gz
 examples/dataset/
 data/
 dataset/

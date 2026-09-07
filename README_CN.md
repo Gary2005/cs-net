@@ -76,8 +76,12 @@ python scripts/test_checkpoints.py --models-dir checkpoints
 
 该测试会：按 config 构建模型并加载每个 checkpoint，检查架构完全匹配
 （无 missing / unexpected 键）、所有权重有限值，并对 spatial-only 模型
-跑一遍合成回合的逐 tick 推理。加 `--forward` 可额外对路径预测模型跑一次
-合成局面的 16 tick 自回归推理（CPU 约 1-3 分钟）。
+跑一遍合成回合的逐 tick 推理；然后用仓库内置的回合数据
+[`examples/json/test.json.gz`](examples/json/test.json.gz)（de_mirage，
+24 回合）跑一遍**完整 pipeline**：
+`json.gz → filter → 武器索引重映射 → process_round → 模型推理`，
+与训练和可视化工具完全相同的预处理链路。加 `--forward` 可额外对路径预测
+模型跑自回归推理（合成局面 + 真实回合数据，CPU 各约 1-3 分钟）。
 
 ## 快速开始
 

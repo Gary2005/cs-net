@@ -6,8 +6,9 @@
     python scripts/test_checkpoints.py --models-dir checkpoints
     python scripts/test_checkpoints.py --models-dir checkpoints --device cpu
     python scripts/test_checkpoints.py --models-dir checkpoints --forward
-        # --forward: 额外对路径预测模型跑一次合成局面的 16 tick 自回归推理
-        #            （CPU 上约 1-3 分钟，默认关闭）
+        # --forward: 额外跑 ① 合成局面的 16 tick 自回归路径预测
+        #            ② 内置回合数据 examples/json/test.json.gz 的完整 pipeline
+        #            路径预测（CPU 上约 1-3 分钟，默认关闭）
 
 检查内容:
   [1] 路径预测 ckpt (cs-net-v4-pro.pt):
@@ -19,11 +20,18 @@
   [2] spatial-only ckpt（winrate / alive_end / future_kill）:
       - SpatialOnlyPredictor 自动发现并加载 3 个任务模型（d_model=768）
       - 合成回合（16 tick）逐 tick 推理，输出全部为有限值
+  [3] 内置回合数据完整 pipeline（examples/json/test.json.gz，de_mirage）:
+      - json.gz → filter_data → _convert_inventory_indices → process_round
+        （与训练/可视化工具完全相同的预处理链路）
+      - spatial-only 对真实回合逐 tick 推理，输出全部为有限值
+      （可选 --forward）对真实回合跑一次自回归路径预测
 """
 
 from __future__ import annotations
 
 import argparse
+import gzip
+import json
 import math
 import sys
 from pathlib import Path
@@ -47,6 +55,8 @@ from training_data.config import MAP_NAME_TO_IDX  # noqa: E402
 PRETRAIN_FILE = "cs-net-v4-pro.pt"
 SPATIAL_TASKS = ("winrate", "alive_end", "future_kill")
 PRO_PARAMS_M = 138.7  # Pro 架构实测参数量（d_model=768）
+PIPELINE_DATA = _PROJECT_ROOT / "examples" / "json" / "test.json.gz"
+PIPELINE_MAX_TICKS = 64  # pipeline 测试只处理真实回合前 64 个 tick（保持测试快速）
 
 
 def _cfg_from_yaml(path: str) -> PretrainConfig:
@@ -112,9 +122,24 @@ def _make_synthetic_sample(T: int = 16, map_name: str = "de_cache") -> dict:
     return sample
 
 
+def _slice_round(sample: dict, n_ticks: int) -> dict:
+    """把 round sample 截断到前 n_ticks 个 tick（所有 [T, ...] 数组沿 dim0 切片）。"""
+    out = {}
+    for k, v in sample.items():
+        if k == "meta":
+            meta = dict(v)
+            meta["T"] = int(n_ticks)
+            out[k] = meta
+        elif isinstance(v, np.ndarray) and v.ndim > 0 and v.shape[0] == sample["meta"]["T"]:
+            out[k] = v[:n_ticks]
+        else:
+            out[k] = v
+    return out
+
+
 def check_pretrain(config_path: str, ckpt_path: Path, device: str,
-                   maps_dir: str, run_forward: bool) -> None:
-    print(f"\n[1/2] 路径预测 checkpoint: {ckpt_path.name}")
+                   maps_dir: str, run_forward: bool) -> PredictionEngine:
+    print(f"\n[1/3] 路径预测 checkpoint: {ckpt_path.name}")
 
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     assert "model" in ckpt, "checkpoint 缺少 'model' 键（不是预训练模型格式）"
@@ -161,10 +186,11 @@ def check_pretrain(config_path: str, ckpt_path: Path, device: str,
         print(f"  AR 推理完成: {n_alive} 名存活玩家全部产出 {result['output_T']} tick 预测轨迹 ✓")
 
     print("  ✓ 路径预测 checkpoint 加载测试通过")
+    return engine
 
 
-def check_spatial(models_dir: Path, device: str) -> None:
-    print(f"\n[2/2] spatial-only checkpoints: {models_dir}")
+def check_spatial(models_dir: Path, device: str) -> SpatialOnlyPredictor:
+    print(f"\n[2/3] spatial-only checkpoints: {models_dir}")
 
     predictor = SpatialOnlyPredictor(str(models_dir), device=device)
     assert set(predictor.tasks) == set(SPATIAL_TASKS), \
@@ -183,6 +209,86 @@ def check_spatial(models_dir: Path, device: str) -> None:
                 for v in vals), f"tick {tick['tick']} {task} 存在非有限/非法值"
     print("  合成回合 16 tick 全任务推理: 输出全部为有限值 ✓")
     print("  ✓ spatial-only checkpoint 加载测试通过")
+    return predictor
+
+
+def check_pipeline(data_path: Path, engine: PredictionEngine,
+                   predictor: SpatialOnlyPredictor, maps_dir: str,
+                   run_forward: bool) -> None:
+    """内置回合数据完整 pipeline：json.gz → 预处理 → process_round → 模型推理。
+
+    与训练 / 可视化工具完全相同的预处理链路：
+      json.gz → filter_data → _convert_inventory_indices → process_round。
+    """
+    print(f"\n[3/3] 回合数据完整 pipeline: {data_path.name}")
+
+    from create_training_data import _convert_inventory_indices
+    from replay_tool.filter import filter_data
+    from training_data.map_loader import get_map_geometry
+    from training_data.round_processor import process_round
+
+    with gzip.open(data_path, "rt", encoding="utf-8") as f:
+        data = json.load(f)
+    assert data.get("format") == "cs2.demo.v2", \
+        f"测试数据格式不符: {data.get('format')}"
+    map_name = data.get("map", "unknown")
+    print(f"  数据: {map_name}, {len(data.get('rounds', []))} 回合, "
+          f"{len(data.get('players', []))} 玩家")
+
+    filter_data(data)
+    round_data = data["rounds"][0]
+
+    # 与训练管线对齐：动态 weapon 索引 → config.py 规范索引
+    _convert_inventory_indices({"weapons": data.get("weapons", {}),
+                                "rounds": [round_data]})
+
+    map_geom = None
+    try:
+        map_geom = get_map_geometry(map_name, Path(maps_dir))
+        print(f"  地图几何: {map_name} (深度图启用)")
+    except FileNotFoundError:
+        print(f"  ⚠ 未找到 {map_name} 的地图 OBJ，深度图跳过")
+
+    sample = process_round(
+        round_data,
+        map_geom=map_geom,
+        source_file=data_path.name,
+        match_teams=None,
+        players_meta=data.get("players"),
+        tick_interval=0.25,
+        compute_depth=map_geom is not None,
+        places=data.get("places"),
+    )
+    round_T = int(sample["meta"]["T"])
+    sample = _slice_round(sample, min(round_T, PIPELINE_MAX_TICKS))
+    print(f"  预处理完成: {map_name}, {round_T} tick → 测试 {sample['meta']['T']} tick")
+
+    # spatial-only 对真实局面逐 tick 推理
+    out = predictor.predict_round_full(sample, chunk=16)
+    assert len(out["ticks"]) == sample["meta"]["T"]
+    n_finite = 0
+    for tick in out["ticks"]:
+        ok = all(
+            tick[task] is not None and all(
+                v is None or (isinstance(v, float) and math.isfinite(v))
+                for v in tick[task])
+            for task in SPATIAL_TASKS)
+        n_finite += int(ok)
+    assert n_finite == len(out["ticks"]), \
+        f"pipeline 推理: {n_finite}/{len(out['ticks'])} tick 输出有效"
+    print(f"  spatial-only 逐 tick 推理: {n_finite}/{len(out['ticks'])} tick 全部有限值 ✓")
+
+    if run_forward:
+        print("  --forward: 对真实局面跑自回归路径预测（CPU 约 1-3 分钟）...")
+        query_tick = max(0, sample["meta"]["T"] // 2)
+        result = engine.predict_at_tick(sample, query_tick=query_tick)
+        n_alive = sum(1 for t in result["trajectories"] if t["is_alive"])
+        n_pred = sum(1 for t in result["trajectories"]
+                     if t["is_alive"] and t["pred_steps"] > 0)
+        assert n_pred == n_alive
+        print(f"  AR 推理完成: {n_alive} 名存活玩家全部产出轨迹 ✓")
+
+    print("  ✓ 回合数据完整 pipeline 测试通过")
 
 
 def main() -> int:
@@ -195,7 +301,7 @@ def main() -> int:
                     help="地图 OBJ 目录（深度图 raycast 用）")
     ap.add_argument("--device", default="cpu", choices=["cpu", "mps", "cuda"])
     ap.add_argument("--forward", action="store_true",
-                    help="额外对路径预测模型跑一次合成局面自回归推理")
+                    help="额外跑自回归路径预测（合成局面 + 内置回合数据）")
     args = ap.parse_args()
 
     models_dir = Path(args.models_dir)
@@ -211,11 +317,17 @@ def main() -> int:
         return 1
 
     torch.set_num_threads(max(1, torch.get_num_threads()))
-    check_pretrain(args.config, pretrain_path, args.device,
-                   args.maps_dir, args.forward)
-    check_spatial(models_dir, args.device)
+    engine = check_pretrain(args.config, pretrain_path, args.device,
+                            args.maps_dir, args.forward)
+    predictor = check_spatial(models_dir, args.device)
 
-    print("\n✅ 全部 checkpoint 加载测试通过")
+    if PIPELINE_DATA.exists():
+        check_pipeline(PIPELINE_DATA, engine, predictor,
+                       args.maps_dir, args.forward)
+    else:
+        print(f"\n[3/3] 跳过 pipeline 测试：未找到 {PIPELINE_DATA.name}")
+
+    print("\n✅ 全部测试通过")
     return 0
 
 

@@ -78,9 +78,14 @@ python scripts/test_checkpoints.py --models-dir checkpoints
 
 The test builds the model from the config, loads each checkpoint, checks the
 architecture matches exactly (no missing/unexpected keys), verifies all weights
-are finite, and runs a synthetic full-round inference for the spatial-only
-models. Add `--forward` to also run one 16-tick autoregressive path prediction
-on a synthetic game state (CPU: 1–3 min).
+are finite, runs a synthetic full-round inference for the spatial-only models,
+and — using the bundled round data
+[`examples/json/test.json.gz`](examples/json/test.json.gz) (de_mirage,
+24 rounds) — runs the **full pipeline** end-to-end:
+`json.gz → filter → inventory remap → process_round → model inference`, the
+exact same preprocessing chain used in training and the visualizer. Add
+`--forward` to also run autoregressive path prediction on a synthetic game
+state and on the real round data (CPU: 1–3 min each).
 
 ## Quick Start
 
