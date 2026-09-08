@@ -60,7 +60,7 @@ PIPELINE_MAX_TICKS = 64  # pipeline 测试只处理真实回合前 64 个 tick�
 
 
 def _cfg_from_yaml(path: str) -> PretrainConfig:
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
     return PretrainConfig(
         d_model=int(cfg.get("d_model", 768)),

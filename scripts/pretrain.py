@@ -136,7 +136,7 @@ def load_config(args) -> dict:
     cfg = dict(DEFAULT_CONFIG)
 
     if args.config:
-        with open(args.config, "r") as f:
+        with open(args.config, "r", encoding="utf-8") as f:
             yaml_cfg = yaml.safe_load(f)
         if yaml_cfg:
             cfg.update(yaml_cfg)

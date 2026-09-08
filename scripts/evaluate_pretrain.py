@@ -185,7 +185,7 @@ def main():
     if not data_dir.is_absolute():
         data_dir = _PROJECT_ROOT / data_dir
 
-    with open(args.config, "r") as f:
+    with open(args.config, "r", encoding="utf-8") as f:
         yaml_cfg = yaml.safe_load(f) or {}
     n_ticks = yaml_cfg.get("n_ticks", 16)
 
@@ -258,7 +258,7 @@ def main():
         out_path = Path(args.output_json)
         if not out_path.is_absolute():
             out_path = _PROJECT_ROOT / out_path
-        with open(out_path, "w") as f:
+        with open(out_path, "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2, ensure_ascii=False)
         print(f"\nSaved summary to {out_path}")
 

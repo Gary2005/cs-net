@@ -1254,7 +1254,7 @@ Conditioning: <span class="label-cond">blue</span>. Camera tokens: <span class="
 
     html_content += '</body></html>'
 
-    with open(output_html, 'w') as f:
+    with open(output_html, 'w', encoding='utf-8') as f:
         f.write(html_content)
     print(f"\nSaved attention analysis to {output_html}")
     print(f"Layers: {n_layers}, positions shown: {show_positions}/{seq_len}")
@@ -1303,7 +1303,7 @@ Examples:
     print(f"Device: {device}")
 
     # Load config
-    with open(args.config, "r") as f:
+    with open(args.config, "r", encoding="utf-8") as f:
         yaml_cfg = yaml.safe_load(f) or {}
     n_ticks = yaml_cfg.get("n_ticks", 16)
     print(f"Config: {args.config}, n_ticks={n_ticks}")

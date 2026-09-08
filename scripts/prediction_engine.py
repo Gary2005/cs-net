@@ -277,7 +277,7 @@ class PredictionEngine:
             self.maps_dir = (_PROJECT_ROOT / self.maps_dir).resolve()
 
         # 加载配置
-        with open(config_path, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             yaml_cfg = yaml.safe_load(f) or {}
 
         # 应用 CLI 覆盖（--predict-override key=value）
@@ -1778,6 +1778,6 @@ if __name__ == "__main__":
 
     if args.output:
         # 保存为 JSON（numpy 转换）
-        with open(args.output, "w") as f:
+        with open(args.output, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2)
         print(f"Saved to {args.output}")
