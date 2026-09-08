@@ -22,8 +22,9 @@ cs-net — 面向客户的可视化工具后端。
     python visualizer/server.py --host 127.0.0.1 --port 5000
 
     或（命令行直接指定 checkpoint / spatial-only 模型目录，免上传）:
-    python visualizer/server.py --checkpoint /path/to/latest_34k.pt --device mps \
-        --spatial-model-dir /path/to/spatial_ckpts
+    python visualizer/server.py --checkpoint checkpoints/cs-net-v4-pro.pt --device mps \
+        --spatial-model-dir checkpoints
+    （先运行 scripts/download_checkpoints.py 下载模型，文件落在 checkpoints/ 目录）
 """
 
 from __future__ import annotations
@@ -144,6 +145,24 @@ def create_app(checkpoint: Optional[str] = None, device: str = "mps",
     _prediction_step = _read_ckpt_step(checkpoint) if checkpoint else None
     _spatial_device = spatial_device
     _spatial_model_dir = spatial_model_dir
+
+    # 确保 outputs/ 存在（页面内上传 checkpoint 的临时目录；
+    # 不存在时 tempfile.NamedTemporaryFile(dir=outputs) 会 FileNotFoundError）
+    (_PROJECT_ROOT / "outputs").mkdir(parents=True, exist_ok=True)
+
+    # 启动时校验路径参数：路径不存在立即给出明确提示，而不是等浏览器
+    # 轮询 /api/model/status 时才 500（避免误以为服务/模型坏了）
+    if checkpoint and not Path(checkpoint).exists():
+        print(f"[Visualizer] ⚠ checkpoint 路径不存在: {checkpoint}")
+        print(f"   已忽略该参数（可在页面内上传）。若已运行 scripts/download_checkpoints.py，"
+              f"模型在 {_PROJECT_ROOT / 'checkpoints'} 目录。")
+        _prediction_checkpoint_path = None
+        _prediction_step = None
+    if spatial_model_dir and not Path(spatial_model_dir).is_dir():
+        print(f"[Visualizer] ⚠ spatial-only 模型目录不存在: {spatial_model_dir}")
+        print(f"   已忽略该参数（可在页面内上传）。若已运行 scripts/download_checkpoints.py，"
+              f"spatial ckpt 在 {_PROJECT_ROOT / 'checkpoints'} 目录（--spatial-model-dir 指向该目录即可）。")
+        _spatial_model_dir = None
 
     def _get_spatial_predictor():
         """懒加载 spatial-only 预测器。"""
