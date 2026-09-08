@@ -171,9 +171,11 @@ def create_app(checkpoint: Optional[str] = None, device: Optional[str] = None,
     device: 统一推理设备（路径预测 + spatial-only 共用）。None = 自动探测
     （mps > cuda > cpu），例如 Windows 无 GPU 时自动落到 cpu，Mac 自动用 mps。
     注：torch < 2.13 的 MPS 后端存在内存损坏问题（间歇性 NaN + 有限但
-    错误的值，非数据问题；已被 2.13 修复，实测 5/5 独立实例逐位干净）。
-    为兼容旧 torch，_run_tasks_safe 仍保留 NaN 自动 CPU 兜底（有限错误
-    值无法检测，但 2.13+ 上不会出现）。
+    错误的值，非数据问题；实测 5/5 独立实例逐位干净，说明该现象随 torch
+    2.13 消失）。但 PyTorch 侧仍有已知 MPS 问题（pytorch/pytorch#193487：
+    matmul 偶发静默错误结果，覆盖 2.7–2.13.0，仅被 #187441 掩盖、未根治）；
+    对数值敏感时 spatial-only 可显式 --device cpu。_run_tasks_safe 的
+    NaN 自动 CPU 兜底检测不到"有限但错误"的值。
     """
     global _prediction_device, _prediction_checkpoint_path, _prediction_step
     global _spatial_model_dir, _spatial_device

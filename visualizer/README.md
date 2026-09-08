@@ -93,11 +93,12 @@ embedder+spatial+head，`finetune_spatial_only.py` 保存的 checkpoint），
 > 损坏（间歇性 NaN + 有限但错误的值，非数据问题；逐 tick `torch.cat` 多个
 > MPS 张量最严重，`torch.stack` 拼装后 NaN 消失但有限错误值仍偶发），
 > 而路径预测（T=16 窗口 + decoder 自回归）在 MPS 上与 CPU 逐位一致——
-> 差异在输入布局/批拼接路径，不在模型结构。该 bug 已被 **torch 2.13**
-> 修复（实测 5/5 独立 MPS 实例整回合与 CPU 逐位干净，max diff 1e-4，
-> cat/stack 路径均无 NaN）。因此默认 `--device mps`（新装 torch 2.13+
-> 自动探测即可）；若用旧 torch
-> 建议显式 `--device cpu`（整回合约 20s，服务端缓存后切回合秒回）。
+> 差异在输入布局/批拼接路径，不在模型结构。该现象在 **torch 2.13** 上实测
+> 已消失（5/5 独立 MPS 实例整回合与 CPU 逐位干净，max diff 1e-4，
+> cat/stack 路径均无 NaN）。不过 PyTorch 侧仍有已知 MPS 问题未根治
+> （[pytorch/pytorch#193487](https://github.com/pytorch/pytorch/issues/193487)：
+> matmul 偶发静默错误结果，覆盖 2.7–2.13.0，仅被 #187441 掩盖）——
+> 对数值敏感时可显式 `--device cpu`（整回合约 20s，服务端缓存后切回合秒回）。
 
 ## 文件结构
 
