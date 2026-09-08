@@ -61,11 +61,30 @@ THREE_DIR = Path(__file__).resolve().parent / "static" / "three"
 
 
 def _detect_device(prefer: Optional[str] = None) -> str:
-    """推理设备：显式指定则用指定值，否则自动探测 mps > cuda > cpu。
+    """推理设备：显式指定则用指定值（不支持时警告并回退 cpu），
+    否则自动探测 mps > cuda > cpu。
 
-    Windows 无 GPU / 无 MPS 的机器自动落到 cpu，Mac 自动用 mps，
-    避免页面里默认 mps 导致无法推理。
+    Windows 无 GPU / 无 MPS 的机器自动落到 cpu，Mac 自动用 mps。
+    显式指定了当前环境不支持的设备（如 Windows 上 --device mps、
+    无 CUDA 的 torch 上 --device cuda）时打印警告并回退 cpu，
+    避免 .to('mps') / .to('cuda') 抛 RuntimeError。
     """
+    if prefer == "mps":
+        try:
+            if getattr(torch.backends, "mps", None) is not None \
+                    and torch.backends.mps.is_available():
+                return "mps"
+        except Exception:
+            pass
+        print("[Visualizer] ⚠ 指定了 mps 但当前 PyTorch 未链接 MPS 支持，"
+              "已回退到 cpu（可用 --device cpu 显式指定）")
+        return "cpu"
+    if prefer == "cuda":
+        if torch.cuda.is_available():
+            return "cuda"
+        print("[Visualizer] ⚠ 指定了 cuda 但当前环境没有可用 CUDA，"
+              "已回退到 cpu（可用 --device cpu 显式指定）")
+        return "cpu"
     if prefer:
         return prefer
     try:
@@ -97,14 +116,14 @@ _last_interval: float = 0.25
 
 # 预测引擎状态
 _prediction_engine = None
-_prediction_device = "mps"
+_prediction_device = "cpu"
 _prediction_checkpoint_path: Optional[str] = None
 _prediction_step: Optional[int] = None
 
 # spatial-only 单局面预测器状态
 _spatial_predictor: Optional[SpatialOnlyPredictor] = None
 _spatial_model_dir: Optional[str] = None
-_spatial_device = "mps"
+_spatial_device = "cpu"
 
 
 def _cleanup_orphan_ckpts() -> None:
