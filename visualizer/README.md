@@ -18,6 +18,10 @@ python visualizer/server.py --port 5000 \
     --device cpu     # mps / cuda 亦可
 ```
 
+> 设备默认**自动探测**（mps > cuda > cpu，页面内上传时下拉框默认选中探测结果）：
+> Mac 自动用 mps，Windows 无 GPU 自动用 cpu，有 N 卡自动用 cuda。
+> 也可用 `--device` / `--spatial-device` 显式指定。
+
 浏览器打开 `http://127.0.0.1:5000/`。
 
 ## 功能
@@ -91,7 +95,8 @@ embedder+spatial+head，`finetune_spatial_only.py` 保存的 checkpoint），
 > 而路径预测（T=16 窗口 + decoder 自回归）在 MPS 上与 CPU 逐位一致——
 > 差异在输入布局/批拼接路径，不在模型结构。该 bug 已被 **torch 2.13**
 > 修复（实测 5/5 独立 MPS 实例整回合与 CPU 逐位干净，max diff 1e-4，
-> cat/stack 路径均无 NaN）。因此默认 `--spatial-device mps`；若用旧 torch
+> cat/stack 路径均无 NaN）。因此默认 `--spatial-device mps`（新装 torch 2.13+
+> 自动探测即可）；若用旧 torch
 > 建议显式 `--spatial-device cpu`（整回合约 20s，服务端缓存后切回合秒回）。
 
 ## 文件结构

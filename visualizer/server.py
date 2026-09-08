@@ -59,6 +59,25 @@ MAPS_DIR = _PROJECT_ROOT / "maps" / "optimized_obj_files"
 CONFIG_PATH = _PROJECT_ROOT / "config" / "pretrain-a100-pro.yaml"
 THREE_DIR = Path(__file__).resolve().parent / "static" / "three"
 
+
+def _detect_device(prefer: Optional[str] = None) -> str:
+    """推理设备：显式指定则用指定值，否则自动探测 mps > cuda > cpu。
+
+    Windows 无 GPU / 无 MPS 的机器自动落到 cpu，Mac 自动用 mps，
+    避免页面里默认 mps 导致无法推理。
+    """
+    if prefer:
+        return prefer
+    try:
+        if getattr(torch.backends, "mps", None) is not None \
+                and torch.backends.mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
 # ── Demo 解析缓存（demo 解析很慢，30 分钟过期）──────────────────────────
 _demo_cache: dict[str, tuple[float, dict]] = {}
 CACHE_TTL = 1800
@@ -126,12 +145,14 @@ def _read_ckpt_step(path: str) -> Optional[int]:
         return None
 
 
-def create_app(checkpoint: Optional[str] = None, device: str = "mps",
+def create_app(checkpoint: Optional[str] = None, device: Optional[str] = None,
                spatial_model_dir: Optional[str] = None,
-               spatial_device: str = "mps") -> Flask:
+               spatial_device: Optional[str] = None) -> Flask:
     """创建 Flask app。
 
-    spatial_device: spatial-only 推理设备。默认 mps（与路径预测一致）。
+    device / spatial_device: 推理设备。None = 自动探测（mps > cuda > cpu），
+    例如 Windows 无 GPU 时自动落到 cpu，Mac 自动用 mps。
+    spatial_device: spatial-only 推理设备。默认自动探测（与路径预测一致）。
     注：torch < 2.13 的 MPS 后端存在内存损坏问题（间歇性 NaN + 有限但
     错误的值，非数据问题；已被 2.13 修复，实测 5/5 独立实例逐位干净）。
     为兼容旧 torch，_run_tasks_safe 仍保留 NaN 自动 CPU 兜底（有限错误
@@ -140,10 +161,10 @@ def create_app(checkpoint: Optional[str] = None, device: str = "mps",
     global _prediction_device, _prediction_checkpoint_path, _prediction_step
     global _spatial_model_dir, _spatial_device
 
-    _prediction_device = device
+    _prediction_device = _detect_device(device)
     _prediction_checkpoint_path = checkpoint
     _prediction_step = _read_ckpt_step(checkpoint) if checkpoint else None
-    _spatial_device = spatial_device
+    _spatial_device = _detect_device(spatial_device)
     _spatial_model_dir = spatial_model_dir
 
     # 确保 outputs/ 存在（页面内上传 checkpoint 的临时目录；
@@ -192,7 +213,9 @@ def create_app(checkpoint: Optional[str] = None, device: str = "mps",
 
     @app.route("/")
     def index():
-        return render_template("index.html")
+        return render_template("index.html",
+                               default_device=_prediction_device,
+                               default_spatial_device=_spatial_device)
 
     @app.route("/three/<path:filename>")
     def serve_three(filename):
@@ -1427,16 +1450,19 @@ def main():
     ap.add_argument("--spatial-model-dir", default=None,
                     help="spatial-only 下游任务 checkpoint 目录（winrate/alive_end/"
                          "future_kill 单局面模型；也可在页面内上传）")
-    ap.add_argument("--spatial-device", default="mps", choices=["cpu", "mps", "cuda"],
-                    help="spatial-only 推理设备（默认 mps。torch < 2.13 的 MPS 有"
-                         "内存损坏问题，已被 2.13 修复；若用旧 torch 建议显式 cpu）")
-    ap.add_argument("--device", default="mps", choices=["cpu", "mps", "cuda"],
-                    help="路径预测设备（Mac 用 mps 加速）")
+    ap.add_argument("--spatial-device", default=None, choices=["cpu", "mps", "cuda"],
+                    help="spatial-only 推理设备（默认自动探测: mps > cuda > cpu；"
+                         "torch < 2.13 的 MPS 有内存损坏问题，旧 torch 建议显式 cpu）")
+    ap.add_argument("--device", default=None, choices=["cpu", "mps", "cuda"],
+                    help="路径预测设备（默认自动探测: mps > cuda > cpu；Mac 自动用 mps 加速）")
     args = ap.parse_args()
 
-    app = create_app(checkpoint=args.checkpoint, device=args.device,
+    device = _detect_device(args.device)
+    spatial_device = _detect_device(args.spatial_device)
+
+    app = create_app(checkpoint=args.checkpoint, device=device,
                      spatial_model_dir=args.spatial_model_dir,
-                     spatial_device=args.spatial_device)
+                     spatial_device=spatial_device)
 
     print(f"""
 ╔════════════════════════════════════════════════════════════╗
@@ -1446,8 +1472,8 @@ def main():
 ║  Maps: {MAPS_DIR}
 ║  Checkpoint: {args.checkpoint or '(页面内上传)'}
 ║  Spatial-only: {args.spatial_model_dir or '(页面内上传)'}
-║  Device:     {args.device}（路径预测）
-║  Spatial:    {args.spatial_device}
+║  Device:     {device}（路径预测）
+║  Spatial:    {spatial_device}
 ╚════════════════════════════════════════════════════════════╝
 """)
     app.run(host=args.host, port=args.port, debug=args.debug)

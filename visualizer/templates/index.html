@@ -70,9 +70,9 @@
       <div class="model-device" id="model-device-row">
         <span class="device-label">推理设备</span>
         <select id="model-device" class="device-select">
-          <option value="mps" selected>MPS（Mac 加速）</option>
-          <option value="cpu">CPU</option>
-          <option value="cuda">CUDA</option>
+          <option value="mps" {% if default_device == 'mps' %}selected{% endif %}>MPS（Mac 加速）</option>
+          <option value="cpu" {% if default_device == 'cpu' %}selected{% endif %}>CPU</option>
+          <option value="cuda" {% if default_device == 'cuda' %}selected{% endif %}>CUDA</option>
         </select>
       </div>
     </div>
@@ -176,9 +176,9 @@
         <div class="model-device" id="model-device-row2">
           <span class="device-label">推理设备</span>
           <select id="model-device2" class="device-select">
-            <option value="mps" selected>MPS（Mac 加速）</option>
-            <option value="cpu">CPU</option>
-            <option value="cuda">CUDA</option>
+            <option value="mps" {% if default_device == 'mps' %}selected{% endif %}>MPS（Mac 加速）</option>
+            <option value="cpu" {% if default_device == 'cpu' %}selected{% endif %}>CPU</option>
+            <option value="cuda" {% if default_device == 'cuda' %}selected{% endif %}>CUDA</option>
           </select>
         </div>
         <div class="ds-upload-row">

@@ -643,7 +643,7 @@ function setModelStatus(loaded, text) {
 async function uploadModel(file) {
   // 优先用主面板（回放页）的 device 选择；登录页的作为兜底
   const deviceSel = $('model-device2') || $('model-device');
-  const device = deviceSel ? deviceSel.value : 'mps';
+  const device = deviceSel ? deviceSel.value : 'cpu';
   const fd = new FormData();
   fd.append('file', file);
   fd.append('device', device);
