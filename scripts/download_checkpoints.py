@@ -9,6 +9,13 @@
     python scripts/download_checkpoints.py --repo-id your/cs-net-v4 # 镜像仓库
 
 依赖: pip install huggingface_hub
+
+说明:
+    - 大文件（555MB）开始时进度条可能停留 0% 约 1 分钟（连接/预检阶段），
+      之后会自动开始下载；如长时间无速度，可 Ctrl+C 重跑（自动断点续传）。
+    - 若下载偏慢，建议升级传输器:
+        pip install -U huggingface_hub        # 新版支持并行分块、进度更好
+        pip install hf_transfer && export HF_HUB_ENABLE_HF_TRANSFER=1
 """
 
 from __future__ import annotations
@@ -23,6 +30,21 @@ FILES = [
     "pretrain-v4-pro-alive_end.pt",     # spatial-only: 回合末存活
     "pretrain-v4-pro-future_kill.pt",   # spatial-only: 未来击杀
 ]
+
+_MIN_RECOMMENDED_VERSION = (1, 20)  # 低于此版本建议升级（下载器/进度显示改进）
+
+
+def _print_version_tip() -> None:
+    try:
+        from huggingface_hub import __version__
+        ver = tuple(int(x) for x in __version__.split(".")[:2])
+        if ver < _MIN_RECOMMENDED_VERSION:
+            print(f"提示: 当前 huggingface_hub={__version__} 版本较旧，下载大文件可能"
+                  f"偏慢/进度条长时间停在 0%（连接阶段属正常）。建议升级：")
+            print("      pip install -U huggingface_hub")
+            print()
+    except Exception:
+        pass
 
 
 def main() -> int:
@@ -42,12 +64,17 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
+    _print_version_tip()
+
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     files = FILES[:1] if args.pretrain_only else FILES
 
     print(f"下载 {args.repo_id} → {out}/")
     for name in files:
+        print(f"  连接中: {name} ...")
+        print("    （大文件首次连接可能需要约 1 分钟，进度条才会开始移动；")
+        print("      中途网络超时会自动断点续传，耐心等待即可）")
         local = hf_hub_download(repo_id=args.repo_id, filename=name,
                                 local_dir=str(out))
         size_mb = Path(local).stat().st_size / 1024 / 1024
