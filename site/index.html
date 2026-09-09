@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CS-NET v4 — CS2 Match Understanding &amp; AI Path Prediction</title>
-<meta name="description" content="CS-NET v4: open-source Transformer framework for Counter-Strike 2 — auto-regressive path prediction from a 16-tick game-state window, spatial-only winrate/alive/future-kill models, and a 3D replay studio with AI path visualization.">
+<title data-en="CS-NET v4 — CS2 Match Understanding &amp; AI Path Prediction" data-zh="CS-NET v4 — CS2 比赛理解与 AI 路径预测">CS-NET v4 — CS2 Match Understanding &amp; AI Path Prediction</title>
+<meta name="description" data-en="CS-NET v4: open-source Transformer framework for Counter-Strike 2 — auto-regressive path prediction from a 16-tick game-state window, spatial-only winrate/alive/future-kill models, and a 3D replay studio with AI path visualization." data-zh="CS-NET v4：开源的 CS2（反恐精英 2）Transformer 框架——基于 16 tick 对局状态窗口的自回归路径预测、胜率/存活/未来击杀单局面模型，以及带 AI 路径可视化的 3D 回放工作台。" content="CS-NET v4: open-source Transformer framework for Counter-Strike 2 — auto-regressive path prediction from a 16-tick game-state window, spatial-only winrate/alive/future-kill models, and a 3D replay studio with AI path visualization.">
 <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -18,15 +18,21 @@
       <span>cs-<b>net</b> <em>v4</em></span>
     </a>
     <nav class="nav-links">
-      <a href="#features">Features</a>
-      <a href="#models">Models</a>
-      <a href="#gallery">Gallery</a>
-      <a href="#quickstart">Quick Start</a>
-      <a href="#docs">Docs</a>
+      <a href="#features" data-en="Features" data-zh="功能">Features</a>
+      <a href="#gallery" data-en="Gallery" data-zh="截图">Gallery</a>
+      <a href="#models" data-en="Models" data-zh="模型">Models</a>
+      <a href="#quickstart" data-en="Quick Start" data-zh="快速开始">Quick Start</a>
+      <a href="#docs" data-en="Docs" data-zh="文档">Docs</a>
     </nav>
     <div class="nav-cta">
+      <div class="lang-toggle" id="lang-toggle" role="group" aria-label="Language / 语言">
+        <button type="button" data-lang="en" class="active" title="English">EN</button>
+        <button type="button" data-lang="zh" title="中文">中文</button>
+      </div>
       <a class="btn btn-ghost" href="https://github.com/Gary2005/cs-net" target="_blank" rel="noopener">GitHub</a>
-      <a class="btn btn-primary" href="https://huggingface.co/gary2oos/cs-net-v4" target="_blank" rel="noopener">Download Models</a>
+      <a class="btn btn-primary" href="https://huggingface.co/gary2oos/cs-net-v4" target="_blank" rel="noopener">
+        <span data-en="Download Models" data-zh="下载模型">Download Models</span>
+      </a>
     </div>
   </div>
 </header>
@@ -35,27 +41,21 @@
 <section id="top" class="hero">
   <div class="hero-bg"></div>
   <div class="hero-inner">
-    <div class="hero-badge">CS-NET <b>v4</b> · Open Source · MIT</div>
-    <h1 class="hero-title">Counter-Strike 2<br><span class="grad">Match Understanding</span> &amp; AI Path Prediction</h1>
-    <p class="hero-sub">
-      A Transformer-based deep learning framework that reads a 16-tick window of the full
-      game state (10 players, bomb, projectiles, raycast depth) and <b>auto-regressively
-      predicts every player&rsquo;s future movement path</b> — plus lightweight
-      single-tick spatial models for <b>winrate</b>, <b>alive-at-round-end</b> and
-      <b>future kill</b>, all inside a 3D replay studio.
-    </p>
+    <div class="hero-badge" data-en="CS-NET <b>v4</b> · Open Source · MIT" data-zh="CS-NET <b>v4</b> · 开源 · MIT">CS-NET <b>v4</b> · Open Source · MIT</div>
+    <h1 class="hero-title" data-en="Counter-Strike 2<br><span class='grad'>Match Understanding</span> &amp; AI Path Prediction" data-zh="反恐精英 2<br><span class='grad'>比赛理解</span>与 AI 路径预测">Counter-Strike 2<br><span class="grad">Match Understanding</span> &amp; AI Path Prediction</h1>
+    <p class="hero-sub" data-en="A Transformer-based deep learning framework that reads a 16-tick window of the full game state (10 players, bomb, projectiles, raycast depth) and <b>auto-regressively predicts every player&rsquo;s future movement path</b> — plus lightweight single-tick spatial models for <b>winrate</b>, <b>alive-at-round-end</b> and <b>future kill</b>, all inside a 3D replay studio." data-zh="基于 Transformer 的深度学习框架：读取 16 tick 的完整对局状态窗口（10 名玩家、炸弹、投掷物、射线深度图），<b>自回归预测每个玩家未来的移动路径</b>；并提供轻量的单局面模型，预测 <b>胜率</b>、<b>回合结束存活</b> 与 <b>未来击杀</b>，全部集成在 3D 回放工作台中。">A Transformer-based deep learning framework that reads a 16-tick window of the full game state (10 players, bomb, projectiles, raycast depth) and <b>auto-regressively predicts every player&rsquo;s future movement path</b> — plus lightweight single-tick spatial models for <b>winrate</b>, <b>alive-at-round-end</b> and <b>future kill</b>, all inside a 3D replay studio.</p>
     <div class="hero-cta">
       <a class="btn btn-primary btn-lg" href="https://github.com/Gary2005/cs-net" target="_blank" rel="noopener">
         <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
-        View on GitHub
+        <span data-en="View on GitHub" data-zh="在 GitHub 查看">View on GitHub</span>
       </a>
-      <a class="btn btn-ghost btn-lg" href="#quickstart">Quick Start ↓</a>
+      <a class="btn btn-ghost btn-lg" href="#quickstart"><span data-en="Quick Start ↓" data-zh="快速开始 ↓">Quick Start ↓</span></a>
     </div>
     <div class="hero-stats">
-      <div class="stat"><b>138.7M</b><span>params (Pro)</span></div>
-      <div class="stat"><b>16</b><span>tick context · 4s</span></div>
-      <div class="stat"><b>3</b><span>spatial-only tasks</span></div>
-      <div class="stat"><b>600k</b><span>pre-train steps</span></div>
+      <div class="stat"><b>138.7M</b><span data-en="params (Pro)" data-zh="参数 (Pro)">params (Pro)</span></div>
+      <div class="stat"><b>16</b><span data-en="tick context · 4s" data-zh="tick 上下文 · 4s">tick context · 4s</span></div>
+      <div class="stat"><b>3</b><span data-en="spatial-only tasks" data-zh="单局面任务">spatial-only tasks</span></div>
+      <div class="stat"><b>600k</b><span data-en="pre-train steps" data-zh="预训练步数">pre-train steps</span></div>
     </div>
   </div>
 </section>
@@ -63,24 +63,21 @@
 <!-- ══════════════ GALLERY (placeholders until screenshots are added) ══════════════ -->
 <section id="gallery" class="section">
   <div class="section-inner">
-    <h2 class="section-title">See it in action</h2>
-    <p class="section-sub">
-      Drop screenshots into <code>site/assets/screenshots/</code> and point the
-      <code>&lt;img&gt;</code> tags below at them.
-    </p>
+    <h2 class="section-title" data-en="See it in action" data-zh="效果展示">See it in action</h2>
+    <p class="section-sub" data-en="Drop screenshots into <code>site/assets/screenshots/</code> and point the <code>&lt;img&gt;</code> tags below at them." data-zh="把截图放进 <code>site/assets/screenshots/</code>，并把下方 <code>&lt;img&gt;</code> 指向它们即可。">Drop screenshots into <code>site/assets/screenshots/</code> and point the <code>&lt;img&gt;</code> tags below at them.</p>
     <div class="gallery">
       <figure class="shot">
-        <!-- Replace src with your screenshot, e.g. assets/screenshots/replay.png -->
+        <!-- Replace the shot-ph div with: <img src="assets/screenshots/xxx.png" alt="..." style="width:100%;display:block"> -->
         <div class="shot-ph"><svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></div>
-        <figcaption><b>3D Replay Studio</b><span>screenshot coming soon</span></figcaption>
+        <figcaption><b data-en="3D Replay Studio" data-zh="3D 回放工作台">3D Replay Studio</b><span data-en="screenshot coming soon" data-zh="截图即将上线">screenshot coming soon</span></figcaption>
       </figure>
       <figure class="shot">
         <div class="shot-ph"><svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17 10 11l4 4 6-8"/><path d="M15 7h5v5"/></svg></div>
-        <figcaption><b>AI Path Prediction</b><span>predicted vs. ground-truth paths</span></figcaption>
+        <figcaption><b data-en="AI Path Prediction" data-zh="AI 路径预测">AI Path Prediction</b><span data-en="predicted vs. ground-truth paths" data-zh="预测路径 vs 真实路径">predicted vs. ground-truth paths</span></figcaption>
       </figure>
       <figure class="shot">
         <div class="shot-ph"><svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-4 4 3 5-7"/></svg></div>
-        <figcaption><b>Spatial Analytics</b><span>per-player probability curves</span></figcaption>
+        <figcaption><b data-en="Spatial Analytics" data-zh="单局面分析">Spatial Analytics</b><span data-en="per-player probability curves" data-zh="逐玩家概率曲线">per-player probability curves</span></figcaption>
       </figure>
     </div>
   </div>
@@ -89,37 +86,37 @@
 <!-- ══════════════ FEATURES ══════════════ -->
 <section id="features" class="section section-alt">
   <div class="section-inner">
-    <h2 class="section-title">What&rsquo;s inside</h2>
+    <h2 class="section-title" data-en="What&rsquo;s inside" data-zh="项目构成">What&rsquo;s inside</h2>
     <div class="cards">
       <article class="card">
         <div class="card-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17H8v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7Z"/><path d="M9 21h6"/></svg></div>
-        <h3>Transformer path prediction</h3>
-        <p>Pre-trained embedder + spatial &amp; temporal transformers + autoregressive decoder. From a 16-tick window it predicts each player&rsquo;s future trajectory as discrete move / angle tokens in world coordinates.</p>
+        <h3 data-en="Transformer path prediction" data-zh="Transformer 路径预测">Transformer path prediction</h3>
+        <p data-en="Pre-trained embedder + spatial &amp; temporal transformers + autoregressive decoder. From a 16-tick window it predicts each player&rsquo;s future trajectory as discrete move / angle tokens in world coordinates." data-zh="预训练 embedder + 空间/时序 Transformer + 自回归 decoder。基于 16 tick 窗口，以离散移动/转向 token（世界坐标）预测每个玩家的未来轨迹。">Pre-trained embedder + spatial &amp; temporal transformers + autoregressive decoder. From a 16-tick window it predicts each player&rsquo;s future trajectory as discrete move / angle tokens in world coordinates.</p>
       </article>
       <article class="card">
         <div class="card-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 9v11"/></svg></div>
-        <h3>Spatial-only task family</h3>
-        <p>Winrate, alive-at-round-end and future-kill from a <b>single tick</b>. Each model = frozen-style embedder + spatial transformer + linear head — minimal and fast.</p>
+        <h3 data-en="Spatial-only task family" data-zh="单局面任务族">Spatial-only task family</h3>
+        <p data-en="Winrate, alive-at-round-end and future-kill from a <b>single tick</b>. Each model = frozen-style embedder + spatial transformer + linear head — minimal and fast." data-zh="从<b>单个 tick</b> 预测胜率、回合结束存活与未来击杀。每个模型 = embedder + 空间 Transformer + 线性头——轻量且快速。">Winrate, alive-at-round-end and future-kill from a <b>single tick</b>. Each model = frozen-style embedder + spatial transformer + linear head — minimal and fast.</p>
       </article>
       <article class="card">
         <div class="card-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg></div>
-        <h3>3D Replay Studio</h3>
-        <p>A Flask + Three.js web app: upload <code>.dem</code> / <code>.json</code> / <code>.json.gz</code>, replay the match smoothly on real map geometry, and overlay <b>AI-predicted paths vs. ground truth</b>.</p>
+        <h3 data-en="3D Replay Studio" data-zh="3D 回放工作台">3D Replay Studio</h3>
+        <p data-en="A Flask + Three.js web app: upload <code>.dem</code> / <code>.json</code> / <code>.json.gz</code>, replay the match smoothly on real map geometry, and overlay <b>AI-predicted paths vs. ground truth</b>." data-zh="Flask + Three.js Web 应用：上传 <code>.dem</code> / <code>.json</code> / <code>.json.gz</code>，在真实地图几何上流畅回放比赛，并叠加<b>AI 预测路径与真实路径</b>对比。">A Flask + Three.js web app: upload <code>.dem</code> / <code>.json</code> / <code>.json.gz</code>, replay the match smoothly on real map geometry, and overlay <b>AI-predicted paths vs. ground truth</b>.</p>
       </article>
       <article class="card">
         <div class="card-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h12"/><circle cx="19" cy="18" r="2.5"/></svg></div>
-        <h3>End-to-end data pipeline</h3>
-        <p><code>.dem</code> → round JSON → training shards, plus a bundled test round (<code>examples/json/test.json.gz</code>) so the whole pipeline can be verified out of the box.</p>
+        <h3 data-en="End-to-end data pipeline" data-zh="端到端数据管线">End-to-end data pipeline</h3>
+        <p data-en="<code>.dem</code> → round JSON → training shards, plus a bundled test round (<code>examples/json/test.json.gz</code>) so the whole pipeline can be verified out of the box." data-zh="<code>.dem</code> → 回合 JSON → 训练分片，并内置测试回合（<code>examples/json/test.json.gz</code>），开箱即可验证整条管线。"><code>.dem</code> → round JSON → training shards, plus a bundled test round (<code>examples/json/test.json.gz</code>) so the whole pipeline can be verified out of the box.</p>
       </article>
       <article class="card">
         <div class="card-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-4Z"/><path d="m9 12 2 2 4-4"/></svg></div>
-        <h3>One-command verification</h3>
-        <p>Checkpoints are served from Hugging Face; <code>download_checkpoints.py</code> pulls all four, and <code>test_checkpoints.py</code> proves they load, match the architecture and run real inference.</p>
+        <h3 data-en="One-command verification" data-zh="一键验证">One-command verification</h3>
+        <p data-en="Checkpoints are served from Hugging Face; <code>download_checkpoints.py</code> pulls all four, and <code>test_checkpoints.py</code> proves they load, match the architecture and run real inference." data-zh="模型权重托管在 Hugging Face；<code>download_checkpoints.py</code> 下载全部四个 checkpoint，<code>test_checkpoints.py</code> 验证它们能加载、架构匹配并跑通真实推理。">Checkpoints are served from Hugging Face; <code>download_checkpoints.py</code> pulls all four, and <code>test_checkpoints.py</code> proves they load, match the architecture and run real inference.</p>
       </article>
       <article class="card">
         <div class="card-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></div>
-        <h3>Cross-platform, auto device</h3>
-        <p>Runs on macOS (MPS), Windows and Linux (CUDA / CPU). The visualizer auto-detects the best device — no config fiddling on any machine.</p>
+        <h3 data-en="Cross-platform, auto device" data-zh="跨平台 · 设备自适应">Cross-platform, auto device</h3>
+        <p data-en="Runs on macOS (MPS), Windows and Linux (CUDA / CPU). The visualizer auto-detects the best device — no config fiddling on any machine." data-zh="支持 macOS (MPS)、Windows 与 Linux (CUDA / CPU)。可视化工具自动探测最优设备——任何机器都无需手动配置。">Runs on macOS (MPS), Windows and Linux (CUDA / CPU). The visualizer auto-detects the best device — no config fiddling on any machine.</p>
       </article>
     </div>
   </div>
@@ -128,40 +125,36 @@
 <!-- ══════════════ MODELS ══════════════ -->
 <section id="models" class="section">
   <div class="section-inner">
-    <h2 class="section-title">Model checkpoints</h2>
-    <p class="section-sub">
-      Trained for the <b>Pro</b> architecture (d_model = 768 · 138.7M params).
-      All four are hosted on
-      <a href="https://huggingface.co/gary2oos/cs-net-v4" target="_blank" rel="noopener">Hugging Face — gary2oos/cs-net-v4</a>.
-    </p>
+    <h2 class="section-title" data-en="Model checkpoints" data-zh="模型权重">Model checkpoints</h2>
+    <p class="section-sub" data-en="Trained for the <b>Pro</b> architecture (d_model = 768 · 138.7M params). All four are hosted on <a href='https://huggingface.co/gary2oos/cs-net-v4' target='_blank' rel='noopener'>Hugging Face — gary2oos/cs-net-v4</a>." data-zh="基于 <b>Pro</b> 架构训练（d_model = 768 · 138.7M 参数）。全部四个权重托管在 <a href='https://huggingface.co/gary2oos/cs-net-v4' target='_blank' rel='noopener'>Hugging Face — gary2oos/cs-net-v4</a>。">Trained for the <b>Pro</b> architecture (d_model = 768 · 138.7M params). All four are hosted on <a href="https://huggingface.co/gary2oos/cs-net-v4" target="_blank" rel="noopener">Hugging Face — gary2oos/cs-net-v4</a>.</p>
     <div class="model-grid">
       <article class="model model-main">
-        <div class="model-tag">path prediction</div>
+        <div class="model-tag" data-en="path prediction" data-zh="路径预测">path prediction</div>
         <h3>cs-net-v4-pro.pt</h3>
         <ul>
-          <li>Full pre-trained model (600k steps)</li>
-          <li>16-tick window → autoregressive future paths</li>
+          <li data-en="Full pre-trained model (600k steps)" data-zh="完整预训练模型（600k 步）">Full pre-trained model (600k steps)</li>
+          <li data-en="16-tick window → autoregressive future paths" data-zh="16 tick 窗口 → 自回归未来路径">16-tick window → autoregressive future paths</li>
           <li><code>{model, global_step}</code> checkpoint format</li>
         </ul>
       </article>
       <article class="model">
-        <div class="model-tag">spatial-only</div>
+        <div class="model-tag" data-en="spatial-only" data-zh="单局面">spatial-only</div>
         <h3>pretrain-v4-pro-win_rate.pt</h3>
-        <ul><li>Single-tick per-player winrate</li><li>embedder + spatial + head</li></ul>
+        <ul><li data-en="Single-tick per-player winrate" data-zh="单 tick 逐玩家胜率">Single-tick per-player winrate</li><li>embedder + spatial + head</li></ul>
       </article>
       <article class="model">
-        <div class="model-tag">spatial-only</div>
+        <div class="model-tag" data-en="spatial-only" data-zh="单局面">spatial-only</div>
         <h3>pretrain-v4-pro-alive_end.pt</h3>
-        <ul><li>Single-tick alive-at-round-end</li><li>embedder + spatial + head</li></ul>
+        <ul><li data-en="Single-tick alive-at-round-end" data-zh="单 tick 回合结束存活">Single-tick alive-at-round-end</li><li>embedder + spatial + head</li></ul>
       </article>
       <article class="model">
-        <div class="model-tag">spatial-only</div>
+        <div class="model-tag" data-en="spatial-only" data-zh="单局面">spatial-only</div>
         <h3>pretrain-v4-pro-future_kill.pt</h3>
-        <ul><li>Single-tick future-kill probability</li><li>embedder + spatial + head</li></ul>
+        <ul><li data-en="Single-tick future-kill probability" data-zh="单 tick 未来击杀概率">Single-tick future-kill probability</li><li>embedder + spatial + head</li></ul>
       </article>
     </div>
     <div class="model-cta">
-      <a class="btn btn-primary" href="https://huggingface.co/gary2oos/cs-net-v4" target="_blank" rel="noopener">Browse on Hugging Face →</a>
+      <a class="btn btn-primary" href="https://huggingface.co/gary2oos/cs-net-v4" target="_blank" rel="noopener"><span data-en="Browse on Hugging Face →" data-zh="在 Hugging Face 查看 →">Browse on Hugging Face →</span></a>
     </div>
   </div>
 </section>
@@ -169,33 +162,51 @@
 <!-- ══════════════ QUICK START ══════════════ -->
 <section id="quickstart" class="section section-alt">
   <div class="section-inner">
-    <h2 class="section-title">Quick start</h2>
-    <p class="section-sub">Four commands from clone to a running 3D AI replay studio.</p>
+    <h2 class="section-title" data-en="Quick start" data-zh="快速开始">Quick start</h2>
+    <p class="section-sub" data-en="Four commands from clone to a running 3D AI replay studio." data-zh="从克隆到跑起 3D AI 回放工作台，只需四条命令。">Four commands from clone to a running 3D AI replay studio.</p>
 
     <div class="codeblock">
-      <div class="codebar"><span>1 · Clone &amp; install</span><button class="copy" data-copy>copy</button></div>
-      <pre><code>git clone https://github.com/Gary2005/cs-net.git
+      <div class="codebar"><span data-en="1 · Clone &amp; install" data-zh="1 · 克隆并安装">1 · Clone &amp; install</span><button class="copy" data-copy>copy</button></div>
+      <pre><code data-en="git clone https://github.com/Gary2005/cs-net.git
+cd cs-net
+pip install -r requirements.txt" data-zh="git clone https://github.com/Gary2005/cs-net.git
+cd cs-net
+pip install -r requirements.txt">git clone https://github.com/Gary2005/cs-net.git
 cd cs-net
 pip install -r requirements.txt</code></pre>
     </div>
 
     <div class="codeblock">
-      <div class="codebar"><span>2 · Download checkpoints (Hugging Face)</span><button class="copy" data-copy>copy</button></div>
-      <pre><code>python scripts/download_checkpoints.py          # all 4 checkpoints → checkpoints/
+      <div class="codebar"><span data-en="2 · Download checkpoints (Hugging Face)" data-zh="2 · 下载模型权重 (Hugging Face)">2 · Download checkpoints (Hugging Face)</span><button class="copy" data-copy>copy</button></div>
+      <pre><code data-en="python scripts/download_checkpoints.py          # all 4 checkpoints → checkpoints/
+python scripts/download_checkpoints.py --pretrain-only   # path prediction only" data-zh="python scripts/download_checkpoints.py          # 全部 4 个权重 → checkpoints/
+python scripts/download_checkpoints.py --pretrain-only   # 仅路径预测">python scripts/download_checkpoints.py          # all 4 checkpoints → checkpoints/
 python scripts/download_checkpoints.py --pretrain-only   # path prediction only</code></pre>
     </div>
 
     <div class="codeblock">
-      <div class="codebar"><span>3 · Verify everything loads &amp; runs</span><button class="copy" data-copy>copy</button></div>
-      <pre><code>python scripts/test_checkpoints.py --models-dir checkpoints
+      <div class="codebar"><span data-en="3 · Verify everything loads &amp; runs" data-zh="3 · 验证加载与运行">3 · Verify everything loads &amp; runs</span><button class="copy" data-copy>copy</button></div>
+      <pre><code data-en="python scripts/test_checkpoints.py --models-dir checkpoints
+# [1/3] path-prediction ckpt: architecture match, 138.7M params, forward pass
+# [2/3] spatial-only models: 3 tasks load, inference is finite
+# [3/3] full pipeline on the bundled test round (examples/json/test.json.gz)" data-zh="python scripts/test_checkpoints.py --models-dir checkpoints
+# [1/3] 路径预测权重：架构匹配、138.7M 参数、前向推理
+# [2/3] 单局面模型：3 个任务加载、推理数值有限
+# [3/3] 内置测试回合全管线 (examples/json/test.json.gz)">python scripts/test_checkpoints.py --models-dir checkpoints
 # [1/3] path-prediction ckpt: architecture match, 138.7M params, forward pass
 # [2/3] spatial-only models: 3 tasks load, inference is finite
 # [3/3] full pipeline on the bundled test round (examples/json/test.json.gz)</code></pre>
     </div>
 
     <div class="codeblock">
-      <div class="codebar"><span>4 · Launch the 3D Replay Studio</span><button class="copy" data-copy>copy</button></div>
-      <pre><code>python visualizer/server.py \
+      <div class="codebar"><span data-en="4 · Launch the 3D Replay Studio" data-zh="4 · 启动 3D 回放工作台">4 · Launch the 3D Replay Studio</span><button class="copy" data-copy>copy</button></div>
+      <pre><code data-en="python visualizer/server.py \
+    --checkpoint checkpoints/cs-net-v4-pro.pt \
+    --spatial-model-dir checkpoints
+# → http://127.0.0.1:5000  (device auto-detected: mps / cuda / cpu)" data-zh="python visualizer/server.py \
+    --checkpoint checkpoints/cs-net-v4-pro.pt \
+    --spatial-model-dir checkpoints
+# → http://127.0.0.1:5000  （设备自动探测：mps / cuda / cpu）">python visualizer/server.py \
     --checkpoint checkpoints/cs-net-v4-pro.pt \
     --spatial-model-dir checkpoints
 # → http://127.0.0.1:5000  (device auto-detected: mps / cuda / cpu)</code></pre>
@@ -206,17 +217,17 @@ python scripts/download_checkpoints.py --pretrain-only   # path prediction only<
 <!-- ══════════════ DOCS ══════════════ -->
 <section id="docs" class="section">
   <div class="section-inner">
-    <h2 class="section-title">Documentation</h2>
+    <h2 class="section-title" data-en="Documentation" data-zh="文档">Documentation</h2>
     <div class="doc-grid">
-      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/README.md">README <span>overview &amp; quick start</span></a>
-      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/README_CN.md">README 中文 <span>总览与快速开始</span></a>
-      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/docs/pretrain.md">Pre-training <span>pretrain pipeline</span></a>
-      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/docs/training-data-format.md">Training data format <span>round &amp; window format</span></a>
-      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/docs/demo-json-format.md">Demo JSON format <span>cs2.demo.v2 schema</span></a>
-      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/docs/torch-dataset.md">Torch dataset <span>window sampling</span></a>
-      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/docs/optimize-obj.md">Map OBJ optimization <span>mesh processing</span></a>
-      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/visualizer/README.md">Visualizer <span>3D replay studio</span></a>
-      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/scripts/downstream-spatial-only/README.md">Spatial-only fine-tune <span>winrate / alive / kill</span></a>
+      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/README.md">README <span data-en="overview &amp; quick start" data-zh="总览与快速开始">overview &amp; quick start</span></a>
+      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/README_CN.md"><span data-en="README (Chinese)" data-zh="README 中文">README 中文</span> <span data-en="Chinese overview" data-zh="中文总览与快速开始">中文总览与快速开始</span></a>
+      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/docs/pretrain.md"><span data-en="Pre-training" data-zh="预训练">Pre-training</span> <span data-en="pretrain pipeline" data-zh="预训练管线">pretrain pipeline</span></a>
+      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/docs/training-data-format.md"><span data-en="Training data format" data-zh="训练数据格式">Training data format</span> <span data-en="round &amp; window format" data-zh="回合与窗口格式">round &amp; window format</span></a>
+      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/docs/demo-json-format.md"><span data-en="Demo JSON format" data-zh="Demo JSON 格式">Demo JSON format</span> <span data-en="cs2.demo.v2 schema" data-zh="cs2.demo.v2 结构">cs2.demo.v2 schema</span></a>
+      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/docs/torch-dataset.md"><span data-en="Torch dataset" data-zh="Torch 数据集">Torch dataset</span> <span data-en="window sampling" data-zh="窗口采样">window sampling</span></a>
+      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/docs/optimize-obj.md"><span data-en="Map OBJ optimization" data-zh="地图 OBJ 优化">Map OBJ optimization</span> <span data-en="mesh processing" data-zh="网格处理">mesh processing</span></a>
+      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/visualizer/README.md"><span data-en="Visualizer" data-zh="可视化工具">Visualizer</span> <span data-en="3D replay studio" data-zh="3D 回放工作台">3D replay studio</span></a>
+      <a class="doc" href="https://github.com/Gary2005/cs-net/blob/main/scripts/downstream-spatial-only/README.md"><span data-en="Spatial-only fine-tune" data-zh="单局面微调">Spatial-only fine-tune</span> <span data-en="winrate / alive / kill" data-zh="胜率 / 存活 / 击杀">winrate / alive / kill</span></a>
     </div>
   </div>
 </section>
@@ -231,9 +242,9 @@ python scripts/download_checkpoints.py --pretrain-only   # path prediction only<
     <div class="footer-links">
       <a href="https://github.com/Gary2005/cs-net" target="_blank" rel="noopener">GitHub</a>
       <a href="https://huggingface.co/gary2oos/cs-net-v4" target="_blank" rel="noopener">Hugging Face</a>
-      <a href="#top">Back to top ↑</a>
+      <a href="#top" data-en="Back to top ↑" data-zh="返回顶部 ↑">Back to top ↑</a>
     </div>
-    <p class="footer-meta">© 2026 Gary2005 · MIT License · Built with PyTorch</p>
+    <p class="footer-meta" data-en="© 2026 Gary2005 · MIT License · Built with PyTorch" data-zh="© 2026 Gary2005 · MIT 许可证 · 基于 PyTorch 构建">© 2026 Gary2005 · MIT License · Built with PyTorch</p>
   </div>
 </footer>
 

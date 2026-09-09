@@ -93,7 +93,21 @@ section[id] { scroll-margin-top: 72px; }
 .nav-links { display: flex; gap: 22px; margin-left: 12px; }
 .nav-links a { color: var(--muted); font-size: 0.95rem; }
 .nav-links a:hover { color: var(--txt); text-decoration: none; }
-.nav-cta { margin-left: auto; display: flex; gap: 10px; }
+.nav-cta { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+/* ── language toggle ─────────────────────────────────── */
+.lang-toggle {
+  display: inline-flex; border: 1px solid var(--line-strong); border-radius: 999px;
+  overflow: hidden; background: rgba(57, 181, 74, 0.06);
+}
+.lang-toggle button {
+  background: transparent; border: 0; color: var(--muted);
+  font-size: 0.78rem; font-weight: 700; padding: 5px 12px; cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  font-family: var(--font);
+}
+.lang-toggle button:hover { color: var(--txt); }
+.lang-toggle button.active { background: rgba(57, 181, 74, 0.20); color: var(--green-soft); }
 
 /* ── hero ────────────────────────────────────────────── */
 .hero { position: relative; overflow: hidden; padding: 150px 24px 80px; }

@@ -1,17 +1,28 @@
 # cs-net 展示网站（site/）
 
-`https://gary2005.github.io/cs-net/` 的静态站点源码，深色科技风单页。
+`https://gary2005.github.io/cs-net/` 的静态站点源码，深色科技风单页，**支持中英文切换**（右上角 EN / 中文；默认跟随浏览器语言，选择会被记住）。
 
 ## 目录结构
 
 ```
 site/
-  index.html            # 单页站点（英文；需要中文版可加）
+  index.html            # 单页站点（英文为静态内容，中文在 data-zh 属性里）
   css/style.css         # 深色科技风样式
-  js/main.js            # 滚动动画 / 代码复制按钮（无外部依赖）
+  js/main.js            # i18n 切换 / 滚动动画 / 代码复制（无外部依赖）
   assets/logo.svg       # 项目 logo
   assets/screenshots/   # 截图目录（目前为空，占位图待替换）
 ```
+
+## 新增 / 修改文案（双语）
+
+每个可翻译元素挂两个属性，静态内容保持英文（无 JS 也能看）：
+
+```html
+<p data-en="English text" data-zh="中文文本">English text</p>
+```
+
+- `data-en` = 英文，`data-zh` = 中文，属性值允许内嵌 HTML（用单引号包裹内层属性，如 `<span class='grad'>`）
+- 不需要翻译的元素（文件名、代码本身、图标等）保持原样即可
 
 ## 替换截图
 
