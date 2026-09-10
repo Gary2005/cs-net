@@ -10,7 +10,7 @@ site/
   css/style.css         # 深色科技风样式
   js/main.js            # i18n 切换 / 滚动动画 / 代码复制（无外部依赖）
   assets/logo.svg       # 项目 logo
-  assets/screenshots/   # 截图目录（目前为空，占位图待替换）
+  assets/screenshots/   # 三张功能截图（1600px PNG：studio / path-prediction / spatial-curves）
 ```
 
 ## 新增 / 修改文案（双语）
@@ -26,12 +26,8 @@ site/
 
 ## 替换截图
 
-1. 把截图（建议 16:9，PNG/WebP）放进 `site/assets/screenshots/`
-2. 改 `index.html` 里 Gallery 段的 `<div class="shot-ph">…</div>` 为：
-
-   ```html
-   <img src="assets/screenshots/你的截图.png" alt="…" style="width:100%;display:block">
-   ```
+现有三张（`studio.png` / `path-prediction.png` / `spatial-curves.png`），建议 1600px 宽、2:1 左右、PNG。
+替换时直接覆盖同名文件即可（或改名后同步改 `index.html` 里对应的 `src`）。
 
 ## 部署
 
