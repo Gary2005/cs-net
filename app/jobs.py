@@ -33,8 +33,8 @@ class Job:
     """One unit of background work."""
 
     __slots__ = (
-        "id", "kind", "label", "subject", "state", "step", "error", "result",
-        "created_at", "started_at", "finished_at", "progress",
+        "id", "kind", "label", "subject", "state", "step", "error", "error_kind",
+        "result", "created_at", "started_at", "finished_at", "progress",
     )
 
     def __init__(self, kind: str, label: str, subject: Any = None) -> None:
@@ -48,6 +48,9 @@ class Job:
         self.state = "queued"          # queued | running | done | error | cancelled
         self.step = "排队中…"
         self.error: Optional[str] = None
+        #: 一类异常可能自带 `kind`（`app.ai.models.ModelUnavailable.kind == "models"`），
+        #: 界面靠它把"没下权重"和"数据不合规"分成两种提示，而不是只显示一段红字。
+        self.error_kind: Optional[str] = None
         self.result: Any = None
         self.progress: Optional[float] = None
         self.created_at = time.time()
@@ -72,6 +75,7 @@ class Job:
             "step": self.step,
             "progress": self.progress,
             "error": self.error,
+            "error_kind": self.error_kind,
             "result": self.result,
             "elapsed": round(end - (self.started_at or self.created_at), 1),
             "created_at": self.created_at,
@@ -197,6 +201,22 @@ class JobManager:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def find_active(self, subject: Any) -> Optional[Job]:
+        """The queued/running job for ``subject``, if any.
+
+        Used by callers that do not want to *replace* the work but to **watch**
+        it: two browsers (or the replay page plus the stats tab) asking for the
+        same round share one inference and one set of progress numbers instead
+        of queueing a second identical job.
+        """
+        if subject is None:
+            return None
+        with self._lock:
+            for j in self._jobs.values():
+                if j.subject == subject and j.state in ("queued", "running"):
+                    return j
+        return None
+
     def list(self, active_only: bool = False) -> list[dict[str, Any]]:
         with self._lock:
             jobs = [self._jobs[i] for i in self._order if i in self._jobs]
@@ -264,6 +284,9 @@ class JobManager:
                 # "queued" -- with the failing job left reading "running".
                 job.state = "error"
                 job.error = _concise(exc)
+                # 异常类可以自带 `kind`（AI 那边是 models / features），界面用它
+                # 区分"去下权重"和"这场数据算不了"，而不是只显示一段红字。
+                job.error_kind = getattr(exc, "kind", None)
                 job.step = "失败"
                 traceback.print_exc()
             finally:

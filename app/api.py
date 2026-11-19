@@ -714,7 +714,8 @@ def api_storage_clean():
     targets = body.get("targets")
     if not isinstance(targets, list) or not targets:
         return _bad("targets 必须是非空数组")
-    if jobs.manager.has_active():
+    # 两个队列都算：AI 分析正在读 .csz / 写缓存时清掉 csz 目录，这一回合就废了。
+    if any(manager.has_active() for _, manager in _job_queues()):
         return _bad("有后台任务在跑，等它结束再清理", 409)
     try:
         result = storage.clean(targets)
@@ -780,25 +781,51 @@ def api_config_put():
     return jsonify(data)
 
 
+def _job_queues():
+    """(名字, 管理器) —— 抽屉里要看到的**所有**后台队列。
+
+    提取/扫描/头像/下载在 `app.jobs.manager`；AI 分析（单回合、整场统计、玩家
+    数据）在 `app.ai.queue.manager`。两个队列各有自己的 worker（AI 一算就是几
+    分钟，不能排在 60 秒的提取后面），但用户只该在**一个**地方看到它们，所以
+    列表和计数在这里合并。
+
+    懒 import `app.ai.queue`：它只 import `app.jobs`，不会把 torch 拖进库页面的
+    启动路径。
+    """
+    from .ai import queue as ai_queue
+
+    return (("extract", jobs.manager), ("ai", ai_queue.manager))
+
+
 @bp.get("/api/library/jobs")
 def api_jobs():
-    return jsonify({
-        "jobs": jobs.manager.list(active_only=request.args.get("active") == "1"),
-        "pending": jobs.manager.pending_count(),
-    })
+    active_only = request.args.get("active") == "1"
+    rows: list[dict[str, Any]] = []
+    pending = 0
+    for name, manager in _job_queues():
+        pending += manager.pending_count()
+        for job in manager.list(active_only=active_only):
+            rows.append({**job, "queue": name})
+    # 两个队列各自有序，合并后按"谁先提交"排：抽屉是从上往下读的，混着两个
+    # 队列时按创建时间才解释得通（AI 任务常常是刚刚点出来的那一个）。
+    rows.sort(key=lambda j: j.get("created_at") or 0.0, reverse=True)
+    return jsonify({"jobs": rows, "pending": pending})
 
 
 @bp.get("/api/library/jobs/<job_id>")
 def api_job(job_id: str):
-    job = jobs.manager.get(job_id)
-    if job is None:
-        return _bad("任务不存在", 404)
-    return jsonify(job.to_dict())
+    for _, manager in _job_queues():
+        job = manager.get(job_id)
+        if job is not None:
+            return jsonify(job.to_dict())
+    return _bad("任务不存在", 404)
 
 
 @bp.post("/api/library/jobs/clear")
 def api_jobs_clear():
-    return jsonify({"cleared": jobs.manager.clear_finished()})
+    return jsonify({"cleared": sum(
+        manager.clear_finished() for _, manager in _job_queues()
+    )})
 
 
 # ── 地图几何：没解压就解压 ───────────────────────────────────────────────────

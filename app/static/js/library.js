@@ -839,7 +839,12 @@ async function scanNow() {
 
 // ── 任务抽屉 ──────────────────────────────────────────────────────────────
 
-function openDrawer() { $('activity-drawer').classList.remove('hidden'); }
+function openDrawer() {
+  $('activity-drawer').classList.remove('hidden');
+  // AI 分析跑在**另一个**队列里（回放页/玩家页点出来的），所以抽屉打开时
+  // 必须重新拉一次：只靠库页面自己的动作触发轮询，会看不到那些任务。
+  startJobPolling();
+}
 
 const JOB_STATE = {
   queued: [t('lib.job.queued'), 'var(--text-dim)'], running: [t('lib.job.running'), 'var(--cyan-bright)'],

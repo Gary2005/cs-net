@@ -82,7 +82,11 @@ T_F64D = 0x12  # float64, 1st-order uint64 delta + byte-plane
 T_F32D2 = 0x13 # float32, 2nd-order delta (better for positions)
 T_F64D2 = 0x14 # float64, 2nd-order delta
 
-DEFAULT_LEVEL = 19
+#: zstd 压缩级别。**19 是 zstd 的最慢档**，而 .csz 是"写一次、读很多次"的产物：
+#: 实测同一份 20 回合的 demo（解压后 72 MB），19 档压 6.2 s 得 9.49 MB，这里用
+#: 9 档只要 0.34 s、10.07 MB —— 每份 demo 大 0.6 MB，换每份提取快 6 s。
+#: 解码速度两者一样（差在压缩端），所以读的一方完全不受影响。
+DEFAULT_LEVEL = 9
 
 
 # ── primitives ───────────────────────────────────────────────────────────────
@@ -226,6 +230,42 @@ def _unplane(buf: bytes, n: int, width: int, dtype) -> np.ndarray:
 # ── encoder ──────────────────────────────────────────────────────────────────
 
 
+def _iarr_bytes(v: list) -> bytes:
+    """`T_IARR` 的载荷：逐元素 zigzag + delta 的 varint 串。
+
+    ⚠ 以前这里逐元素调用 `_uvarint(_zigzag(x - prev))`（两次 Python 函数调用 +
+    一次 bytearray 拼接 / 一个整数）。这类数组的**条数**很吓人：一个 20 回合的
+    .csz 有 ~89 万条 int 列表（平均十几项，全是小整数），写完整个文件光这一段
+    就要 ~11 s。所以这里把 delta、zigzag、varint 全摊平进一个循环，只做位运算和
+    `append`，输出**逐字节一致**（`_iarr_bytes_py` 是原来的写法，留着做对照）。
+
+    试过用 numpy 向量化整段：小数组占绝大多数，`np.asarray` / 掩码展开的固定
+    开销比省下来的还多（实测反而慢一倍），所以这里只优化常数，不换算法。
+    """
+    out = bytearray()
+    ap = out.append
+    prev = 0
+    for x in v:
+        d = x - prev
+        prev = x
+        u = (d << 1) if d >= 0 else ((-d << 1) - 1)     # zigzag
+        while u >= 0x80:
+            ap((u & 0x7F) | 0x80)
+            u >>= 7
+        ap(u)
+    return bytes(out)
+
+
+def _iarr_bytes_py(v: list) -> bytes:
+    """逐元素版本（原来 `_enc_list` 里的那段），只做兜底和等价性对照。"""
+    out = bytearray()
+    prev = 0
+    for x in v:
+        out += _uvarint(_zigzag(x - prev))
+        prev = x
+    return bytes(out)
+
+
 def _enc(out: bytearray, v: Any) -> None:
     if v is None:
         out.append(T_NONE)
@@ -306,10 +346,7 @@ def _enc_list(out: bytearray, v: list) -> None:
     if types == {int}:
         out.append(T_IARR)
         out += _uvarint(n)
-        prev = 0
-        for x in v:
-            out += _uvarint(_zigzag(x - prev))
-            prev = x
+        out += _iarr_bytes(v)
         return
 
     if types == {float}:
@@ -398,16 +435,45 @@ def _dec(r: _Reader) -> Any:
         return []
     if tag == T_IARR:
         n = r.uvarint()
-        out = []
+        # ⚠ 这是整个解码里最烫的一段：一个 20 回合的 .csz 有 **1300 万个** zigzag
+        # varint（逐 tick 的 int 列，比如 `spotted` / `weapon`），之前是
+        # `acc += _unzigzag(r.uvarint())` —— 每个整数两次 Python 函数调用，
+        # 实测 8 s 上下。这里把 varint 和 zigzag 都摊平成局部变量的循环：
+        # 输出完全一样（同一套 7 bit 小端分组 + zigzag），只是不再有调用开销。
+        buf = r.buf
+        pos = r.pos
+        limit = len(buf)
+        out = [0] * n
         acc = 0
-        for _ in range(n):
-            acc += _unzigzag(r.uvarint())
-            out.append(acc)
+        for k in range(n):
+            if pos >= limit:
+                raise ValueError("truncated varint")
+            b = buf[pos]
+            pos += 1
+            if b < 0x80:
+                v = b
+            else:
+                v = b & 0x7F
+                shift = 7
+                while True:
+                    if pos >= limit:
+                        raise ValueError("truncated varint")
+                    b = buf[pos]
+                    pos += 1
+                    v |= (b & 0x7F) << shift
+                    if b < 0x80:
+                        break
+                    shift += 7
+            acc += (v >> 1) if not (v & 1) else -((v + 1) >> 1)
+            out[k] = acc
+        r.pos = pos
         return out
     if tag == T_BITS:
         n = r.uvarint()
         raw = r.take((n + 7) // 8)
-        return [bool(b) for b in np.unpackbits(np.frombuffer(raw, dtype=np.uint8))[:n]]
+        # `.tolist()` 是 C 循环；`[bool(b) for b in …]` 是 Python 循环，一个回合
+        # 几十万位，光这一行就要几百毫秒（见 `_dec` 里 float 分支的注释）。
+        return np.unpackbits(np.frombuffer(raw, dtype=np.uint8))[:n].astype(bool).tolist()
     if tag in (T_F32, T_F64, T_F32D, T_F64D, T_F32D2, T_F64D2):
         n = r.uvarint()
         width = 4 if tag in (T_F32, T_F32D, T_F32D2) else 8
@@ -418,7 +484,12 @@ def _dec(r: _Reader) -> Any:
             arr = _unplane_delta(buf, n, width, np.uint32 if width == 4 else np.uint64, 2)
         else:
             arr = _unplane(buf, n, width, np.float32 if width == 4 else np.float64)
-        return [float(x) for x in arr]
+        # ⚠ 这里以前是 `[float(x) for x in arr]`：numpy → list 走的是 **Python
+        # 循环**，一个 9.5 MB 的 .csz（解压后 72 MB、上千万个数）要 10~12 秒，
+        # 而 `codec.load` 是打开一场比赛、看一次玩家数据都要付一次的固定成本。
+        # `ndarray.tolist()` 是 C 里跑的同一件事（元素还是 Python float，值和类型
+        # 都不变），实测 12 s → 1.2 s。
+        return arr.tolist()
     if tag == T_BLOBS:
         n = r.uvarint()
         lens = [r.uvarint() for _ in range(n)]

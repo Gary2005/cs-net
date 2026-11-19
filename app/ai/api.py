@@ -22,8 +22,9 @@
     {"type":"result","payload":{...},"elapsed":23.9}
     {"type":"error","error":"…","kind":"models"}
 
-真的预测跑在后台线程里，生成器只读一个加锁的 `Progress` 快照。不带这个参数
-时行为完全不变（纯 JSON），命令行 / 老的调用方不受影响。
+真的预测跑在 AI 队列的 worker 线程里（`app.ai.queue`），生成器只读任务的
+`step` / `progress` 快照。不带这个参数时行为完全不变（纯 JSON），命令行 / 老的
+调用方不受影响。
 
 `/api/ai/stats` 的三层缓存
 --------------------------
@@ -44,7 +45,6 @@ import（那台 server 不需要模型也能放回放）。
 from __future__ import annotations
 
 import json
-import threading
 import time
 from typing import Any, Callable
 
@@ -174,42 +174,70 @@ def api_ai_models_download():
 
 
 def stream_work(
-    fn: Callable[[Callable[[float, str], None]], Any], *, name: str = "ai"
+    fn: Callable[[Callable[[float, str], None]], Any],
+    *,
+    name: str = "ai",
+    label: str = "AI 分析",
+    subject: Any = None,
 ) -> Response:
-    """把一段慢活放到后台线程，边算边把进度写成 NDJSON。
+    """把一段慢活排进 AI 队列，边算边把进度写成 NDJSON。
 
-    `fn(say)` 是真正的工作，`say(pct, stage)` 就是 `Progress.report`；它的返回值
-    作为最后一条 `result` 事件的 `payload`。`ModelUnavailable` / `AiFeaturesError`
-    会带上 `kind`，其余异常统一成 `kind="internal"` —— HTTP 头早就发出去了，
-    只能在流里报错。
+    `fn(say)` 是真正的工作，`say(pct, stage)` 就是任务进度；它的返回值作为最后
+    一条 `result` 事件的 `payload`。`ModelUnavailable` / `AiFeaturesError` 会带上
+    `kind`，其余异常统一成 `kind="internal"` —— HTTP 头早就发出去了，只能在流里
+    报错。
 
-    路由里同步跑也行（不带 `progress=1` 就是纯 JSON），这里只是把"同一段活"
-    的两种跑法分开写，免得两边各写一遍错误分类。
+    **活是在 AI 队列里跑的**（`app.ai.queue`，一个 worker），所以
+    `/library` 顶栏的「任务」抽屉能看到它，和提取任务并排：谁在算什么回合、
+    进度多少、失败了为什么，都不必开第二个页面去猜。
+
+    `subject` 相同的请求不会再排一个任务：第二个（第三个…）请求直接**跟着看**
+    已有的那个任务。两个浏览器点同一个回合，只会有一次推理。
+
+    不带 `progress=1` 的同步路径不走这里（它直接算，行为和以前一样）。
     """
-    from . import service
-    from .features import AiFeaturesError
-    from .models import ModelUnavailable
+    from . import queue as ai_queue
 
-    box = service.Progress()
-
-    def work() -> None:
-        try:
-            box.finish(payload=fn(box.report))
-        except ModelUnavailable as exc:
-            box.finish(error=str(exc), kind="models")
-        except AiFeaturesError as exc:
-            box.finish(error=str(exc), kind="features")
-        except Exception as exc:  # noqa: BLE001 —— 一条人话比 500 页面有用
-            box.finish(error=f"{type(exc).__name__}: {exc}", kind="internal")
-
-    threading.Thread(target=work, name=name, daemon=True).start()
+    job = ai_queue.find(subject)
+    if job is None:
+        job = ai_queue.submit(
+            label,
+            lambda worker: fn(lambda pct, stage: worker.set_step(stage, pct)),
+            subject=subject,
+        )
+        if job is None:                    # 刚好有人抢先提交了同一个 subject
+            job = ai_queue.find(subject)
 
     def events():
         while True:
-            ev = box.snapshot()
-            yield json.dumps(ev, ensure_ascii=False) + "\n"
-            if ev["type"] in ("result", "error"):
+            if job is None:                # 理论上到不了：只有 subject=None 才会
+                yield json.dumps({"type": "error", "error": "AI 任务提交失败",
+                                  "kind": "internal", "elapsed": 0.0},
+                                 ensure_ascii=False) + "\n"
                 return
+            snap = job.to_dict()
+            state = snap["state"]
+            if state == "done":
+                yield json.dumps({"type": "result", "payload": snap["result"],
+                                  "elapsed": snap["elapsed"]},
+                                 ensure_ascii=False) + "\n"
+                return
+            if state in ("error", "cancelled"):
+                yield json.dumps({
+                    "type": "error",
+                    "error": snap["error"] or "已取消",
+                    "kind": snap.get("error_kind") or ("cancelled" if state == "cancelled" else "internal"),
+                    "job_id": snap["id"],
+                    "elapsed": snap["elapsed"],
+                }, ensure_ascii=False) + "\n"
+                return
+            yield json.dumps({
+                "type": "progress",
+                "pct": round(float(snap["progress"] or 0.0), 4),
+                "stage": snap["step"],
+                "job_id": snap["id"],
+                "elapsed": snap["elapsed"],
+            }, ensure_ascii=False) + "\n"
             time.sleep(_TICK)
 
     return Response(events(), mimetype="application/x-ndjson", headers=_NO_STORE)
@@ -243,12 +271,18 @@ def api_ai_round(idx: int):
     refresh = _wants_refresh()
     stride = request.args.get("stride", type=int) or service.DEFAULT_STRIDE
     if _wants_stream():
+        meta = (snap.get("data") or {}).get("meta") or {}
+        # 同一个回合 + 同一个 stride 只算一次：统计页和回放页同时点，第二个跟着看。
+        subject = ("ai", "round", service.demo_key(snap.get("csz_path"), snap["data"]),
+                   idx, stride, bool(refresh))
         return stream_work(
             lambda say: service.predict_round(
                 snap["data"], idx, csz_path=snap.get("csz_path"),
                 stride=stride, refresh=refresh, progress=say,
             ),
             name=f"ai-round-{idx}",
+            label=f"AI 回合 {idx + 1} · {meta.get('map') or '未知地图'}",
+            subject=subject,
         )
     try:
         payload = service.predict_round(
@@ -314,7 +348,12 @@ def api_ai_stats():
                     elapsed=round(time.perf_counter() - t0, 1))
 
     if _wants_stream():
-        return stream_work(run, name="ai-stats")
+        meta = (data or {}).get("meta") or {}
+        subject = ("ai", "match", service.demo_key(snap.get("csz_path"), data),
+                   stride, bool(refresh))
+        return stream_work(run, name="ai-stats",
+                           label=f"AI 整场统计 · {meta.get('map') or '未知地图'}",
+                           subject=subject)
     try:
         return _json(run(None))
     except ModelUnavailable as exc:

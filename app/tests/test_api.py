@@ -969,6 +969,54 @@ def test_no_double_extraction(c, tmp: Path) -> None:
         manager.stop(timeout=2.0)
 
 
+def test_ai_jobs_visible(c, tmp: Path) -> None:
+    """AI 分析也要出现在库页面的任务列表里。
+
+    AI 跑在**另一个**队列（`app.ai.queue`，一个 worker，不能排在 60 秒的提取
+    后面），但用户只该在一个地方看到后台在干什么：`/api/library/jobs` 把两个
+    队列合并，AI 任务带 `queue: "ai"`。
+    """
+    print("\nAI 任务在同一个任务列表里")
+    from app.ai import queue as ai_queue
+
+    release = threading.Event()
+    job = ai_queue.submit("AI 回合 3 · de_mirage",
+                          lambda worker: release.wait(timeout=10.0),
+                          subject=("test", "visible", uuid.uuid4().hex))
+    check("任务提交成功", job is not None)
+    try:
+        deadline = time.time() + 10.0
+        while job.state != "running" and time.time() < deadline:
+            time.sleep(0.02)
+        eq("worker 起来了", job.state, "running")
+
+        body = c.get("/api/library/jobs").get_json()
+        mine = [j for j in body["jobs"] if j["id"] == job.id]
+        eq("出现在列表里", len(mine), 1)
+        eq("带队列名", mine[0]["queue"], "ai")
+        eq("类型是 ai", mine[0]["kind"], "ai")
+        eq("标题说明在算什么", mine[0]["label"], "AI 回合 3 · de_mirage")
+        check("pending 把它算进去", body["pending"] >= 1, str(body["pending"]))
+        eq("按 id 也能查",
+           c.get(f"/api/library/jobs/{job.id}").get_json()["id"], job.id)
+
+        active = c.get("/api/library/jobs?active=1").get_json()["jobs"]
+        check("只列在跑的时候也包含它",
+              any(j["id"] == job.id for j in active), str([j["id"] for j in active]))
+
+        # 清「已完成」不该把还在跑的删掉
+        eq("清除已完成返回数量", isinstance(
+            c.post("/api/library/jobs/clear").get_json()["cleared"], int), True)
+        eq("还在跑的仍然在",
+           c.get(f"/api/library/jobs/{job.id}").status_code, 200)
+    finally:
+        release.set()
+        deadline = time.time() + 10.0
+        while job.state in ("queued", "running") and time.time() < deadline:
+            time.sleep(0.02)
+        eq("任务正常结束", job.state, "done")
+
+
 def main() -> int:
     # Each group gets a fresh app + data dir, so a row seeded by one group
     # cannot quietly change another group's totals.
@@ -985,6 +1033,7 @@ def main() -> int:
         ("players/avatars", test_players_api, True),
         ("player search", test_player_search, True),
         ("duplicate extraction", test_no_double_extraction, True),
+        ("AI jobs in the drawer", test_ai_jobs_visible, True),
         ("storage", test_storage, True),
         # Last: it puts real work on the job queue, and draining it here keeps
         # a straggler from running against the next group's scratch dir.

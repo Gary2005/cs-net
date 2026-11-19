@@ -51,7 +51,12 @@ class ModelUnavailable(RuntimeError):
     """AI 功能用不了：没权重 / 没装 torch / 权重和 config 对不上。
 
     这不是"服务器内部错误"，是一条**给人看**的说明。
+
+    `kind` 是给任务队列和 NDJSON 流用的标签：界面靠它把这里和"这场 demo 算
+    不了"（`features`）分开，前者该引导去下权重，后者只能换一场。
     """
+
+    kind = "models"
 
 
 #: 内容指纹读多少：头尾各 1 MB（见 :func:`file_fingerprint`）。

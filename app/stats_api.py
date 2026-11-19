@@ -173,17 +173,35 @@ def _match_label(demo: dict) -> str:
     return str(demo.get("display_name") or demo.get("filename") or f"#{demo['id']}")
 
 
+def _player_label(demos: list[dict], steamid: str) -> str:
+    """选手名（库里第一场就带着）+ SteamID 尾巴，给任务抽屉当标题用。"""
+    for demo in demos:
+        try:
+            roster = json.loads(demo.get("players_json") or "[]")
+        except (TypeError, ValueError):
+            continue
+        for p in roster:
+            if str((p or {}).get("steamid")) == str(steamid) and p.get("name"):
+                return str(p["name"])
+    return f"…{str(steamid)[-6:]}"
+
+
 def _player_demos(steamid: str, limit: int = 200) -> list[dict]:
     result = db.list_demos(steamid=steamid, sort="date", limit=limit, offset=0)
     return list(result.get("items") or [])
 
 
-def _run(fn, *, name: str):
-    """慢活两种跑法：NDJSON 流（带进度）或纯 JSON。"""
+def _run(fn, *, name: str, label: str = "统计", subject=None):
+    """慢活两种跑法：NDJSON 流（带进度）或纯 JSON。
+
+    流式那条会排进 AI 队列，所以 `/library` 顶栏的「任务」抽屉里能看到
+    "玩家统计 / 玩家 AI 数据" 这类几分钟的活；`subject` 相同的请求只算一次
+    （同一场/同一个人被两个页签同时点）。
+    """
     from .ai.api import stream_work
 
     if _wants_stream():
-        return stream_work(fn, name=name)
+        return stream_work(fn, name=name, label=label, subject=subject)
     try:
         payload = fn(None)
     except Exception as exc:  # noqa: BLE001
@@ -261,7 +279,9 @@ def api_player_stats(steamid: str):
             "elapsed": round(time.perf_counter() - t0, 1),
         }
 
-    return _run(run, name="player-stats")
+    return _run(run, name="player-stats",
+                label=f"玩家统计 · {_player_label(demos, steamid)}",
+                subject=("stats", "player", str(steamid), bool(refresh)))
 
 
 @bp.get("/api/library/players/<steamid>/ai")
@@ -346,4 +366,6 @@ def api_player_ai(steamid: str):
             "elapsed": round(time.perf_counter() - t0, 1),
         }
 
-    return _run(run, name="player-ai")
+    return _run(run, name="player-ai",
+                label=f"玩家 AI 数据 · {_player_label(demos, steamid)}",
+                subject=("ai", "player", str(steamid), stride, bool(refresh)))

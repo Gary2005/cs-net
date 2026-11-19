@@ -61,8 +61,11 @@ OCC_CHUNK = 512
 class AiFeaturesError(RuntimeError):
     """这份数据没法治成模型输入（地图不认识 / 不是逐 tick 抽样 ……）。
 
-    消息是给人看的，路由层直接 400/503 返回。
+    消息是给人看的，路由层直接 400/503 返回；`kind` 给任务队列和 NDJSON 流
+    分类（和 `ModelUnavailable.kind == "models"` 对应）。
     """
+
+    kind = "features"
 
 
 @dataclass(frozen=True)

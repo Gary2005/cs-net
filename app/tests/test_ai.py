@@ -643,6 +643,75 @@ def test_cache_migration() -> None:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_stream_work_shares_one_job() -> None:
+    """同一个 subject 的两次请求 = 一个任务，第二个跟着看。
+
+    回放页和玩家页、或者两个浏览器点同一个回合时，**不能**排两次推理：
+    模型只有一份，多跑一次就是几十秒的 CPU/显存白烧。任务本身进 AI 队列，
+    所以库页面的「任务」抽屉能看到它。
+    """
+    print("\nstream_work 去重 + 任务可见")
+    import threading
+
+    from flask import Flask
+
+    from app.ai import queue as ai_queue
+    from app.ai.api import stream_work
+
+    app = Flask(__name__)
+    subject = ("test", "shared", uuid.uuid4().hex)
+    release = threading.Event()
+    calls = {"n": 0}
+
+    def work(say) -> dict:
+        calls["n"] += 1
+        say(0.2, "构建玩家特征…")
+        release.wait(timeout=10.0)
+        return {"ok": True, "value": 7}
+
+    @app.get("/work")
+    def _work():
+        return stream_work(work, name="t", label="测试 AI 任务", subject=subject)
+
+    results: list[list[dict]] = []
+
+    def client_call() -> None:
+        with app.test_client() as c:
+            body = c.get("/work").data.decode("utf-8")
+        results.append([json.loads(x) for x in body.splitlines() if x.strip()])
+
+    t1 = threading.Thread(target=client_call, name="w1")
+    t1.start()
+    # 等第一个请求把任务挂上（worker 是懒启动的），再发第二个。
+    import time as _t
+
+    for _ in range(100):
+        if ai_queue.manager.list():
+            break
+        _t.sleep(0.02)
+    t2 = threading.Thread(target=client_call, name="w2")
+    t2.start()
+    _t.sleep(0.3)                      # 让第二个请求走到 find()/attach
+    release.set()
+    t1.join(timeout=20)
+    t2.join(timeout=20)
+
+    eq("两次请求只跑了一次推理", calls["n"], 1)
+    eq("两个请求都拿到了结果", [r[-1]["type"] for r in results], ["result", "result"])
+    eq("结果一样", [r[-1]["payload"]["value"] for r in results], [7, 7])
+    check("每个流都先推过进度",
+          all(any(e["type"] == "progress" for e in r) for r in results),
+          str([[e["type"] for e in r] for r in results]))
+
+    jobs = [j for j in ai_queue.manager.list()
+            if j["subject"] == list(subject)]
+    eq("队列里只有一个任务", len(jobs), 1)
+    eq("任务类型是 ai（抽屉按它分组）", jobs[0]["kind"], "ai")
+    eq("标题带上算什么", jobs[0]["label"], "测试 AI 任务")
+    eq("算完了", jobs[0]["state"], "done")
+    eq("结果挂在任务上（下一次点开是缓存）", jobs[0]["result"]["value"], 7)
+
+
 def main() -> int:
     print("app/ai 单元测试")
     for name, fn in [
@@ -656,6 +725,7 @@ def main() -> int:
         ("cache migration", test_cache_migration),
         ("models pinned", test_pinned_models),
         ("routes", test_routes),
+        ("stream_work jobs", test_stream_work_shares_one_job),
     ]:
         print(f"\n[{name}]")
         try:
