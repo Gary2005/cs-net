@@ -6,6 +6,11 @@ flask
 pandas
 Pillow
 
+# Weight download for the AI panels: scripts/download_models.py uses
+# hf_hub_download (resume + checksums). The web app's "download models" button
+# runs the same script, so the app needs it too.
+huggingface_hub
+
 # Training: the PyTorch models under training/. For GPU, install torch from
 # https://pytorch.org instead of the default CPU wheel.
 torch

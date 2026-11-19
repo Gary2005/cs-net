@@ -36,6 +36,15 @@
   padding: 2px 8px; border-radius: 20px;
   background: rgba(56, 189, 248, 0.10); border: 1px solid var(--panel-border);
 }
+/* 版本号：现在是第 5 版。紧挨品牌名右侧，和 logo 一起读作「cs-net v5」——
+   放在 .brand-sub 里会跟"Demo 库 / 玩家 / 可视化回放"这种**当前页面**的标签
+   混在一起，换页时看着像版本号也变了。 */
+.brand-ver {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 1.4px; line-height: 1;
+  padding: 3px 6px; border-radius: 4px;
+  color: #0a1020; background: linear-gradient(90deg, #7ad7ff, #b69bff);
+  white-space: nowrap;
+}
 
 .nav { display: flex; gap: 6px; margin-left: 6px; }
 .nav-link {

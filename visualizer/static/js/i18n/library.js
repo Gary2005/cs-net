@@ -170,6 +170,17 @@ export default {
     'lib.clean.after': '之后',
     'lib.clean.done': '已删除 {n} 个文件，释放 {size}',
 
+    // ── AI 模型下载 ─────────────────────────────────────────────────────
+    'lib.models.title': 'AI 模型还没下载',
+    'lib.models.btn': '下载模型',
+    'lib.models.btnTitle': '从 Hugging Face 下载 v5 权重；连不上时自动改用 hf-mirror.com',
+    'lib.models.missing': '本地缺 {n} 个文件（合计约 665 MB），下载后 AI 面板即可使用',
+    'lib.models.running': '正在下载',
+    'lib.models.queued': '排队中…',
+    'lib.models.preparing': '准备下载（先探测可用站点）…',
+    'lib.models.done': '模型下载完成，AI 面板现在可以用了',
+    'lib.models.failed': '下载失败：{msg}',
+
     // ── 任务抽屉 ────────────────────────────────────────────────────────
     'lib.job.title': '后台任务',
     'lib.job.clearDone': '清除已完成',
@@ -389,6 +400,17 @@ export default {
     'lib.clean.dir': 'Folder',
     'lib.clean.after': 'After that',
     'lib.clean.done': 'Deleted {n} files, freed {size}',
+
+    // ── AI model download ───────────────────────────────────────────────
+    'lib.models.title': 'AI models are not downloaded yet',
+    'lib.models.btn': 'Download models',
+    'lib.models.btnTitle': 'Download the v5 weights from Hugging Face; falls back to hf-mirror.com when it is unreachable',
+    'lib.models.missing': '{n} file(s) missing (about 665 MB in total). Download them to enable the AI panels',
+    'lib.models.running': 'Downloading',
+    'lib.models.queued': 'Queued…',
+    'lib.models.preparing': 'Preparing (probing which host is reachable)…',
+    'lib.models.done': 'Models downloaded — the AI panels are ready now',
+    'lib.models.failed': 'Download failed: {msg}',
 
     // ── task drawer ─────────────────────────────────────────────────────
     'lib.job.title': 'Background tasks',

@@ -1,6 +1,9 @@
 """AI 预测的 HTTP 路由。
 
     GET /api/ai/status         → 权重在哪、什么设备、有没有装 torch（**不加载权重**）
+    GET /api/ai/models         → 写死的那几份权重文件在不在（**不联网**）
+    POST /api/ai/models/download
+                               → 起一个后台任务把缺的权重下下来（走 jobs 队列）
     GET /api/ai/round/<idx>    → 一个回合的完整预测（首次 15~25 秒，之后读缓存）
     GET /api/ai/round/<idx>?progress=1
                                → 同上，但边算边推 NDJSON（一行一个事件，进度条用）
@@ -57,6 +60,9 @@ _NO_STORE = {"Cache-Control": "no-store", "X-Accel-Buffering": "no"}
 #: 250 行，每行几十字节。
 _TICK = 0.08
 
+#: 下载权重的任务类型（出现在顶栏的「任务」抽屉里，和提取任务同一套队列）。
+MODELS_JOB_KIND = "models"
+
 
 def _json(payload: dict[str, Any]):
     from flask import current_app
@@ -92,6 +98,74 @@ def api_ai_status():
         if map_name:
             service.warmup(str(map_name))
     return _json(status)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 权重：本地有没有 / 缺了就下
+#
+# 两份 `.pt` 合计 665 MB，`models/` 因此不进 git —— 干净检出之后 AI 面板一定
+# 不可用。库页面的横幅问的就是这两个路由：**先查本地**（`inspect()` 只碰磁盘，
+# 不发请求，页面一打开就调），缺了才让人点按钮，点完把活儿交给 jobs 队列。
+#
+# 下载本身在 `scripts/download_models.py` 里（命令行 `python
+# scripts/download_models.py` 走的是同一个函数），所以这里不重复实现"从哪个
+# 站点下、断点续传怎么写"—— 网页和命令行不可能下出不一样的东西。
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@bp.get("/api/ai/models")
+def api_ai_models():
+    """本地那几份写死的权重在不在（`app/ai/models.py::PINNED_WEIGHTS`）。
+
+    不联网：`inspect()` 只看文件在不在、像不像一份完整的权重。远端大小是
+    下载脚本 `--check` 才关心的事 —— 每次开页面都去探测一遍 HF 会把首屏拖慢
+    好几秒，而且国内大概率还连不上。
+    """
+    from scripts.download_models import inspect
+
+    from app.jobs import manager
+
+    state = inspect()
+    # 正在下 / 刚下完的那个任务一起给页面，横幅直接用它的 step + progress，
+    # 不必再为"下载进度"造第二套接口。
+    state["download"] = next(
+        (job for job in manager.list() if job.get("kind") == MODELS_JOB_KIND), None
+    )
+    return _json(state)
+
+
+@bp.post("/api/ai/models/download")
+def api_ai_models_download():
+    """把缺的权重下到 `models/` 里，跑在后台任务里。
+
+    同步做这件事不行：665 MB 在慢网上要几分钟到几十分钟，浏览器的 fetch 会
+    先超时，中间还看不到任何进度。所以 POST 立刻返回 `job_id`，页面去
+    `/api/library/jobs/<id>` 读 step / progress（顶栏的「任务」抽屉也是同一份）。
+
+    已经齐了就不排队（除非 `?force=1`）；已经有一个在跑就把它还回去 ——
+    连点两下按钮不该排出两个 665 MB 的下载。
+    """
+    from app.jobs import manager
+    from scripts.download_models import download, inspect
+
+    force = request.args.get("force") in ("1", "true", "yes")
+    if inspect()["ok"] and not force:
+        return _json({"ok": True, "job_id": None, "already": True})
+
+    for job in manager.list(active_only=True):
+        if job.get("kind") == MODELS_JOB_KIND:
+            return _json({"ok": True, "job_id": job["id"], "already": True})
+
+    def run(job):
+        # `job.set_step(一句话, 0..1)` 是 jobs 队列的进度 API；下载脚本通过
+        # `progress` 回调把同一个动作报上来。
+        return download(
+            force=force,
+            progress=lambda frac, msg: job.set_step(msg, frac),
+        )
+
+    job = manager.submit(MODELS_JOB_KIND, "下载 AI 模型", run)
+    return _json({"ok": True, "job_id": job.id})
 
 
 # ═══════════════════════════════════════════════════════════════════════════

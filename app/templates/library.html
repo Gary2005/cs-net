@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title data-i18n="doc.library">cs-net — Demo 库</title>
-<link rel="stylesheet" href="/static/css/topbar.css?v=20261117h">
-<link rel="stylesheet" href="/lib-static/css/library.css?v=20260928a">
+<link rel="stylesheet" href="/static/css/topbar.css?v=20261119a">
+<link rel="stylesheet" href="/lib-static/css/library.css?v=20261119a">
 </head>
 <body>
 
@@ -17,6 +17,7 @@
   <div class="brand">
     <img src="/static/logo.svg" alt="cs-net" width="34" height="26">
     <span class="brand-name">cs-<b>net</b></span>
+    <span class="brand-ver" title="第 5 版">v5</span>
     <span class="brand-sub" data-i18n="common.nav.library">Demo 库</span>
   </div>
 
@@ -39,6 +40,27 @@
     </button>
   </div>
 </header>
+
+<!-- ══ AI 模型横幅 ════════════════════════════════════════════════════
+     `models/` 里那两份权重合计 665 MB，不进 git，所以干净检出之后 AI 面板一定
+     报"权重不存在"。这一条只在**真缺**的时候出现（问 /api/ai/models，只查
+     本地文件，不联网）。按钮起一个后台任务，跑的是
+     scripts/download_models.py，和命令行下载的是同一份代码。 -->
+<div id="model-banner" class="model-banner hidden">
+  <span class="mb-tag">AI</span>
+  <div class="mb-body">
+    <div class="mb-title">
+      <b data-i18n="lib.models.title">AI 模型还没下载</b>
+      <span id="model-detail" class="mb-detail"></span>
+    </div>
+    <div id="model-bar" class="mb-bar hidden"><i id="model-bar-fill"></i></div>
+  </div>
+  <button id="btn-download-models" class="btn-primary"
+          data-i18n-title="lib.models.btnTitle"
+          title="从 Hugging Face 下载 v5 权重；连不上时自动改用 hf-mirror.com">
+    ⬇ <span data-i18n="lib.models.btn">下载模型</span>
+  </button>
+</div>
 
 <!-- ══ 统计条 ════════════════════════════════════════════════════════ -->
 <div id="stats-strip" class="stats-strip"></div>
@@ -253,6 +275,6 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script type="module" src="/lib-static/js/library.js?v=20261117g"></script>
+<script type="module" src="/lib-static/js/library.js?v=20261119a"></script>
 </body>
 </html>

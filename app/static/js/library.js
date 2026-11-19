@@ -905,6 +905,101 @@ function pollJobUntilDone(jobId, onEach) {
   }, 1200);
 }
 
+// ── AI 模型：缺了就下 ─────────────────────────────────────────────────────
+//
+// 网页用的两份权重不在 git 里（`models/` 被忽略，合计 665 MB），干净检出之后
+// AI 面板一定用不了。缺的时候页面顶上出现一条横幅 + 一个按钮：
+//
+//   GET  /api/ai/models             本地那几份写死的文件在不在（不联网）
+//   POST /api/ai/models/download    起后台任务，跑 scripts/download_models.py
+//
+// "缺没缺"由后端判断（路径表在 app/ai/models.py 里），这里**不抄一份路径表**，
+// 抄了换版本时就会漂移。进度也不是另造的接口：下载任务就在 jobs 队列里，
+// 顶栏「任务」抽屉看到的是同一个任务。
+
+let MODEL_STATE = null;   // 最近一次 /api/ai/models 的响应
+let MODEL_JOB = null;     // 正在轮询的任务 id（同一个任务只挂一个定时器）
+
+async function loadModels() {
+  try {
+    MODEL_STATE = await api('/api/ai/models');
+  } catch {
+    return;  // 老版本后端 / 网络抖动：横幅不出现，页面照常用
+  }
+  renderModels();
+  const job = MODEL_STATE.download;
+  if (job && (job.state === 'running' || job.state === 'queued')) watchModelJob(job.id);
+}
+
+function renderModels() {
+  const box = $('model-banner');
+  if (!box) return;
+  const state = MODEL_STATE || { ok: true, missing: [], files: [] };
+  const job = state.download;
+  const running = Boolean(job && (job.state === 'running' || job.state === 'queued'));
+  const failed = Boolean(job && job.state === 'error' && !state.ok);
+  const missing = state.missing || [];
+
+  // 齐了、也没在下载、上次也没失败 → 整条横幅不出现
+  box.classList.toggle('hidden', !missing.length && !running && !failed);
+
+  let detail;
+  if (running) {
+    const pct = job.progress != null ? ` ${Math.round(job.progress * 100)}%` : '';
+    // 后端 step 里已经带了"第几个文件 / 已下多少"，直接显示，不重复翻译
+    detail = `${t('lib.models.running')}${pct} · ${job.step || t('lib.models.queued')}`;
+  } else if (failed) {
+    detail = t('lib.models.failed', { msg: job.error || job.step || '' });
+  } else {
+    detail = t('lib.models.missing', { n: missing.length });
+  }
+  $('model-detail').textContent = detail;
+
+  const bar = $('model-bar');
+  const showBar = Boolean(running && job.progress != null);
+  bar.classList.toggle('hidden', !showBar);
+  if (showBar) $('model-bar-fill').style.width = `${Math.round(job.progress * 100)}%`;
+
+  $('btn-download-models').disabled = running;
+}
+
+function watchModelJob(jobId) {
+  if (MODEL_JOB === jobId) return;   // 已经有人在看这个任务了
+  MODEL_JOB = jobId;
+  pollJobUntilDone(jobId, (job) => {
+    if (MODEL_STATE) MODEL_STATE.download = job;
+    renderModels();
+    if (!['done', 'error', 'cancelled'].includes(job.state)) return;
+    MODEL_JOB = null;
+    if (job.state === 'done') toast(t('lib.models.done'), 'ok');
+    else if (job.state === 'error') toast(t('lib.models.failed', { msg: job.error || job.step }), 'error');
+    loadModels();   // 重新查一遍本地状态：横幅该消失就消失，该留着报错就留着
+  });
+}
+
+async function downloadModels() {
+  const btn = $('btn-download-models');
+  btn.disabled = true;
+  // 先给一个"已经在动"的反馈：排进队列到第一个字节之间有探测站点的几秒。
+  if (MODEL_STATE) {
+    MODEL_STATE.download = { state: 'queued', step: t('lib.models.preparing'), progress: null };
+    renderModels();
+  }
+  try {
+    const r = await post('/api/ai/models/download');
+    if (r.job_id) {
+      watchModelJob(r.job_id);
+      startJobPolling();   // 顶栏的任务角标 / 抽屉同步动起来
+    } else {
+      await loadModels();  // 文件其实已经齐了
+    }
+  } catch (err) {
+    btn.disabled = false;
+    toast(t('lib.models.failed', { msg: err.message }), 'error');
+    loadModels();
+  }
+}
+
 // ── 设置弹窗 ──────────────────────────────────────────────────────────────
 
 let CFG = null;
@@ -1088,6 +1183,7 @@ function bindEvents() {
 
   $('btn-scan').onclick = scanNow;
   $('btn-settings').onclick = openSettings;
+  $('btn-download-models').onclick = downloadModels;
   $('btn-activity').onclick = () => {
     $('activity-drawer').classList.remove('hidden');
     startJobPolling();
@@ -1170,6 +1266,8 @@ async function init() {
   bindEvents();
   $('sort').value = S.sort;
   await load();
+  // 缺权重时把「下载模型」横幅放出来（查的是本地文件，不联网）
+  await loadModels();
   // 打开页面时后台可能还有任务在跑（比如上次的提取），把轮询接上
   const jobs = await refreshJobs();
   if (jobs.pending > 0) startJobPolling();

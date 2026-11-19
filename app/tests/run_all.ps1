@@ -40,6 +40,10 @@ Step 'AI prediction (pairing / windows / cache / api)' 'app/tests/test_ai.py'
 # per-match aggregate + its disk cache, and the two player-profile endpoints.
 # Uses hand-computed fixtures, so no GPU and no real checkpoints.
 Step 'AI stats (impact / position / duel score)'       'app/tests/test_ai_stats.py'
+# scripts/download_models.py (mirror fallback, resume, size checks) and the two
+# /api/ai/models* routes.  A local HTTP server impersonates the HF repo, so this
+# neither downloads 665 MB nor needs the real checkpoints.
+Step 'model download (mirror fallback / resume / api)' 'app/tests/test_download_models.py'
 
 Write-Host ""
 if ($failed.Count -gt 0) {

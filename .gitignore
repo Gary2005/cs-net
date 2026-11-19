@@ -28,6 +28,11 @@ visualizer/outputs/
 /models/
 /runs/
 
+# huggingface_hub's local-directory metadata: `scripts/download_models.py` puts
+# the weights in models/ with `local_dir=<repo>`, and hub keeps etags / partial
+# downloads under <repo>/.cache/huggingface/.
+/.cache/
+
 # Local demo files. Anchored to the repo root on purpose: an unanchored
 # "examples/" also matches visualizer/static/three/examples/, which would
 # silently block the vendored three.js addons (GLTFLoader,

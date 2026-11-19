@@ -135,7 +135,7 @@ def banner(host: str, port: int, *, maps: Optional[Path], data_dir: Path,
             ("地图:", str(maps) if maps else "(未找到，回退到空地 + 网格)"),
             ("提取器:", f"demo_extract（{sampling}）"),
         ],
-        title="cs-net · Demo 库 + 3D 回放",
+        title="cs-net v5 · Demo 库 + 3D 回放",
         columns=columns,
         color=color,
     )
@@ -144,7 +144,7 @@ def banner(host: str, port: int, *, maps: Optional[Path], data_dir: Path,
 def main() -> None:
     import argparse
 
-    ap = argparse.ArgumentParser(description="cs-net · Demo 库 + 3D 回放")
+    ap = argparse.ArgumentParser(description="cs-net v5 · Demo 库 + 3D 回放")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=5000)
     ap.add_argument("--maps-dir", default=None,

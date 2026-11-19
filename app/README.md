@@ -108,6 +108,13 @@ maps/optimized_obj_files/de_mirage.obj
 
 ### 模型预测（AI）
 
+两份权重合计 665 MB，**不在仓库里**（`models/` 被 gitignore）：干净检出之后
+AI 面板一定报"权重不存在"。第一次用之前先下 —— 库页面顶部的「下载模型」横幅点
+一下（只在真缺的时候出现），或者 `python scripts/download_models.py`。脚本用
+`huggingface_hub` 下；连不上 huggingface.co 时会把 `HF_ENDPOINT` 自动切到
+hf-mirror.com（和自己 `$env:HF_ENDPOINT = "https://hf-mirror.com"` 等价）。
+`--mirror` 强制走镜像、`--endpoint` 指定站点。
+
 回放页底部多了两个开关：**AI 预测面板** 和 **AI 对枪**。它们把 `models/` 下
 两份**写死**的训练产物接到眼前这场回放上：
 
@@ -529,6 +536,11 @@ app/data/
 | GET | `/api/ai/round/<idx>?progress=1` | 同上，但回 **NDJSON 流**：一行一个 `progress` / `result` / `error` 事件（进度条用） |
 | GET | `/api/ai/stats` | 整场比赛的 **AI 统计**（五个平均值，逐人 + 每回合明细）。冷启动 = 逐回合跑模型（几分钟），之后读整场汇总的磁盘缓存；`?refresh=1` 重算 |
 | GET | `/api/ai/stats?progress=1` | 同上，NDJSON 流 |
+| GET | `/api/ai/models` | 写死的那几份权重在不在（只查本地文件，**不联网**）。库页面的「下载模型」横幅读它；`download` 字段顺手带上最近一次下载任务 |
+| POST | `/api/ai/models/download` | 把缺的权重下下来，跑在 jobs 队列里（`scripts/download_models.py`），返回 `job_id`。`?force=1` 已有也重下；已经有一个在跑就返回它，不会排出第二个 665 MB |
+
+`/api/ai/models*` 这两条不需要先 `/api/load` 一场 —— 它们和回放会话无关，是
+"这台机器的 `models/` 齐不齐"。
 
 `/api/ai/round/<idx>` 的返回（约 130 KB，`Cache-Control: no-store`）：
 
@@ -578,7 +590,7 @@ models     用了哪两份权重、哪个设备
 不需要 pytest，直接跑：
 
 ```powershell
-pwsh -File app/tests/run_all.ps1        # 七个都跑
+pwsh -File app/tests/run_all.ps1        # 八个都跑
 ```
 
 或者单独跑：
@@ -592,6 +604,7 @@ pwsh -File app/tests/run_all.ps1        # 七个都跑
 | `app/tests/test_ui_wiring.py` | 前端接线：三个页面的元素 id、`data-*` 钩子、JS 里调用的 API 路径是否真的存在、回放页集成 |
 | `app/tests/test_ai.py` | AI：对枪窗口（只认敌人 / 不认自杀队友 / 死前 3 秒 / 终点取最后一个活帧 / 回合结束那一枪挂在最后一帧 / 重叠归谁）、4 秒窗口的补齐与 `seconds` 对零、进度事件（只增不减 / finish 后变 result）、缓存键与版本作废、写死的扁平 `<run>.pt` 路径与 `<run>.yaml` 配套（老布局 `last.pt` + `config.yaml` 仍认）、三条 `/api/ai/*` 路由的错误码与 NDJSON 流 |
 | `app/tests/test_ai_stats.py` | AI 数据统计：击杀前 2 秒的探针（时间轴是 tick 不是采样下标）、五个指标的**手算**用例（击杀 / 死亡影响力、按胜负补最后一个采样点、站位风险只算活着、对枪评分 `1-p` / `-p`）、跨回合与跨场的聚合口径（先加再除）、一次比赛里坏掉的回合只记 `errors` 不拖垮整场、比赛级缓存（第二次不再跑模型）、玩家页两个端点的合计算法 |
+| `app/tests/test_download_models.py` | 权重下载：要下哪些文件由 `PINNED_WEIGHTS` 推出来（`.pt` 与同名 `.yaml` 必须成套、落盘路径就是网页读的那几条）、`inspect()` 不联网且把几百字节的 LFS 指针文本算成"坏的"、站点优先级与**官方挂掉自动换镜像**（探测时就用镜像 + 下到一半失败再换，两家都挂要报出各自原因）、`local_dir` / `force_download` / 进度递进、没装 hub 时给一句能照做的话、`/api/ai/models*` 两条路由（齐了不排队、连点两下只排一个）。`hf_hub_download` 换成桩，**不下载 665 MB** |
 
 `test_ui_wiring.py` 值得单独说一句：这里没有浏览器，界面点不了。它静态地交叉检查
 每个 `.js` 引用的元素 id 是否在自己的 `.html` 里、每个 `/api/library/...`
