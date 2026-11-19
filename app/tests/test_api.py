@@ -13,12 +13,15 @@ Run:  python app/tests/test_api.py
 from __future__ import annotations
 
 import contextlib
+import hashlib
+import io
 import json
 import shutil
 import sys
 import threading
 import time
 import uuid
+import zipfile
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
@@ -969,6 +972,149 @@ def test_no_double_extraction(c, tmp: Path) -> None:
         manager.stop(timeout=2.0)
 
 
+def test_upload(c, tmp: Path) -> None:
+    """Uploading demos: add, queue, and recognise what is already in the library.
+
+    The duplicate answer is keyed on **content** (md5), not on the file name or
+    the path: the same match downloaded twice under two names, or unpacked from
+    a 5E archive that also arrived by post, must not become two cards and two
+    parses.  The digest is computed while the bytes are written, which is why
+    the answer is available before a parse would even start.
+    """
+    print("\nupload")
+    from app import db, ingest
+
+    original_run = ingest.run_extraction
+    ingest.run_extraction = lambda demo_id, job: {"demo_id": demo_id}  # noqa: ARG005
+
+    def send(pairs, field="files"):
+        data = {field: [(io.BytesIO(payload), name) for payload, name in pairs]}
+        return c.post("/api/library/upload", data=data,
+                      content_type="multipart/form-data")
+
+    def total() -> int:
+        return c.get("/api/library/stats").get_json()["total"]
+
+    def listing() -> list[dict]:
+        return c.get("/api/library/list?limit=50").get_json()["items"]
+
+    imports = tmp / "imports"
+    digest_a = hashlib.md5(b"demo-A").hexdigest()[:8]
+
+    try:
+        r = send([(b"demo-A", "aurora-vs-vitality.dem")])
+        body = r.get_json()
+        eq("one demo uploads", r.status_code, 200)
+        eq("and is added", body["imported"], 1)
+        eq("and queued for extraction", body["queued"], 1)
+        demo_id = body["items"][0]["demos"][0]["demo_id"]
+        check("the response carries the new id", isinstance(demo_id, int), str(body))
+
+        copy = imports / f"aurora-vs-vitality__{digest_a}.dem"
+        check("the file is copied into data/imports", copy.is_file(),
+              str([p.name for p in imports.glob("*")]))
+        row = next((i for i in listing() if i["id"] == demo_id), {})
+        eq("the card keeps the name the user uploaded",
+           row.get("display_name"), "aurora-vs-vitality.dem")
+        check("the digest is stored", bool(row.get("content_md5")), str(row))
+        eq("the row is waiting for extraction", row.get("status"), "discovered")
+
+        # Same bytes, another name: the library already has this demo.
+        r = send([(b"demo-A", "renamed-copy.dem")])
+        body = r.get_json()
+        eq("the same content under another name is a duplicate", body["duplicates"], 1)
+        eq("nothing is added", body["imported"], 0)
+        eq("nothing is queued", body["queued"], 0)
+        eq("and it points at the demo already in the library",
+           body["items"][0]["demos"][0]["existing"]["demo_id"], demo_id)
+        eq("no second copy is left on disk", len(list(imports.glob("*.dem"))), 1)
+        eq("still one row", total(), 1)
+
+        # One request, one new demo and one the library already has.
+        r = send([(b"demo-B", "b.dem"), (b"demo-A", "a-again.dem")])
+        body = r.get_json()
+        eq("a batch adds the new one", body["imported"], 1)
+        eq("and skips the known one", body["duplicates"], 1)
+        eq("queuing only the new one", body["queued"], 1)
+        eq("two rows now", total(), 2)
+
+        # Already in the library from a watch folder: different path, same bytes.
+        other = tmp / "watch-root" / "from-disk.dem"
+        other.parent.mkdir(parents=True, exist_ok=True)
+        other.write_bytes(b"demo-D")
+        seeded = db.upsert_demo(
+            str(other.resolve()), filename="from-disk.dem",
+            content_md5=hashlib.md5(b"demo-D").hexdigest(),
+            status=db.STATUS_READY, map_name="de_nuke",
+        )
+        r = send([(b"demo-D", "re-downloaded.dem")])
+        body = r.get_json()
+        eq("a demo already known from a watch folder is a duplicate too",
+           body["duplicates"], 1)
+        eq("pointing at that row",
+           body["items"][0]["demos"][0]["existing"]["demo_id"], seeded)
+        eq("and says which match it is",
+           body["items"][0]["demos"][0]["existing"]["map"], "de_nuke")
+
+        # 记录还在、文件已经没了（删除过、或者目录换了盘）：再传一次要把这场
+        # 加回来，而不是回一句「之前就有」让人没有出路。
+        gone = tmp / "gone-dir" / "deleted.dem"
+        gone.parent.mkdir(parents=True, exist_ok=True)
+        db.upsert_demo(str(gone), filename="deleted.dem",
+                       content_md5=hashlib.md5(b"demo-H").hexdigest(),
+                       status=db.STATUS_MISSING)
+        r = send([(b"demo-H", "deleted.dem")])
+        body = r.get_json()
+        eq("a demo whose file was deleted can be uploaded again", body["imported"], 1)
+        eq("and is queued", body["queued"], 1)
+
+        r = send([(b"not a demo", "notes.txt")])
+        body = r.get_json()
+        eq("a text file is skipped", body["rejected"], 1)
+        check("with a reason", "只能上传" in (body["items"][0]["reason"] or ""), str(body))
+        eq("an empty file is skipped", send([(b"", "empty.dem")]).get_json()["rejected"], 1)
+        eq("a request with no files is a 400",
+           c.post("/api/library/upload", data={},
+                  content_type="multipart/form-data").status_code, 400)
+
+        # 5E hands out zips; the members go through the same checks.
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("zz1.dem", b"demo-E")
+            zf.writestr("zz2.dem", b"demo-F")
+        pack = buf.getvalue()
+        r = send([(pack, "5e-pack.zip")])
+        body = r.get_json()
+        eq("a zip is unpacked and both demos are added", body["imported"], 2)
+        eq("with a job each", body["queued"], 2)
+        eq("the item lists the members", len(body["items"][0]["demos"]), 2)
+        r = send([(pack, "5e-pack.zip")])
+        body = r.get_json()
+        eq("the same zip again adds nothing", body["imported"], 0)
+        eq("and reports both members as duplicates", body["duplicates"], 2)
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("dup-of-a.dem", b"demo-A")
+            zf.writestr("brand-new.dem", b"demo-G")
+        r = send([(buf.getvalue(), "mixed.zip")])
+        body = r.get_json()
+        eq("a zip with one known and one new member is flagged as partial",
+           body["items"][0]["status"], "partial")
+        eq("the new member is added", body["imported"], 1)
+        eq("the known member is a duplicate", body["duplicates"], 1)
+        check("the duplicate member is not left behind on disk",
+              not (imports / "dup-of-a.dem").exists(),
+              str([p.name for p in imports.glob("*")]))
+
+        labels = [j["label"] for j in c.get("/api/library/jobs").get_json()["jobs"]
+                  if j["kind"] == "extract"]
+        check("the drawer names the uploaded demos",
+              any("brand-new.dem" in label for label in labels), str(labels[:8]))
+    finally:
+        ingest.run_extraction = original_run
+
+
 def test_ai_jobs_visible(c, tmp: Path) -> None:
     """AI 分析也要出现在库页面的任务列表里。
 
@@ -1033,6 +1179,7 @@ def main() -> int:
         ("players/avatars", test_players_api, True),
         ("player search", test_player_search, True),
         ("duplicate extraction", test_no_double_extraction, True),
+        ("upload", test_upload, True),
         ("AI jobs in the drawer", test_ai_jobs_visible, True),
         ("storage", test_storage, True),
         # Last: it puts real work on the job queue, and draining it here keeps

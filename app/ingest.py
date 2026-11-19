@@ -102,6 +102,7 @@ def register_demo(
     watch_root: Optional[str] = None,
     probe_file: bool = True,
     force_hash: bool = False,
+    md5: Optional[str] = None,
     db_path: Optional[Path] = None,
 ) -> tuple[int, bool]:
     """Register (or refresh) a ``.dem`` in the library.
@@ -113,6 +114,10 @@ def register_demo(
     Hashing a 300 MB demo costs about a second, which is far too much to repeat
     on every watcher poll, so an unchanged file reuses the digest already on its
     row.  Pass ``force_hash=True`` (the UI's "强制重新扫描") to override.
+
+    ``md5`` is a digest the caller already computed while the bytes were being
+    written -- that is how an upload lands on disk, one pass, hash as it goes.
+    Supplying it saves reading the same 300 MB a second time just to hash it.
     """
     p = Path(path)
     if not p.is_file():
@@ -132,11 +137,10 @@ def register_demo(
         fields["watch_root"] = watch_root
 
     # -- hash + content dedup ------------------------------------------------
-    md5 = None
-    if not force_hash and existing and existing.get("content_md5") and \
+    if md5 is None and not force_hash and existing and existing.get("content_md5") and \
             existing.get("file_size") == size:
         md5 = existing["content_md5"]
-    else:
+    elif md5 is None:
         try:
             md5 = file_md5(p)
         except OSError:

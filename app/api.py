@@ -21,7 +21,7 @@ from typing import Any, Optional
 
 from flask import Blueprint, jsonify, request, send_file
 
-from . import avatars, config, db, ingest, jobs, radar, storage, watcher
+from . import avatars, config, db, ingest, jobs, radar, storage, uploads, watcher
 
 bp = Blueprint(
     "library",
@@ -508,6 +508,31 @@ def api_refresh(demo_id: int):
         "refresh", f"刷新 #{demo_id}", lambda j: ingest.refresh_metadata(demo_id, j)
     )
     return jsonify({"job_id": job.id})
+
+
+# ── upload ───────────────────────────────────────────────────────────────────
+
+
+@bp.post("/api/library/upload")
+def api_upload():
+    """Take ``.dem`` / ``.zip`` files from the browser and add them to the library.
+
+    The files land in ``data/imports`` and are queued for extraction; the reply
+    describes every file individually so the page can show what happened to
+    each one.  A demo whose *content* is already in the library is reported as
+    ``duplicate`` and is not copied or parsed a second time -- see
+    :mod:`app.uploads` for why the digest is computed while the bytes stream in.
+    """
+    length = request.content_length or 0
+    if length > uploads.MAX_REQUEST_BYTES:
+        # Refuse before reading the body: a 10 GB selection should not have to
+        # reach the disk to learn it is too big.
+        return _bad(f"一次最多上传 {uploads.MAX_REQUEST_BYTES >> 30} GB", 413)
+
+    files = request.files.getlist("files") or request.files.getlist("file")
+    if not files:
+        return _bad("没有收到文件", 400)
+    return jsonify(uploads.import_uploads(files))
 
 
 # ── open in the replay page ──────────────────────────────────────────────────

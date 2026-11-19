@@ -13,6 +13,7 @@ Module map::
     metadata.py  scoreboard / roster / watched players from an extracted demo
     radar.py     map OBJ -> radar thumbnail
     ingest.py    discovery, dedup, extraction pipeline
+    uploads.py   browser uploads: stream to data/imports, content dedup
     watcher.py   polling directory watcher
     jobs.py      background job queue
     api.py       /api/library/* HTTP surface
@@ -22,4 +23,4 @@ Module map::
 from .config import Config
 
 __all__ = ["Config"]
-__version__ = "5.0.1"
+__version__ = "5.1.0"

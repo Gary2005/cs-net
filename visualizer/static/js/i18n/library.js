@@ -15,12 +15,40 @@
 export default {
   zh: {
     // ── 顶栏 ────────────────────────────────────────────────────────────
+    'lib.topbar.upload': '上传',
+    'lib.topbar.uploadTitle': '上传 .dem（或 zip），可以多选，也可以直接把文件拖到页面上',
     'lib.topbar.scan': '扫描',
     'lib.topbar.scanTitle': '立即扫描所有已启用的监听目录',
     'lib.topbar.tasks': '任务',
     'lib.topbar.tasksTitle': '后台任务',
     'lib.topbar.settings': '设置',
     'lib.topbar.settingsTitle': '监听目录 / 关注玩家 / 采样',
+
+    // ── 上传 ────────────────────────────────────────────────────────────
+    'lib.upload.title': '上传 Demo',
+    'lib.upload.lead': '文件会复制到 data\\imports 再入库；内容一样的直接跳过，不重复提取。',
+    'lib.upload.dropTitle': '松开鼠标，添加到 Demo 库',
+    'lib.upload.dropHint': '.dem 和 .zip，一次可以拖多个',
+    'lib.upload.more': '继续添加',
+    'lib.upload.close': '关闭',
+    'lib.upload.tagWaiting': '等待中',
+    'lib.upload.tagNew': '已加入',
+    'lib.upload.tagDup': '之前就有',
+    'lib.upload.tagPartial': '部分重复',
+    'lib.upload.tagRejected': '已跳过',
+    'lib.upload.tagFailed': '失败',
+    'lib.upload.members': '压缩包里有 {n} 个 demo',
+    'lib.upload.existsAt': '库里已有：{name}（{status}）',
+    'lib.upload.uploading': '正在上传 {n} 个文件…',
+    'lib.upload.queued': '已排队提取 {n} 个',
+    'lib.upload.truncated': '一次最多 40 个文件，{n} 个没传',
+    'lib.upload.doneNew': '已加入 {n} 个',
+    'lib.upload.doneDup': '{n} 个之前就有',
+    'lib.upload.doneBad': '{n} 个没成功',
+    'lib.upload.none': '没有可入库的文件',
+    'lib.upload.busy': '上一批还在传，等它传完',
+    'lib.upload.netFail': '上传中断了，检查一下连接再试',
+    'lib.upload.failToast': '上传失败：{msg}',
 
     // ── 工具栏 ──────────────────────────────────────────────────────────
     'lib.toolbar.view': '视图',
@@ -261,12 +289,40 @@ export default {
 
   en: {
     // ── top bar ─────────────────────────────────────────────────────────
+    'lib.topbar.upload': 'Upload',
+    'lib.topbar.uploadTitle': 'Upload .dem files (or a zip) — pick several, or drag them onto the page',
     'lib.topbar.scan': 'Scan',
     'lib.topbar.scanTitle': 'Scan every enabled watch folder now',
     'lib.topbar.tasks': 'Tasks',
     'lib.topbar.tasksTitle': 'Background tasks',
     'lib.topbar.settings': 'Settings',
     'lib.topbar.settingsTitle': 'Watch folders / watched players / sampling',
+
+    // ── upload ──────────────────────────────────────────────────────────
+    'lib.upload.title': 'Upload demos',
+    'lib.upload.lead': 'Files are copied into data\\imports and added to the library; anything already there is skipped, not parsed twice.',
+    'lib.upload.dropTitle': 'Drop to add to the demo library',
+    'lib.upload.dropHint': '.dem and .zip, several at a time',
+    'lib.upload.more': 'Add more',
+    'lib.upload.close': 'Close',
+    'lib.upload.tagWaiting': 'Waiting',
+    'lib.upload.tagNew': 'Added',
+    'lib.upload.tagDup': 'Already here',
+    'lib.upload.tagPartial': 'Partly here',
+    'lib.upload.tagRejected': 'Skipped',
+    'lib.upload.tagFailed': 'Failed',
+    'lib.upload.members': '{n} demos in the archive',
+    'lib.upload.existsAt': 'In the library: {name} ({status})',
+    'lib.upload.uploading': 'Uploading {n} files…',
+    'lib.upload.queued': 'Queued {n} for extraction',
+    'lib.upload.truncated': '{n} files were left out — 40 per upload at most',
+    'lib.upload.doneNew': 'Added {n}',
+    'lib.upload.doneDup': '{n} were already here',
+    'lib.upload.doneBad': '{n} did not make it',
+    'lib.upload.none': 'Nothing to add',
+    'lib.upload.busy': 'The previous batch is still uploading',
+    'lib.upload.netFail': 'The upload was interrupted — check the connection and retry',
+    'lib.upload.failToast': 'Upload failed: {msg}',
 
     // ── toolbar ─────────────────────────────────────────────────────────
     'lib.toolbar.view': 'View',

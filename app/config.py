@@ -64,6 +64,16 @@ MAPS_DIR = paths.MAPS_DIR
 EXAMPLES_DIR = paths.EXAMPLES_DIR
 
 
+def imports_dir() -> Path:
+    """浏览器上传的 ``.dem`` 落在这里（``data\\imports``）。
+
+    是个函数而不是常量：测试把 ``DATA_DIR`` 指到临时目录时，模块常量早就
+    在 import 那一刻定死了，上传会写进真正的资料库。``storage.recycle_dir``
+    也是同样的理由。
+    """
+    return DATA_DIR / "imports"
+
+
 # ── demo sources ─────────────────────────────────────────────────────────────
 
 #: Display order and labels for the platforms the library knows about.

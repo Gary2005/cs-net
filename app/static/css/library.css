@@ -615,6 +615,53 @@ body {
 .toast.error { border-color: rgba(248,113,113,0.5); color: #fecaca; }
 .toast.ok { border-color: rgba(52,211,153,0.5); color: #a7f3d0; }
 
+/* ── 上传 ────────────────────────────────────────────────────────────── */
+
+.upload-list { display: flex; flex-direction: column; gap: 6px; }
+.upload-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 11px; border-radius: 9px;
+  background: rgba(6,10,20,0.55); border: 1px solid var(--panel-border);
+}
+.upload-main { flex: 1; min-width: 0; }
+.upload-name {
+  font-size: 12.5px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.upload-sub { margin-top: 3px; font-size: 11.5px; line-height: 1.6; color: var(--text-dim); }
+
+/* 每个文件的结果标签：已入库 / 之前就有 / 跳过 / 失败 */
+.u-tag {
+  flex: none; font-size: 11px; padding: 2px 9px; border-radius: 999px;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.u-tag.ok   { color: var(--green); border-color: rgba(52,211,153,0.45); background: rgba(52,211,153,0.10); }
+.u-tag.dup  { color: var(--orange); border-color: rgba(251,191,36,0.45); background: rgba(251,191,36,0.10); }
+.u-tag.bad  { color: var(--red); border-color: rgba(248,113,113,0.45); background: rgba(248,113,113,0.10); }
+.u-tag.wait { color: var(--text-dim); border-color: var(--panel-border); }
+
+.upload-bar { height: 4px; border-radius: 2px; overflow: hidden; background: rgba(255,255,255,0.07); }
+.upload-bar i {
+  display: block; height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--cyan), var(--purple));
+  transition: width 0.2s;
+}
+
+/* 把文件拖到页面上时的整屏提示 */
+.drop-overlay {
+  position: fixed; inset: 0; z-index: 180;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(3, 6, 12, 0.78); backdrop-filter: blur(3px);
+  pointer-events: none;   /* 拖拽事件还得继续落到 window 上 */
+}
+.drop-box {
+  padding: 34px 48px; border-radius: 18px; text-align: center;
+  border: 2px dashed rgba(56,189,248,0.55); background: rgba(9,16,32,0.85);
+}
+.drop-ico { font-size: 30px; line-height: 1; color: var(--cyan-bright); }
+.drop-title { margin-top: 14px; font-size: 15px; color: var(--text); }
+.drop-hint { margin-top: 7px; font-size: 12px; color: var(--text-dim); }
+
 /* ── 滚动条 ─────────────────────────────────────────────────────────── */
 
 ::-webkit-scrollbar { width: 9px; height: 9px; }

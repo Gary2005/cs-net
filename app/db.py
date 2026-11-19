@@ -289,6 +289,30 @@ def get_by_md5(md5: str, db_path: Optional[Path] = None) -> Optional[dict[str, A
     return _row_to_dict(row) if row else None
 
 
+def live_by_md5(md5: str, db_path: Optional[Path] = None) -> Optional[dict[str, Any]]:
+    """Like :func:`get_by_md5`, but only a row whose ``.dem`` still exists.
+
+    A row keeps its digest after the file is deleted (the row becomes
+    ``missing``), and uploading that demo again should add it back rather than be
+    refused as a duplicate -- so "is this content already in the library?" has to
+    mean "…and can I still watch it?".  The difference only matters for uploads:
+    the scanner deliberately re-registers such a row and lets ``register_demo``
+    reuse its ``.csz``.
+    """
+    if not md5:
+        return None
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM demo_files WHERE content_md5 = ?", (md5,)
+        ).fetchall()
+    for row in rows:
+        item = _row_to_dict(row)
+        path = item.get("path")
+        if path and Path(path).is_file():
+            return item
+    return None
+
+
 # ── writes ───────────────────────────────────────────────────────────────────
 
 

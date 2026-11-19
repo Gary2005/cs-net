@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title data-i18n="doc.library">cs-net — Demo 库</title>
 <link rel="stylesheet" href="/static/css/topbar.css?v=20261119a">
-<link rel="stylesheet" href="/lib-static/css/library.css?v=20261120a">
+<link rel="stylesheet" href="/lib-static/css/library.css?v=20261120b">
 </head>
 <body>
 
@@ -28,6 +28,9 @@
   </nav>
 
   <div class="tb-actions">
+    <button id="btn-upload" class="btn-glass" data-i18n-title="lib.topbar.uploadTitle" title="上传 .dem（或 zip），可以多选，也可以直接把文件拖到页面上">
+      <span class="ico">⬆</span> <span data-i18n="lib.topbar.upload">上传</span>
+    </button>
     <button id="btn-scan" class="btn-glass" data-i18n-title="lib.topbar.scanTitle" title="立即扫描所有已启用的监听目录">
       <span class="ico">⟳</span> <span data-i18n="lib.topbar.scan">扫描</span>
     </button>
@@ -278,6 +281,40 @@
   </div>
 </div>
 
+<!-- ══ 上传 ══════════════════════════════════════════════════════════
+     顶栏「上传」和整页拖拽都走这里。文件复制到 data\imports 再入库，服务端
+     边落盘边算 md5：内容一样的当场判定为「之前已入过库」，不复制第二份，
+     也不再解析一遍。 -->
+<input type="file" id="file-input" class="hidden" multiple accept=".dem,.zip">
+
+<div id="drop-overlay" class="drop-overlay hidden">
+  <div class="drop-box">
+    <div class="drop-ico">⬆</div>
+    <div class="drop-title" data-i18n="lib.upload.dropTitle">松开鼠标，添加到 Demo 库</div>
+    <div class="drop-hint" data-i18n="lib.upload.dropHint">.dem 和 .zip，一次可以拖多个</div>
+  </div>
+</div>
+
+<div id="upload-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 data-i18n="lib.upload.title">上传 Demo</h2>
+      <button class="modal-close" data-close="upload-modal">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="sect-note" data-i18n="lib.upload.lead">文件会复制到 data\imports 再入库；内容一样的直接跳过，不重复提取。</p>
+      <div id="upload-list" class="upload-list"></div>
+      <div id="upload-bar" class="upload-bar hidden"><i id="upload-bar-fill"></i></div>
+    </div>
+    <div class="modal-foot">
+      <span id="upload-msg" class="inline-msg"></span>
+      <span class="spacer"></span>
+      <button id="btn-upload-more" class="btn-glass" data-i18n="lib.upload.more">继续添加</button>
+      <button class="btn-ghost" data-close="upload-modal" data-i18n="lib.upload.close">关闭</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ 任务抽屉 ══════════════════════════════════════════════════════ -->
 <div id="activity-drawer" class="drawer hidden">
   <div class="drawer-head">
@@ -292,6 +329,6 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script type="module" src="/lib-static/js/library.js?v=20261120a"></script>
+<script type="module" src="/lib-static/js/library.js?v=20261120b"></script>
 </body>
 </html>

@@ -148,6 +148,8 @@ def js_api_paths(text: str) -> set[str]:
     """API paths the JS calls, with `${...}` interpolations normalised away."""
     raw = set(re.findall(r"""(?:api|post|put|patch)\(\s*[`'"]([^`'"]+)[`'"]""", text))
     raw |= set(re.findall(r"""fetch\(\s*[`'"]([^`'"]+)[`'"]""", text))
+    # XHR is used where fetch cannot report upload progress (the demo upload).
+    raw |= set(re.findall(r"""\.open\(\s*['"]\w+['"]\s*,\s*[`'"]([^`'"]+)[`'"]""", text))
     out = set()
     for p in raw:
         if not p.startswith("/api/"):

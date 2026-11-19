@@ -66,9 +66,9 @@ script. Like the weights, it is a one-time thing per checkout.
 
 Every release ships two Windows x64 zips that need neither Python nor conda:
 
-* `cs-net-5.0.1-win64-lite.zip` — no weights; the AI panel downloads them (665 MB)
+* `cs-net-5.1.0-win64-lite.zip` — no weights; the AI panel downloads them (665 MB)
   the first time you click the banner;
-* `cs-net-5.0.1-win64-full.zip` — weights included, works offline.
+* `cs-net-5.1.0-win64-full.zip` — weights included, works offline.
 
 Unpack, double-click `cs-net.exe`, done. The map geometry is already unpacked in
 both, and the library/`config.json`/`.csz` live in the `data\` folder next to the
@@ -100,6 +100,10 @@ side-channel binary, browser, unrar); run it if something looks off.
    that holds your demos (candidates found on this machine are listed) → **Save**
    → **扫描 / Scan**. The library starts empty on purpose: the folder has to be
    yours.
+   No folder to watch? **上传 / Upload** in the top bar takes one or more `.dem`
+   files (or a 5E `.zip`), or drag them onto the page: they are copied into
+   `data\imports\`, and a demo whose content is already in the library is
+   recognised and skipped instead of being parsed again.
 2. **Wait for extraction** — each `.dem` becomes a `.csz` in the background
    (110 MB → ~7 MB). Progress shows in the list and in the **任务 / Tasks** drawer.
 3. **Watch it back** — tick one or more demos → **载入分析 / Load analysis** →

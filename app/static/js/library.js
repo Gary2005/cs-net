@@ -837,6 +837,185 @@ async function scanNow() {
   }
 }
 
+// ── 上传 ──────────────────────────────────────────────────────────────────
+//
+// 拖进来或选中的文件走一次 XHR：fetch 没有上传进度，几百 MB 的 demo 没个
+// 进度条看着就像卡死了。服务端边写边算 md5，所以响应回来的时候就已经知道
+// 「这份内容之前入过库没有」：重复的不会再复制一份，也不会再解析一遍。
+
+let UPLOADING = false;
+
+/** 结果标签 [文案 key, class]，按接口给的 status 查。 */
+const UPLOAD_TAGS = {
+  imported: ['lib.upload.tagNew', 'ok'],
+  duplicate: ['lib.upload.tagDup', 'dup'],
+  partial: ['lib.upload.tagPartial', 'dup'],
+  rejected: ['lib.upload.tagRejected', 'bad'],
+  failed: ['lib.upload.tagFailed', 'bad'],
+};
+
+/** 一个文件的结果：名字 + 一行说明（体积 / 重复说明 / 出错原因）+ 标签。 */
+function uploadRowHTML(item) {
+  const [key, cls] = UPLOAD_TAGS[item.status] || UPLOAD_TAGS.failed;
+  const demos = item.demos || [];
+  const notes = [];
+  if (item.size) notes.push(fmtSize(item.size));
+  if (item.reason) notes.push(esc(item.reason));
+  if (demos.length > 1) notes.push(t('lib.upload.members', { n: demos.length }));
+  for (const d of demos) {
+    if (d.status === 'duplicate') {
+      const ex = d.existing || {};
+      notes.push(t('lib.upload.existsAt', {
+        name: esc(ex.name || d.name),
+        status: esc(statusText({ status: ex.status, status_label: ex.status_label })),
+      }));
+    } else if (d.status === 'failed' && d.reason) {
+      notes.push(esc(d.reason));
+    }
+  }
+  return `<div class="upload-row">
+    <div class="upload-main">
+      <div class="upload-name">${esc(item.name)}</div>
+      ${notes.length ? `<div class="upload-sub">${notes.join('<br>')}</div>` : ''}
+    </div>
+    <span class="u-tag ${cls}">${t(key)}</span>
+  </div>`;
+}
+
+function uploadPendingHTML(file) {
+  return `<div class="upload-row">
+    <div class="upload-main">
+      <div class="upload-name">${esc(file.name)}</div>
+      <div class="upload-sub">${fmtSize(file.size)}</div>
+    </div>
+    <span class="u-tag wait">${t('lib.upload.tagWaiting')}</span>
+  </div>`;
+}
+
+function setUploadBar(frac) {
+  $('upload-bar').classList.remove('hidden');
+  $('upload-bar-fill').style.width = `${Math.round(Math.min(1, Math.max(0, frac)) * 100)}%`;
+}
+
+function openUploadModal(files) {
+  $('upload-list').innerHTML = files.map(uploadPendingHTML).join('');
+  $('upload-msg').className = 'inline-msg';
+  $('upload-msg').textContent = t('lib.upload.uploading', { n: files.length });
+  setUploadBar(0);
+  $('upload-modal').classList.remove('hidden');
+}
+
+/**
+ * 一次请求传完这批文件。用 XHR 而不是 fetch，只为 upload.onprogress。
+ * 服务端在响应里逐个文件报结果，所以这里只解析、不重试。
+ */
+function uploadRequest(body, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/library/upload');
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable && ev.total) onProgress(ev.loaded / ev.total);
+    };
+    xhr.onload = () => {
+      let data = null;
+      try { data = JSON.parse(xhr.responseText); } catch { /* 非 JSON 的错误页 */ }
+      if (xhr.status >= 200 && xhr.status < 300 && data) return resolve(data);
+      reject(new Error((data && data.error) || `${xhr.status} ${xhr.statusText}`));
+    };
+    xhr.onerror = () => reject(new Error(t('lib.upload.netFail')));
+    xhr.send(body);
+  });
+}
+
+function renderUploadResult(data) {
+  const items = data.items || [];
+  $('upload-list').innerHTML = items.length
+    ? items.map(uploadRowHTML).join('')
+    : `<div class="dim" style="font-size:12px">${t('lib.upload.none')}</div>`;
+  $('upload-bar').classList.add('hidden');
+
+  const bad = (data.rejected || 0) + (data.failed || 0);
+  const bits = [];
+  if (data.imported) bits.push(t('lib.upload.doneNew', { n: data.imported }));
+  if (data.duplicates) bits.push(t('lib.upload.doneDup', { n: data.duplicates }));
+  if (bad) bits.push(t('lib.upload.doneBad', { n: bad }));
+  toast(bits.join(t('lib.toast.sep')) || t('lib.upload.none'), bad ? 'error' : 'ok');
+
+  const msg = $('upload-msg');
+  msg.className = `inline-msg ${bad ? 'err' : 'ok'}`;
+  let note = '';
+  if (data.queued) note = t('lib.upload.queued', { n: data.queued });
+  else if (data.imported && data.already_queued) {
+    note = t('lib.toast.alreadyQueued', { n: data.already_queued });
+  }
+  if (data.truncated) {
+    note = [note, t('lib.upload.truncated', { n: data.truncated })]
+      .filter(Boolean).join(t('lib.toast.sep'));
+  }
+  msg.textContent = note;
+
+  if (data.imported) load();
+  // 不主动弹任务抽屉：抽屉从右边盖过来，正好压住这个弹窗的最后一行和结果标签，
+  // 用户看到的是「上传完成了，但结果呢」。顶栏的角标已经在涨，要看得自己点开。
+  if (data.queued) startJobPolling();
+}
+
+async function uploadFiles(list) {
+  const files = [...(list || [])].filter(Boolean);
+  if (!files.length) return;
+  if (UPLOADING) return toast(t('lib.upload.busy'), 'error');
+
+  UPLOADING = true;
+  $('btn-upload').disabled = true;
+  $('btn-upload-more').disabled = true;
+  openUploadModal(files);
+  const body = new FormData();
+  files.forEach((f) => body.append('files', f, f.name));
+  try {
+    renderUploadResult(await uploadRequest(body, setUploadBar));
+  } catch (err) {
+    $('upload-bar').classList.add('hidden');
+    $('upload-msg').className = 'inline-msg err';
+    $('upload-msg').textContent = err.message;
+    toast(t('lib.upload.failToast', { msg: err.message }), 'error');
+  } finally {
+    UPLOADING = false;
+    $('btn-upload').disabled = false;
+    $('btn-upload-more').disabled = false;
+  }
+}
+
+/** 整页拖拽：只有真拖了文件才接管，拖一段文字不会弹出提示。 */
+function bindDropZone() {
+  const overlay = $('drop-overlay');
+  let depth = 0;
+  const hasFiles = (ev) => {
+    const types = ev.dataTransfer && ev.dataTransfer.types;
+    return !!types && [...types].includes('Files');
+  };
+  window.addEventListener('dragenter', (ev) => {
+    if (!hasFiles(ev)) return;
+    ev.preventDefault();
+    depth += 1;
+    overlay.classList.remove('hidden');
+  });
+  window.addEventListener('dragover', (ev) => {
+    if (hasFiles(ev)) ev.preventDefault();
+  });
+  window.addEventListener('dragleave', () => {
+    if (!depth) return;
+    depth -= 1;
+    if (!depth) overlay.classList.add('hidden');
+  });
+  window.addEventListener('drop', (ev) => {
+    if (!hasFiles(ev)) return;
+    ev.preventDefault();
+    depth = 0;
+    overlay.classList.add('hidden');
+    uploadFiles(ev.dataTransfer.files);
+  });
+}
+
 // ── 任务抽屉 ──────────────────────────────────────────────────────────────
 
 function openDrawer() {
@@ -1264,6 +1443,15 @@ function bindEvents() {
   $('btn-delete-selected').onclick = deleteSelected;
 
   $('btn-scan').onclick = scanNow;
+  $('btn-upload').onclick = () => $('file-input').click();
+  $('btn-upload-more').onclick = () => $('file-input').click();
+  $('file-input').onchange = (ev) => {
+    const files = [...ev.target.files];
+    // 清空 value，同一个文件再选一次也还会触发 change
+    ev.target.value = '';
+    uploadFiles(files);
+  };
+  bindDropZone();
   $('btn-settings').onclick = openSettings;
   MODEL_BANNER.bind();
   MAP_BANNER.bind();
