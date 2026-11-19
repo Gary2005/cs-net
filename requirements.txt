@@ -1,11 +1,20 @@
+# Core: demo extraction (.dem -> .csz), the demo library and the 3D replay studio.
 numpy
-torch
-webdataset
-zstandard
-open3d
-tqdm
 demoparser2
+zstandard
 flask
-matplotlib
+pandas
+Pillow
+
+# Training: the PyTorch models under training/. For GPU, install torch from
+# https://pytorch.org instead of the default CPU wheel.
+torch
 pyyaml
-huggingface_hub  # 仅下载/验证模型 checkpoint 需要
+tqdm
+matplotlib
+
+# Scraper only (HLTV -> .dem). Also needs a browser:
+#   python -m playwright install chromium
+# and unrar on PATH (rarfile shells out to it).
+rarfile
+playwright
