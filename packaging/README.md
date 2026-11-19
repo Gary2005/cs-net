@@ -4,8 +4,8 @@
 
 | 包 | 体积 | 权重 | 适合谁 |
 |---|---|---|---|
-| `cs-net-5.0.0-win64-lite.zip` | ~660 MB | 不随包，首次开 AI 时点横幅下载（665 MB） | 默认选择 |
-| `cs-net-5.0.0-win64-full.zip` | ~1.28 GB | 随包，解压即离线可用 | 网络差 / 离线机器 |
+| `cs-net-5.0.0-win64-lite.zip` | ~690 MB | 不随包，首次开 AI 时点横幅下载（665 MB） | 默认选择 |
+| `cs-net-5.0.0-win64-full.zip` | ~1.31 GB | 随包，解压即离线可用 | 网络差 / 离线机器 |
 
 地图几何**两个包里都是解压好的**：943 MB 的文本 OBJ 压进 zip 只占约 300 MB，
 不值得换玩家一次"点横幅 + 等解压 + 额外占 943 MB"。
@@ -100,16 +100,33 @@ HF 上独立更新，不用为了换模型重发整个包。full 版是兜底。
 `ModuleNotFoundError: No module named 'polars'`。这两个包一共给包加了约 245 MB
 （未压缩），但少了它们提取功能就是废的。
 
+**scipy 不是可选依赖。** `demo_extract/voxel.py` 的烟雾凸包有两条路：装了 scipy
+走 Qhull（C 实现，一颗满云 2.2 ms），没装就**静默**回落到纯 Python beneath-beyond
+（147 ms）。两条路算出来的凸包逐格相同，所以测试全绿、画面一样，只有速度差 65 倍
+—— 而"逐帧两两遮挡"每颗烟每个 journal 记录都要重建一次。5.0.0 第一版就漏了它：
+同一个 7068 帧的回合，遮挡阶段 **102 秒**，补上 scipy 之后 **9.1 秒**（同一个 exe、
+同一个回合，除此之外没有任何差别），玩家看到的就是"两两遮挡 1536/7068 帧… 24%
+· 28.9 s"。现在 `app/selftest.py::_check_smoke_hull` 把 `HULL_BACKEND == "qhull"`
+钉死，少收 scipy 的包在"打包自检"那一步就红，不必等玩家盯着进度条。
+
+**而"装上 scipy"还不等于"能用 Qhull"。** `scipy.spatial` 会程序化 import
+`scipy._external.array_api_compat.numpy.fft`（PyInstaller 自带的 hook 还停在
+`scipy._lib.…` 的老位置），静态分析看不见它 —— 于是 `import scipy` 成功、
+`from scipy.spatial import ConvexHull` 却抛 `ModuleNotFoundError`，又被 `voxel.py`
+的 `try/except ImportError` 吞成"没装 scipy"。spec 里因此显式
+`collect_submodules("scipy.spatial")` + `collect_submodules("scipy._external.array_api_compat")`；
+自检那条会把第一个起不来的模块名打出来，不用再猜。
+
 ## 体积预算（实测 5.0.0）
 
 | 组成 | 压缩后 |
 |---|---|
-| Python 运行时 + 依赖（含 CPU torch 的 114 MB 轮子、polars + pyarrow 的 245 MB） | ~350 MB |
+| Python 运行时 + 依赖（含 CPU torch 的 114 MB 轮子、polars + pyarrow 的 245 MB、scipy 的 70 MB） | ~380 MB |
 | Valve 静态资源（武器模型 / 贴图 / 雷达图，295 MB） | ~260 MB |
 | 地图几何（解压后 943 MB 的 OBJ） | ~300 MB |
 | 权重 665 MB | full 才有 |
 
-所以 lite **659 MB**、full **1277 MB**。都远在 GitHub Release 单文件 2 GB 之下，
+所以 lite **688 MB**、full **1306 MB**。都远在 GitHub Release 单文件 2 GB 之下，
 不需要分卷。
 
 ## 常见问题

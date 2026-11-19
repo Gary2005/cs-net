@@ -145,6 +145,40 @@ def _check_demo_parse(demo: Path) -> str:
     return f"{Path(demo).name}: {rows} 行（{type(df).__name__}）"
 
 
+def _check_smoke_hull() -> str:
+    """烟雾凸包必须走 scipy 的 Qhull。
+
+    ``demo_extract/voxel.py`` 在**没有 scipy** 时会静默回落到纯 Python
+    beneath-beyond：两者算同一个凸包，但一颗满云一次重建 **147 ms vs 2.2 ms**。
+    那条路径在"逐帧两两遮挡"里每颗烟每个 journal 记录都要走一次，所以漏掉
+    scipy 的表现不是报错，而是**慢 65 倍** —— v5.0.0 的发行包就这样发出去过：
+    一个 7068 帧的回合，遮挡阶段跑了 **102 秒**（装了 scipy 是 9.6 秒），
+    用户在进度条上看到的就是"两两遮挡 1536/7068 帧… 24% · 28.9 s"。
+    """
+    from demo_extract import voxel
+
+    if voxel.HULL_BACKEND == "qhull":
+        return f"hull backend={voxel.HULL_BACKEND}"
+
+    # 回落了：把原因问出来。`import scipy` 成功**不代表** `scipy.spatial` 起得来
+    # —— 少收一个 .pyd、或者 .pyd 找不到 scipy.libs 里的 DLL，voxel.py 里那个
+    # try/except ImportError 都会把它吞成"环境里没有 scipy"，只留一句"慢 65 倍"
+    # 让人猜。逐个 import，报第一个炸的模块。
+    why = ""
+    for mod in ("scipy.spatial._qhull", "scipy.spatial.distance",
+                "scipy.spatial.transform", "scipy.spatial"):
+        try:
+            __import__(mod)
+        except Exception as exc:  # noqa: BLE001
+            why = f"{mod} → {type(exc).__name__}: {exc}"
+            break
+    raise RuntimeError(
+        "烟雾凸包回落到纯 Python（scipy.spatial 起不来）：逐帧遮挡会慢约 65 倍。"
+        + (f" 第一个起不来的模块：{why}" if why else "")
+        + " 装法：pip install -r requirements.txt（发行包见 packaging/requirements-app.txt）"
+    )
+
+
 def _check_numba_parallel() -> str:
     """真的编译并跑一个 ``parallel=True`` 内核。
 
@@ -289,13 +323,14 @@ def run(verbose: bool = False) -> int:
     print("  -- 依赖 --")
     for module in ("numpy", "pandas", "flask", "PIL", "zstandard",
                    "demoparser2", "polars", "pyarrow", "numba", "llvmlite",
-                   "torch", "huggingface_hub", "pystray"):
+                   "scipy", "torch", "huggingface_hub", "pystray"):
         _attempt(f"import {module}", _import_version(module))
 
     print("  -- 内部链路 --")
     _attempt("demo_extract (解压链)", _check_demo_extract)
     _attempt("app.ai (预测链)", _check_ai_chain)
     _attempt("numba 并行内核", _check_numba_parallel)
+    _attempt("烟雾凸包 (scipy/Qhull)", _check_smoke_hull)
     demo = _selftest_demo()
     if demo is None:
         _record("demoparser2 解析（polars/pyarrow）", True,

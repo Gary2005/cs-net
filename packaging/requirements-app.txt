@@ -20,6 +20,13 @@ zstandard==0.25.0
 huggingface_hub==2.4.0
 numba==0.68.0
 
+# 烟雾凸包的后端。`demo_extract/voxel.py` 没装 scipy 时会**静默**回落到纯 Python
+# beneath-beyond：结果一模一样，一颗满云重建 147 ms → 2.2 ms。而"逐帧两两遮挡"
+# 每颗烟每个 journal 记录都要重建一次，所以少这一行的表现不是报错，是**慢 65 倍**
+# ——v5.0.0 的包就这么发出去过：7068 帧的回合，遮挡阶段 102 秒（装了 scipy 是 1.5 秒）。
+# `app/selftest.py::_check_smoke_hull` 会在打包自检里把这条钉死。
+scipy==1.18.1
+
 # demoparser2 的运行时依赖，必须显式钉住、并由 cs-net.spec 整包收进来：
 # 它是纯 Rust 扩展，在 Rust 里 `PyImport_ImportModule("polars")` / ("pyarrow")，
 # PyInstaller 的静态分析看不见 —— 少一个，玩家点"提取"就是

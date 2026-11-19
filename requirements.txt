@@ -13,6 +13,11 @@ Pillow
 # numpy at <2.6.
 numba
 
+# 烟雾凸包（`demo_extract/voxel.py::convex_hull_halfspaces`）：有 scipy 走 Qhull
+# 的 C 实现，没有就静默回落到纯 Python —— 结果一样，一次重建 147 ms vs 2.2 ms。
+# 逐帧遮挡每颗烟每个 journal 记录都要重建，少装它整条链路慢到不可用。
+scipy
+
 # Weight download for the AI panels: scripts/download_models.py uses
 # hf_hub_download (resume + checksums). The web app's "download models" button
 # runs the same script, so the app needs it too.

@@ -75,6 +75,15 @@ hiddenimports = (
     + collect_submodules("demo_extract")
     + collect_submodules("scripts.training_data")
     + collect_submodules("training")
+    # scipy 的烟雾凸包（`demo_extract/voxel.py` 用 `scipy.spatial.ConvexHull`）。
+    # PyInstaller 自带的 hook 只补 `scipy._lib.array_api_compat.numpy.fft`，但
+    # scipy 1.18 把这个包挪到了 `scipy._external.…`，而且它是 importlib 里
+    # **程序化**导入的 —— 静态分析完全看不见。少这一条的结果不是报错，是打包后
+    # `scipy.spatial` 一 import 就 ModuleNotFoundError、`voxel.HULL_BACKEND` 静默
+    # 回落到纯 Python：烟雾凸包慢 65 倍，玩家看到的就是"两两遮挡 24% · 28.9 s"。
+    # `app/selftest.py::_check_smoke_hull` 会把这条钉死，少收一个模块就红。
+    + collect_submodules("scipy.spatial")
+    + collect_submodules("scipy._external.array_api_compat")
     # pystray 在 import 时按平台 `from . import _win32`，静态分析不一定跟得进
     # ctypes 后端；显式列出来，免得打出来的包"托盘不可用"。
     + ["pystray", "pystray._win32"]
