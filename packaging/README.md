@@ -4,8 +4,8 @@
 
 | 包 | 体积 | 权重 | 适合谁 |
 |---|---|---|---|
-| `cs-net-5.0.0-win64-lite.zip` | ~610 MB | 不随包，首次开 AI 时点横幅下载（665 MB） | 默认选择 |
-| `cs-net-5.0.0-win64-full.zip` | ~1.2 GB | 随包，解压即离线可用 | 网络差 / 离线机器 |
+| `cs-net-5.0.0-win64-lite.zip` | ~660 MB | 不随包，首次开 AI 时点横幅下载（665 MB） | 默认选择 |
+| `cs-net-5.0.0-win64-full.zip` | ~1.28 GB | 随包，解压即离线可用 | 网络差 / 离线机器 |
 
 地图几何**两个包里都是解压好的**：943 MB 的文本 OBJ 压进 zip 只占约 300 MB，
 不值得换玩家一次"点横幅 + 等解压 + 额外占 943 MB"。
@@ -84,25 +84,32 @@ dist\cs-net\cs-net.exe --packaging-selftest      # 先自检，再发
 **地图在 CI 里解压。** 见开头：外层 zip 从 207 MB（已是压缩格式）变成约 250 MB，
 多 40 MB 下载，换掉玩家一次解压步骤和 943 MB 临时空间。
 
-**权重不随 lite 包。** 公开分发时 1.1 GB 比 1.6 GB 的下完率高得多；权重还能在
+**权重不随 lite 包。** 公开分发时 0.66 GB 比 1.28 GB 的下完率高得多；权重还能在
 HF 上独立更新，不用为了换模型重发整个包。full 版是兜底。
 
 **`--packaging-selftest` 写进 exe 里。** 不是单测，是给产物做的体检：import
-`torch` / `numba` / `demoparser2`、走一遍 `demo_extract` 和 `app.ai` 两条最容易漏
-的链、起真的 HTTP 服务打 `/healthz` `/library` `/replay` `/api/maps` 等路由，
-最后打印一行 `SELFTEST_JSON`。缺隐藏 import 时，玩家看到的是"库页面和回放都
-正常、只有 AI 面板 500" —— 那种 bug 只能靠它挡。
+`torch` / `numba` / `demoparser2` / `polars` / `pyarrow`、走一遍 `demo_extract` 和
+`app.ai` 两条最容易漏的链、必要时**真的解析一张 demo**（`CSNET_SELFTEST_DEMO`）、
+起真的 HTTP 服务打 `/healthz` `/library` `/replay` `/api/maps` 等路由，最后打印一行
+`SELFTEST_JSON`。缺隐藏 import 时，玩家看到的是"库页面和回放都正常、只有 AI 面板
+500"或者"一提取就 `ModuleNotFoundError`" —— 那种 bug 只能靠它挡。
+
+**polars / pyarrow 是 `collect_all` 硬收进来的。** `demoparser2` 是纯 Rust 扩展，
+它在 Rust 里 `PyImport_ImportModule("polars")`，PyInstaller 的静态分析看不见。
+5.0.0 第一版就栽在这里：源码和自检都正常，玩家一点"提取"就
+`ModuleNotFoundError: No module named 'polars'`。这两个包一共给包加了约 245 MB
+（未压缩），但少了它们提取功能就是废的。
 
 ## 体积预算（实测 5.0.0）
 
 | 组成 | 压缩后 |
 |---|---|
-| Python 运行时 + 依赖（含 CPU torch 的 114 MB 轮子） | ~300 MB |
+| Python 运行时 + 依赖（含 CPU torch 的 114 MB 轮子、polars + pyarrow 的 245 MB） | ~350 MB |
 | Valve 静态资源（武器模型 / 贴图 / 雷达图，295 MB） | ~260 MB |
 | 地图几何（解压后 943 MB 的 OBJ） | ~300 MB |
 | 权重 665 MB | full 才有 |
 
-所以 lite **607 MB**、full **1225 MB**。都远在 GitHub Release 单文件 2 GB 之下，
+所以 lite **659 MB**、full **1277 MB**。都远在 GitHub Release 单文件 2 GB 之下，
 不需要分卷。
 
 ## 常见问题
