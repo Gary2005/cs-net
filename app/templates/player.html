@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="doc.player">cs-net — 玩家档案</title>
+<link rel="stylesheet" href="/static/css/topbar.css?v=20261119a">
+<link rel="stylesheet" href="/lib-static/css/library.css?v=20261119a">
+<link rel="stylesheet" href="/lib-static/css/players.css?v=20261118a">
+</head>
+<body data-steamid="{{ steamid }}">
+
+<div class="bg-glow glow-1"></div>
+<div class="bg-glow glow-2"></div>
+
+<!-- ══ 顶栏 ══════════════════════════════════════════════════════════ -->
+<header class="topbar">
+  <div class="brand">
+    <img src="/static/logo.svg" alt="cs-net" width="34" height="26">
+    <span class="brand-name">cs-<b>net</b></span>
+    <span class="brand-ver" data-i18n-title="common.brand.version" title="第 5 版">v5</span>
+    <span class="brand-sub" data-i18n="common.brand.player">玩家档案</span>
+  </div>
+
+  <nav class="nav">
+    <a class="nav-link" href="/library" data-i18n="common.nav.library">Demo 库</a>
+    <span class="nav-link active" data-i18n="common.nav.players">玩家</span>
+    <a class="nav-link" href="/replay" data-i18n="common.nav.replay">可视化回放</a>
+  </nav>
+
+  <div class="tb-actions">
+    <span id="avatar-stat" class="avatar-stat"></span>
+    <a class="btn-glass" href="/players">← <span data-i18n="player.profile.back">玩家列表</span></a>
+  </div>
+</header>
+
+<!-- ══ 档案 ══════════════════════════════════════════════════════════ -->
+<main class="profile">
+  <section class="phead">
+    <div id="profile-head" class="phead-identity"></div>
+    <div class="phead-actions">
+      <button id="btn-watch" class="btn-glass" data-i18n="player.common.watch.add">加入关注</button>
+      <button id="btn-refresh-avatar" class="btn-glass"
+              data-i18n-title="player.profile.refreshAvatar.title"
+              title="忽略缓存，重新从 Steam 取一次头像"
+              data-i18n="player.profile.refreshAvatar">刷新头像</button>
+    </div>
+  </section>
+  <section id="profile-stats" class="stat-grid"></section>
+
+  <!-- 数据统计：传统 / AI 两个页签。AI 要跑模型，点了才请求。 -->
+  <section id="player-analysis" class="pblock">
+    <div class="pblock-head">
+      <h3 data-i18n="player.stats.title">数据统计</h3>
+      <div class="pstats-tabs" role="tablist">
+        <button class="pstats-tab active" data-tab="trad" role="tab" aria-selected="true"
+                data-i18n="player.stats.tab.trad">传统数据</button>
+        <button class="pstats-tab" data-tab="ai" role="tab" aria-selected="false"
+                data-i18n="player.stats.tab.ai">AI 数据</button>
+      </div>
+      <span class="spacer"></span>
+      <span id="pstats-note" class="dim"></span>
+    </div>
+    <div id="player-stats"></div>
+  </section>
+
+  <section class="pblock">
+    <h3><span data-i18n="player.profile.names.title">用过的名字</span>
+        <span class="hint" data-i18n="player.common.inGame">游戏内</span></h3>
+    <div id="name-table"></div>
+  </section>
+
+  <section class="pblock">
+    <h3 data-i18n="player.profile.maps.title">地图分布</h3>
+    <div id="map-table"></div>
+  </section>
+
+  <section class="pblock">
+    <div class="pblock-head">
+      <h3 data-i18n="player.profile.matches.title">比赛记录</h3>
+      <input id="demo-search" class="input search" type="search"
+             data-i18n-placeholder="player.profile.search.ph"
+             placeholder="在这位玩家的 Demo 里搜索…">
+      <span class="spacer"></span>
+      <span id="demo-count" class="dim"></span>
+      <button id="btn-load-all" class="btn-glass"
+              data-i18n-title="player.profile.loadAll.title"
+              title="把这批 Demo 全部送进回放页（最多 100 场）"
+              data-i18n="player.profile.loadAll">全部载入分析</button>
+    </div>
+    <div id="demo-list" class="mlist"></div>
+    <footer id="pager" class="pager"></footer>
+  </section>
+
+</main>
+
+<div id="toast" class="toast hidden"></div>
+
+<script type="module" src="/lib-static/js/player.js?v=20261118c"></script>
+</body>
+</html>

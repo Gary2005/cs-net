@@ -1,0 +1,214 @@
+name: release-win
+
+# 打 tag 时自动出包并发布到 GitHub Release；手动触发（workflow_dispatch）只跑构建、
+# 把产物传成 artifact，不建 Release —— 用来验证 spec 改动，不用先想版本号。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: '打哪些包'
+        type: choice
+        options: [both, lite, full]
+        default: both
+
+permissions:
+  contents: write   # 建 Release、传资产
+
+concurrency:
+  group: release-win
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      # Windows runner 的控制台默认不是 UTF-8，中文日志会变成乱码；统一成 UTF-8。
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'      # 原生轮子全是 cp312，别往上抬
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/demo_extract/sidechannel_go/go.mod
+          cache-dependency-path: tools/demo_extract/sidechannel_go/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'      # 只有 visualizer 的语法/一致性检查用得到
+
+      # pip 缓存 + 权重缓存：命中时省 3~5 分钟；HF 临时抽风时还能靠上一次的权重重跑。
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pip\Cache
+            models
+            .cache\huggingface
+          key: pack-${{ runner.os }}-${{ hashFiles('packaging/requirements-app.txt', 'packaging/requirements-build.txt', 'scripts/download_models.py') }}
+
+      - name: 装依赖（CPU torch）
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r packaging/requirements-build.txt -r packaging/requirements-app.txt
+          python -c "import torch; assert torch.__version__.endswith('+cpu'), torch.__version__; print('torch', torch.__version__)"
+
+      - name: 编 Go 辅助程序（火/烟）
+        working-directory: tools/demo_extract/sidechannel_go
+        run: go build -o cs2sidechannel.exe .
+
+      - name: 解压地图几何
+        run: python scripts/extract_maps.py --dir maps/optimized_obj_files --json
+
+      # 先跑一遍仓库自己的测试，再花十几分钟打包：spec / 资源路径改坏了，
+      # 在这里红比在 40 分钟后的打包末尾红便宜得多。
+      - name: 跑测试套件
+        shell: pwsh
+        env:
+          CSNET_PYTHON: python
+          PYTHONIOENCODING: utf-8
+        run: |
+          ./app/tests/run_all.ps1
+          if ($LASTEXITCODE -ne 0) { throw "app 测试失败" }
+          ./visualizer/tests/run_all.ps1
+          if ($LASTEXITCODE -ne 0) { throw "visualizer 测试失败" }
+
+      - name: 下载权重（full 版要随包）
+        run: python scripts/download_models.py --json
+
+      - name: PyInstaller（onedir）
+        run: python -m PyInstaller packaging/cs-net.spec --noconfirm
+
+      # 先把地图放进 dist，自检才是在**真实布局**上跑的：地图目录在 exe 旁边、
+      # 不是 `_internal` 里。否则自检只能说"没有 zip，也没看见 .obj"，等于没查。
+      - name: 地图进 dist
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist\cs-net\maps\optimized_obj_files | Out-Null
+          Copy-Item maps\optimized_obj_files\*.obj dist\cs-net\maps\optimized_obj_files\
+
+      # 这里是整个流水线最重要的一个检查：跑的是**打出来的 exe**，而且把 PATH 清成
+      # 只剩系统目录 —— 否则漏收的 DLL 会从 runner 的 Python 环境里被找到，
+      # 表现就是"CI 全绿、玩家那边 DLL load failed"。
+      - name: 打包自检（空 PATH）
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\Windows\system32;C:\Windows"
+          $env:CSNET_DATA_DIR = "$PWD\.selftest-data"
+          $lines = & "dist\cs-net\cs-net.exe" --packaging-selftest 2>&1
+          $code = $LASTEXITCODE
+          $lines | ForEach-Object { Write-Host $_ }
+          if ($code -ne 0) { throw "packaging selftest 失败（exit $code）" }
+
+      # 上面那条自检是在**进程内**跑的，`main()` 里"起服务 + 打横幅"那段根本没走过
+      # —— 而那正是玩家双击之后第一眼看到的东西。这里真起一次 exe：等它写出
+      # server.json，请求 /healthz，再检查控制台里有没有横幅和地址，然后杀掉。
+      - name: 双击冒烟（控制台模式）
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\Windows\system32;C:\Windows"
+          $data = "$PWD\.smoke-data"
+          New-Item -ItemType Directory -Force $data | Out-Null
+          $env:CSNET_DATA_DIR = $data
+          $out = "$data\stdout.txt"
+          $err = "$data\stderr.txt"
+          $p = Start-Process -FilePath "dist\cs-net\cs-net.exe" -PassThru -WindowStyle Hidden `
+                             -RedirectStandardOutput $out -RedirectStandardError $err
+          try {
+            $url = $null
+            foreach ($i in 1..90) {                 # 冷启动 + 首次建库，最多等 90 s
+              Start-Sleep -Seconds 1
+              if (Test-Path "$data\server.json") {
+                $url = (Get-Content "$data\server.json" -Raw | ConvertFrom-Json).url
+                if ($url) { break }
+              }
+              if ($p.HasExited) { break }           # 崩了就别再等
+            }
+            if (-not $url) {
+              throw "exe 没起来（exit $($p.ExitCode)）：$(Get-Content $err -Raw -ErrorAction SilentlyContinue)"
+            }
+            $health = Invoke-RestMethod -Uri ($url -replace '/library$', '/healthz') -TimeoutSec 20
+            if (-not $health.ok) { throw "/healthz 不 ok：$($health | ConvertTo-Json -Compress)" }
+            $banner = Get-Content $out -Raw
+            if ($banner -notmatch 'cs-net v5') { throw "控制台里没有横幅：$banner" }
+            if ($banner -notmatch [regex]::Escape($url)) { throw "横幅里没有 $url：$banner" }
+            Write-Host "控制台模式 ok：$url"
+          }
+          finally {
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          }
+
+      - name: 组包（lite / full）
+        shell: pwsh
+        run: |
+          ./packaging/package.ps1 -Flavor "${{ inputs.flavor || 'both' }}"
+
+      # 组包脚本自己会检查"地图/权重在不在"，但不会检查**打进 zip 的路径**对不对
+      # （顶层目录少了、maps 放深了一层，解压出来就是打不开）。这里直接列 zip 内容：
+      # 每个条目都必须落在唯一的顶层目录 `cs-net-<ver>-win64-<flavor>\` 里 ——
+      # 7z 会把命令行上的相对路径原样存进去，真出过一次解压多一层 `packaging\out\`。
+      # 顺手把 2 GB 的上限也守住，那是 GitHub Release 的单文件硬限制。
+      - name: 检查 zip 布局
+        shell: pwsh
+        run: |
+          $sevenZip = 'C:\Program Files\7-Zip\7z.exe'
+          $top = 'cs-net-\d+\.\d+\.\d+-win64-(lite|full)(\\|$)'
+          foreach ($zip in Get-ChildItem packaging/out/*.zip) {
+            if ($zip.Length -gt 2GB) { throw "$($zip.Name) 超过 Release 单文件 2 GB 上限" }
+            # 只要数据行：7z 的表头里有本机路径，结尾还有 "N files, M folders" 汇总行。
+            $entries = @((& $sevenZip l $zip.FullName) |
+                         Where-Object { $_ -match '^\d{4}-\d\d-\d\d ' -and $_ -notmatch 'files,|folders' })
+            $stray = @($entries | Where-Object { $_ -notmatch $top })
+            if ($stray.Count) { throw "$($zip.Name)：$($stray.Count) 个条目不在顶层目录，例如 $($stray[0])" }
+            $list = $entries -join "`n"
+            $need = @('cs-net.exe', '_internal\app\', 'maps\optimized_obj_files\de_dust2.obj',
+                      'README.txt', 'build-info.json', 'cs2sidechannel.exe')
+            if ($zip.Name -match 'full') { $need += 'models\aim\' }
+            foreach ($n in $need) {
+              if (-not $list.Contains($n)) { throw "$($zip.Name) 里缺 $n" }
+            }
+            Write-Host ("{0}: {1:N0} MB，{2} 个条目，布局 ok" -f $zip.Name, ($zip.Length / 1MB), $entries.Count)
+          }
+
+      - name: 发布到 GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            packaging/out/*.zip
+            packaging/out/sha256sums.txt
+          generate_release_notes: true
+          body: |
+            Windows x64，解压后双击 `cs-net.exe`。两个包内容一样，差别只在权重：
+
+            * `cs-net-*-lite.zip`：不带权重，第一次开 AI 面板时点横幅下载（约 665 MB）
+            * `cs-net-*-full.zip`：权重随包，解压即可离线使用
+
+            地图几何已经解压好，不需要再跑任何脚本。用 `sha256sums.txt` 校验完整性。
+            游戏内资产（武器模型、贴图、雷达图）版权归 Valve Corporation，仅限本机个人分析使用。
+
+      - name: 上传构建产物（仅手动触发时）
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: cs-net-win64
+          path: |
+            packaging/out/*.zip
+            packaging/out/sha256sums.txt
+          retention-days: 14
+
+      - name: 自检日志（失败也要留下）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-debug
+          path: |
+            .selftest-data/logs/**
+            build/cs-net/**
+          retention-days: 7
+          if-no-files-found: ignore

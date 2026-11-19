@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>cs-net — 3D Replay & AI Path Prediction</title>
-<link rel="stylesheet" href="/static/css/style.css?v=20260903d">
+<title data-i18n="doc.replay">cs-net — 可视化回放</title>
+<link rel="stylesheet" href="/static/css/topbar.css?v=20261119a">
+<link rel="stylesheet" href="/static/css/style.css?v=20261118a">
 
 <script type="importmap">
 {
@@ -23,64 +24,71 @@
 <div class="bg-glow glow-2"></div>
 
 <!-- ═══════════════════════════════════════════════════════════════════
-     上传引导层（初始状态）
+     顶栏（品牌块 + 导航 + 右侧动作区）
+
+     四个页面共用一份结构、一份样式（topbar.css）。它必须待在 #app **外面**：
+     以前它在 #app 里面，而 /replay 不带 ?batch= 又没有活着的会话时会走空状
+     态、把整个 #app 藏起来 —— 顶栏连同导航一起消失，看着就像点「可视化回放」
+     跳到了另一个产品。顶栏是外壳，不是回放内容的一部分。
+
+     单独跑 visualizer/server.py 时没有 /library 和 /players 这两个路由
+     （in_app 为假），那时候不画导航 —— 与其给两个 404 的链接，不如老实只留
+     品牌块。
      ═══════════════════════════════════════════════════════════════════ -->
-<div id="landing" class="landing">
-  <div class="landing-card">
-    <div class="landing-logo">
-      <div class="logo-badge">
-        <img src="/static/logo.svg" alt="cs-net logo" width="92" height="72">
-      </div>
-      <h1>cs-net</h1>
-      <p class="landing-sub">3D 回放 · 平滑插值 · AI 路径预测</p>
-    </div>
+<header id="topbar" class="topbar">
+  <div class="brand">
+    <img src="/static/logo.svg" alt="cs-net" width="34" height="26">
+    <span class="brand-name">cs-<b>net</b></span>
+    <span class="brand-ver" data-i18n-title="common.brand.version" title="第 5 版">v5</span>
+    <span class="brand-sub" data-i18n="common.nav.replay">可视化回放</span>
+  </div>
 
-    <!-- 上传区 -->
-    <div id="drop-zone" class="drop-zone">
-      <div class="drop-icon">
-        <svg viewBox="0 0 48 48" width="56" height="56">
-          <path d="M24 32V12m0 0l-8 8m8-8l8 8" stroke="#00e5ff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M8 36v4a4 4 0 004 4h24a4 4 0 004-4v-4" stroke="#7c4dff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div class="drop-text">
-        <strong>拖拽文件到此处</strong>
-        <span>或点击选择文件</span>
-      </div>
-      <div class="drop-formats">
-        <span class="fmt">.dem</span><span class="fmt">.json</span><span class="fmt">.json.gz</span>
-      </div>
-      <input type="file" id="file-input" accept=".dem,.json,.gz" hidden>
-    </div>
+  {% if in_app %}
+  <nav class="nav">
+    <a class="nav-link" href="/library" data-i18n="common.nav.library">Demo 库</a>
+    <a class="nav-link" href="/players" data-i18n="common.nav.players">玩家</a>
+    <!-- 本页是当前页，不做成链接：点了也只是重新加载自己，还会把 ?batch= 丢掉 -->
+    <span class="nav-link active" data-i18n="common.nav.replay">可视化回放</span>
+  </nav>
+  {% endif %}
 
-    <!-- 示例 -->
-    <div class="landing-examples">
-      <button id="btn-load-example" class="btn-ghost">加载示例回放</button>
-      <div id="example-list" class="example-list hidden"></div>
-    </div>
+  <!-- 这两块只有真的载入了一场比赛才有意义：没数据时「加载中…」是假话，
+       下载按钮点了也只会报错。onDataReady 里再放出来。 -->
+  <div id="tb-info" class="tb-info hidden">
+    <span id="map-name" class="map-name">—</span>
+    <span class="sep">·</span>
+    <select id="round-select" class="round-select" disabled>
+      <option data-i18n="common.action.loading">加载中…</option>
+    </select>
+    <span id="sampling-badge" class="sampling-badge">—</span>
+    <span id="source-name" class="source-name"></span>
+  </div>
+  <div class="tb-actions">
+    <!-- Demo 库勾选多场后进入本页：这里切换当前回放的是哪一场 -->
+    <select id="batch-select" class="round-select hidden" title="在 Demo 库里选择的比赛" data-i18n-title="replay.topbar.batch.title"></select>
+    <button id="btn-download" class="btn-glass accent hidden" title="下载 demo_extract 压缩格式 .csz" data-i18n-title="replay.topbar.download.title">⬇ .csz</button>
+  </div>
+</header>
 
-    <!-- 模型上传 -->
-    <div class="model-upload">
-      <div class="model-upload-header">
-        <span class="model-dot" id="model-dot"></span>
-        <span id="model-status-text">预训练模型：未加载</span>
-        <button id="btn-model-upload" class="btn-mini">上传 checkpoint</button>
-        <input type="file" id="model-input" accept=".pt,.pth" hidden>
-      </div>
-      <div class="model-device" id="model-device-row">
-        <span class="device-label">推理设备</span>
-        <select id="model-device" class="device-select">
-          <option value="mps" {% if default_device == 'mps' %}selected{% endif %}>MPS（Mac 加速）</option>
-          <option value="cpu" {% if default_device == 'cpu' %}selected{% endif %}>CPU</option>
-          <option value="cuda" {% if default_device == 'cuda' %}selected{% endif %}>CUDA</option>
-        </select>
-      </div>
-    </div>
+<!-- ═══════════════════════════════════════════════════════════════════
+     空状态
 
-    <!-- 加载进度 -->
-    <div id="loading-bar" class="loading-bar hidden">
-      <div class="loading-fill"></div>
-      <span id="loading-text">解析 demo 中…</span>
+     这里以前是一个独立的上传页：拖拽 .dem/.csz、浏览本机文件、选采样方式。
+     回放现在只能从 Demo 库进（勾选一场或多场 → 分析），所以那个页面整个删
+     掉了 —— 留着它就是第二个入口，还多一套「上传的 demo 用哪种采样」的
+     说法，和库里的提取设置打架。
+
+     这一屏只在两种情况下出现：直接敲了 /replay 没带 ?batch=，而且服务端
+     也没有还活着的会话。正常路径永远看不到它。
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="empty" class="empty-state">
+  <div class="empty-card">
+    <img src="/static/logo.svg" alt="cs-net" width="72" height="56">
+    <h1 data-i18n="replay.empty.title">没有正在回放的比赛</h1>
+    <p data-i18n="replay.empty.body">3D 回放从 Demo 库进：勾选一场或多场，点「分析」。</p>
+    <a class="btn-glass accent" href="/library" data-i18n="replay.empty.goLibrary">去 Demo 库</a>
+    <div class="maps-note" id="maps-note">
+      {% if maps_available %}<span data-i18n="replay.empty.mapsLabel">地图：</span>{{ maps_dir }}{% else %}<span data-i18n="replay.empty.mapsMissing">未找到地图 OBJ，回放会退化成空地 + 网格，用 --maps-dir 指定</span>{% endif %}
     </div>
   </div>
 </div>
@@ -89,43 +97,21 @@
      回放主界面
      ═══════════════════════════════════════════════════════════════════ -->
 <div id="app" class="app hidden">
-  <!-- 顶栏 -->
-  <header id="topbar" class="topbar">
-    <div class="tb-brand">
-      <div class="logo-mini">
-        <img src="/static/logo.svg" alt="cs-net" width="34" height="26">
-      </div>
-      <span class="brand-name">cs-<b>net</b></span>
-    </div>
-    <div class="tb-info">
-      <span id="map-name" class="map-name">—</span>
-      <span class="sep">·</span>
-      <select id="round-select" class="round-select" disabled>
-        <option>加载中…</option>
-      </select>
-      <span id="source-name" class="source-name"></span>
-    </div>
-    <div class="tb-actions">
-      <button id="btn-back" class="btn-glass" title="返回上传">↺ 新文件</button>
-      <button id="btn-download" class="btn-glass accent" title="下载 JSON 压缩包">⬇ JSON</button>
-    </div>
-  </header>
-
-  <!-- 主区域 -->
   <div id="main-container" class="main-container">
 
     <!-- 左：玩家面板 -->
     <aside id="left-panel" class="panel side-panel">
       <div class="panel-title">
-        <span class="panel-title-bar"></span> 玩家状态
+        <span class="panel-title-bar"></span> <span data-i18n="replay.panel.players">玩家状态</span>
       </div>
       <div id="player-list" class="player-list">
-        <div class="placeholder-text">加载回放后显示玩家</div>
+        <div class="placeholder-text" data-i18n="replay.players.placeholder">加载回放后显示玩家</div>
       </div>
       <div id="round-stats" class="round-stats hidden">
-        <div class="stat-row"><span>回合</span><b id="stat-round">—</b></div>
-        <div class="stat-row"><span>获胜方</span><b id="stat-winner">—</b></div>
-        <div class="stat-row"><span>结束原因</span><b id="stat-reason">—</b></div>
+        <div class="stat-row"><span data-i18n="replay.panel.round">回合</span><b id="stat-round">—</b></div>
+        <div class="stat-row"><span data-i18n="replay.panel.winner">获胜方</span><b id="stat-winner">—</b></div>
+        <div class="stat-row"><span data-i18n="replay.panel.endReason">结束原因</span><b id="stat-reason">—</b></div>
+        <div class="stat-row"><span data-i18n="replay.panel.samples">采样 / tick</span><b id="stat-samples">—</b></div>
       </div>
     </aside>
 
@@ -133,136 +119,220 @@
     <div id="viewport" class="viewport">
       <canvas id="three-canvas"></canvas>
 
-      <!-- 回合过渡浮层 -->
       <div id="round-overlay" class="round-overlay hidden">
         <div id="round-overlay-text"></div>
       </div>
 
-      <!-- 击杀信息 -->
       <div id="kill-feed" class="kill-feed"></div>
 
-      <!-- Minimap -->
-      <div id="minimap-container" class="minimap-container">
+      <!-- ═══════════════════════════════════════════════════════════════
+           AI 预测面板（底部的「AI 预测面板」「AI 对枪」开关打开后出现）
+
+           数据来自 /api/ai/round/<idx>（`?progress=1` 是流式的，一行一个事件）。
+           这块只放**赢面**一件事：CT / T 各自赢下这一回合的概率。开算的时候
+           同一个位置长出进度条（阶段 + 百分比 + 已用时），所以用户知道还要等
+           多久。**百分比本身也能点**：和表格里的数字一样打开整回合的胜率曲线，
+           点曲线任意一点跳到那一刻（不锁定选手，因为它不属于某一个人）。
+           选手级的五项指标在左下角的 #ai-table 里，3D 那部分在
+           ai-overlay.js 里。
+           ═══════════════════════════════════════════════════════════════ -->
+      <div id="ai-panel" class="ai-panel hidden">
+        <div class="ai-head">
+          <span class="ai-tag">AI</span>
+          <span class="ai-title" data-i18n="replay.ai.winTitle">回合胜率</span>
+          <span id="ai-state" class="ai-state"></span>
+          <!-- 用的哪两份权重：单独占一行。挤在标题那一行时 "aim 2026… · spa…"
+               会被省略号截掉，而这两串是版本管理的唯一凭据，截了就没用了。 -->
+          <span id="ai-model" class="ai-model">—</span>
+        </div>
+        <!-- 两个百分比也能点：和左下表格里的数字一样，打开整回合的胜率曲线
+             （点曲线任意一点跳到那一刻）。它们不是一个选手的指标，所以跳转
+             不锁定镜头 —— 见 main.js::toggleAiChart(-1, ...)。 -->
+        <div class="ai-win">
+          <span class="ai-side ct"><span class="ai-side-tag">CT</span>
+            <span id="ai-win-ct" class="ai-pct ct" data-metric="win_ct"
+                  role="button" tabindex="0" aria-label="CT 胜率，点击查看整回合曲线" data-i18n-aria-label="replay.ai.winCtAria">—</span></span>
+          <div class="ai-bar">
+            <i id="ai-bar-ct" class="ai-bar-ct"></i>
+            <span class="ai-bar-mid" aria-hidden="true"></span>
+          </div>
+          <span class="ai-side t">
+            <span id="ai-win-t" class="ai-pct t" data-metric="win_t"
+                  role="button" tabindex="0" aria-label="T 胜率，点击查看整回合曲线" data-i18n-aria-label="replay.ai.winTAria">—</span>
+            <span class="ai-side-tag">T</span></span>
+        </div>
+        <div id="ai-progress" class="ai-progress hidden">
+          <div class="ai-progress-track"><i id="ai-progress-fill"></i></div>
+          <div class="ai-progress-meta">
+            <span id="ai-progress-stage" class="ai-progress-stage" data-i18n="replay.ai.stage.preparing">准备…</span>
+            <span id="ai-progress-time" class="ai-progress-time">0.0 s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI 选手指标：每个活着的选手一行，五个概率都在这儿。
+           行顺序固定（先 CT 后 T，按槽位），不按概率排序 —— 每帧跳动的排行榜
+           没法看。两把对枪的人在名字前多一个 ⚔ + 自己的对枪胜率。
+
+           这是 AI 的**唯一**数字出口：3D 场景里只有对枪弧线，头顶不挂百分比、
+           脚下不画光环（都挡视线）。三种交互都长在这张表上：
+
+             * 悬停表头 → `#ai-tip` 解释这一列到底在预测什么、该怎么读；
+             * 点名字 → 和点左边选手卡片一样：选中他，镜头飞过去并跟随；
+             * 点数字 → 表格旁边长出 `#ai-chart`，画这一项整回合的曲线；点曲线上
+               任意一点 = 跳到那一刻 + 锁定镜头。对枪只有 3 秒窗口，没有曲线。
+
+           顶部面板里的「CT / T 胜率」用同一张曲线卡（`aiSeriesFor` 的 win_*
+           分支）：有曲线、能跳时间，但它不属于某一个人，所以跳转不锁镜头。
+
+           整块 `.ai-table` 是 `pointer-events:none`（不能挡住 3D 视口的拖拽），
+           只有列头 / 名字 / 数字自己接收鼠标 —— 见 style.css。 -->
+      <div id="ai-table" class="ai-table hidden">
+        <div class="ai-table-head">
+          <span class="ai-tag">AI</span>
+          <span class="ai-table-title" data-i18n="replay.ai.tableTitle">选手指标</span>
+          <span class="ai-table-sub" data-i18n="replay.ai.tableSub">悬停表头看释义 · 点数字看曲线</span>
+        </div>
+        <div class="ai-table-cols">
+          <span class="ai-col-name" data-metric="name" data-i18n="replay.ai.metric.name">选手</span>
+          <span class="ai-col" data-metric="alive" data-i18n="replay.ai.metric.alive">存活</span>
+          <span class="ai-col" data-metric="can_kill" data-i18n="replay.ai.metric.can_kill">可击杀</span>
+          <span class="ai-col" data-metric="next_kill" data-i18n="replay.ai.metric.next_kill">下次击杀</span>
+          <span class="ai-col" data-metric="next_death" data-i18n="replay.ai.metric.next_death">下次被击杀</span>
+          <span class="ai-col ai-col-duel" data-metric="duel" data-i18n="replay.ai.metric.duel">对枪</span>
+        </div>
+        <div id="ai-table-body" class="ai-table-body"></div>
+      </div>
+
+      <!-- 指标曲线（点表格里的数字 / 顶部面板里的胜率打开）。canvas 由 ai-chart.js
+           画：整回合的概率折线 + 播放头 + 悬停游标；点任意一点 = seekTo（选手的
+           曲线还会选中并跟随该选手，胜率曲线不锁镜头）。
+           位置由 JS 量 `#ai-table` 算：表格正上方放得下就放上面，否则挪到右边
+           （正上方在 1440×900 上会盖住小地图）—— 见 ai-chart.js::place()。 -->
+      <div id="ai-chart" class="ai-chart hidden">
+        <div class="ai-chart-head">
+          <i id="ai-chart-dot" class="ai-chart-dot"></i>
+          <span id="ai-chart-title" class="ai-chart-title">—</span>
+          <span id="ai-chart-now" class="ai-chart-now">—</span>
+          <button id="ai-chart-close" class="ai-chart-close" title="关闭曲线（Esc）" data-i18n-title="replay.chart.close.title">✕</button>
+        </div>
+        <canvas id="ai-chart-canvas" height="132"></canvas>
+        <div class="ai-chart-foot">
+          <span id="ai-chart-hint" class="ai-chart-hint" data-i18n="replay.chart.hint.player">点击曲线任意一点：跳到那一刻，镜头锁定这个选手</span>
+          <span id="ai-chart-death" class="ai-chart-death"></span>
+        </div>
+      </div>
+
+      <!-- 小地图。点一下放大成一块 2D 回放视野（Esc / 再点一次收起）：放大的是
+           同一块画布、同一个正交相机，`scene.js::renderMinimap` 每帧按显示尺寸
+           同步后备分辨率，所以位置和朝向不会重算一套。 -->
+      <div id="minimap-container" class="minimap-container"
+           role="button" tabindex="0"
+           title="点击放大：2D 回放视图" data-i18n-title="replay.minimap.expand.title"
+           aria-label="小地图，点击放大成 2D 回放视图" data-i18n-aria-label="replay.minimap.aria">
         <canvas id="minimap-canvas" width="200" height="200"></canvas>
         <canvas id="minimap-overlay" width="200" height="200"></canvas>
-        <div class="minimap-label">MINIMAP</div>
+        <div class="minimap-label"><span class="mm-label-mini">MINIMAP</span><span class="mm-label-2d" data-i18n="replay.minimap.label2d">2D 回放</span></div>
+        <button id="minimap-close" class="minimap-close"
+                title="收起（Esc）" data-i18n-title="replay.minimap.close.title"
+                aria-label="收起小地图" data-i18n-aria-label="replay.minimap.close.label">✕</button>
+        <div class="minimap-zoom-hint" data-i18n="replay.minimap.zoomHint">点选手箭头或名字＝跟随他 · 点空白处 / Esc 收起</div>
       </div>
 
-      <!-- 预测模式横幅 -->
-      <div id="prediction-banner" class="prediction-banner hidden">
-        <div class="pred-banner-title">AI 路径预测</div>
-        <div id="pred-banner-meta" class="pred-banner-meta"></div>
+      <div id="camera-hint" class="camera-hint" data-i18n="replay.hint.camera">
+        🖱 拖拽旋转 · 滚轮缩放 · 右键平移 · WASD 移动机位（QE 升降 / Shift 加速）· 点击玩家聚焦（并跟随）
       </div>
 
-      <!-- 相机提示 -->
-      <div id="camera-hint" class="camera-hint">
-        🖱 拖拽旋转 · 滚轮缩放 · 右键平移
+      <!-- ═══════════════════════════════════════════════════════════════
+           第一人称 HUD
+
+           只有在「左侧选手卡片 → 摄像机 → 第一人称摄像机」时显示。
+           准星永远在屏幕正中 = 摄像机朝向 = 该选手的瞄准方向；下面是
+           血量 / 护甲 / 头盔 / 装备。整层 pointer-events:none，只有退出
+           按钮可点，保证第一人称期间不会误触 3D 视口。
+           ═══════════════════════════════════════════════════════════════ -->
+      <div id="fp-hud" class="fp-hud hidden" aria-hidden="true">
+        <div class="fp-crosshair" aria-hidden="true">
+          <span class="fp-ch fp-ch-t"></span>
+          <span class="fp-ch fp-ch-r"></span>
+          <span class="fp-ch fp-ch-b"></span>
+          <span class="fp-ch fp-ch-l"></span>
+          <span class="fp-ch-dot"></span>
+        </div>
+
+        <div class="fp-panel">
+          <div class="fp-head">
+            <span id="fp-team" class="fp-team">—</span>
+            <span id="fp-name" class="fp-name">—</span>
+            <span class="fp-locked" data-i18n="replay.fp.locked">🔒 镜头已锁定</span>
+            <button id="fp-exit" class="fp-exit" title="退出第一人称视角（Esc）" data-i18n-title="replay.fp.exit.title">
+              <span data-i18n="replay.fp.exit">退出第一人称</span> <kbd>Esc</kbd>
+            </button>
+          </div>
+
+          <div class="fp-vitals">
+            <div class="fp-hp-wrap">
+              <div class="fp-hp-top">
+                <span class="fp-label" data-i18n="replay.fp.hp">生命</span>
+                <b id="fp-hp" class="fp-hp-num">—</b>
+              </div>
+              <div class="fp-hpbar"><div id="fp-hpfill" class="fp-hpfill"></div></div>
+            </div>
+            <div class="fp-vital">
+              <span class="fp-label" data-i18n="replay.fp.armor">护甲</span>
+              <b id="fp-armor">—</b>
+            </div>
+            <div class="fp-vital">
+              <span class="fp-label" data-i18n="replay.fp.helmet">头盔</span>
+              <b id="fp-helmet">—</b>
+            </div>
+          </div>
+
+          <div class="fp-equip-row">
+            <span class="fp-label" data-i18n="replay.fp.weapon">当前武器</span>
+            <b id="fp-weapon">—</b>
+          </div>
+          <div class="fp-equip-row">
+            <span class="fp-label" data-i18n="replay.fp.equipment">装备</span>
+            <div id="fp-inventory" class="fp-inventory">—</div>
+          </div>
+          <div class="fp-hint" data-i18n="replay.fp.hint">第一人称观察 · 鼠标 / WASD 不会移动镜头 · 按 Esc 退出后可恢复自由相机</div>
+        </div>
       </div>
     </div>
 
-    <!-- 右：预测面板 -->
+    <!-- 右：数据检查面板（烟/火是重点） -->
     <aside id="right-panel" class="panel side-panel">
+      <!-- 统计是"看比赛"用的，不属于数据检查，所以放在这一栏最上面、标题之外 -->
+      <button id="btn-stats" class="btn-glass accent full stats-open"
+              title="这一场比赛的统计数据：每人的 K / D / A / ADR，以及每个回合的击杀、死亡、造成和承受的伤害" data-i18n-title="replay.stats.open.title">
+        📊 <span data-i18n="replay.stats.open">统计</span>
+      </button>
       <div class="panel-title">
-        <span class="panel-title-bar accent"></span> AI 路径预测
+        <span class="panel-title-bar accent"></span> <span data-i18n="replay.inspector.title">数据检查 · demo_extract</span>
       </div>
 
-      <div class="pred-section">
-        <div class="pred-model-row" id="pred-model-row">
-          <span class="model-dot" id="model-dot2"></span>
-          <span id="model-status-text2">模型未加载</span>
-        </div>
-        <button id="btn-model-upload2" class="btn-glass full">⬆ 上传预训练模型 (.pt)</button>
-        <input type="file" id="model-input2" accept=".pt,.pth" hidden>
-        <div class="model-device" id="model-device-row2">
-          <span class="device-label">推理设备</span>
-          <select id="model-device2" class="device-select">
-            <option value="mps" {% if default_device == 'mps' %}selected{% endif %}>MPS（Mac 加速）</option>
-            <option value="cpu" {% if default_device == 'cpu' %}selected{% endif %}>CPU</option>
-            <option value="cuda" {% if default_device == 'cuda' %}selected{% endif %}>CUDA</option>
-          </select>
-        </div>
-        <div class="ds-upload-row">
-          <span class="ds-label">spatial-only 模型</span>
-          <button id="btn-spatial-upload" class="btn-mini" title="上传 winrate / alive_end / future_kill 单局面 checkpoint (.pt)，支持多选">⬆ 上传</button>
-          <input type="file" id="spatial-input" accept=".pt,.pth" multiple hidden>
+      <div class="inspector-section">
+        <div class="section-title" data-i18n="replay.inspector.extractTitle">提取结果</div>
+        <div id="inspector-extract" class="inspect-rows">
+          <div class="placeholder-text">—</div>
         </div>
       </div>
 
-      <div class="pred-section">
-        <label class="pred-label">预测起始 tick <span class="hint">（自动跟随当前画面）</span></label>
-        <div class="pred-tick-row">
-          <input type="range" id="pred-tick" min="0" max="100" value="50" class="range-slider">
-          <span id="pred-tick-val" class="pred-tick-val">50</span>
-        </div>
-        <button id="btn-use-current" class="btn-mini" style="margin-bottom:10px">🎯 使用当前画面位置</button>
-        <label class="pred-label">采样温度 <span id="pred-temp-val">0.0</span></label>
-        <input type="range" id="pred-temp" min="0" max="2" value="0" step="0.1" class="range-slider">
-        <div class="pred-hint-row">
-          <span class="hint">温度 0 = 确定性 (argmax)</span>
-        </div>
-        <button id="btn-predict" class="btn-primary full" disabled>▶ 运行路径预测</button>
-        <div id="predict-status" class="predict-status"></div>
-      </div>
-
-      <!-- spatial-only 单局面预测（自动） -->
-      <div class="pred-section" id="spatial-section">
-        <div class="section-title">🧠 spatial-only · 自动单局面预测</div>
-        <div id="spatial-status" class="spatial-status-bar">单局面模型：未配置</div>
-        <div class="spatial-note">切换回合自动预测该回合<b>全部 tick</b>（服务端缓存，来回切换不重算）。拖动底部时间线，左侧玩家卡片实时显示每玩家<b>存活 / 击杀概率</b>，<b>点击数值</b>查看该玩家整回合曲线；右侧曲线为<b>团队聚合胜率</b>（整回合）。</div>
-      </div>
-
-      <div class="pred-section">
-        <div class="pred-legend">
-          <div class="legend-row"><span class="lg-line pred"></span> AI 预测轨迹</div>
-          <div class="legend-row"><span class="lg-line gt"></span> 真实轨迹 (GT)</div>
-          <div class="legend-row"><span class="lg-line sample"></span> 单玩家采样 ×N（队伍色）</div>
-          <div class="legend-row"><span class="lg-line curve"></span> 聚合 CT 胜率（spatial-only）</div>
-        </div>
-        <button id="btn-clear-pred" class="btn-mini">清除预测</button>
-        <div class="pred-hint-row" style="margin-top:8px">
-          <span class="hint">在左侧玩家卡片上点击玩家 → 展开详情 → 🎲 采样可并行生成多条路径</span>
+      <div class="inspector-section">
+        <div class="section-title" data-i18n="replay.inspector.roundTitle">本回合</div>
+        <div id="inspector-round" class="inspect-rows">
+          <div class="placeholder-text">—</div>
         </div>
       </div>
 
-      <!-- 低概率移动扫描 -->
-      <div class="pred-section">
-        <div class="scan-head">
-          <span class="scan-title" data-tip="列出被扫描玩家在本回合分数最低的 3 个移动（最不像职业打法的时刻）；只保留起点后至少存活 2 秒的移动（跳过阵亡前不足 2 秒的短路径——那是被杀，不是走位问题）；相邻条目的起点间隔 ≥ 2 秒（低概率时刻常扎堆，去重后覆盖更多不同局面）。点击条目会跳到该时刻、摄像机聚焦该玩家并预测职业路径（分数越低 = 越不寻常）">🎯 低概率移动</span>
-          <span id="scan-status" class="scan-status"></span>
-        </div>
-        <div class="scan-hint-row">
-          <span class="hint">点击左侧玩家卡片 → 🔍 扫描走位，只列出该玩家分数最低的 3 个移动（分数越低 = 越不寻常；跳过阵亡前不足 2 秒的移动，只谈走位不谈击杀；相邻起点间隔 ≥ 2 秒）；点击条目跳到该时刻并预测职业路径。底部 🔥 扫描全部玩家可一键预热全部玩家 × 全部回合的缓存。</span>
-        </div>
-        <div id="scan-list" class="scan-list"></div>
-        <div class="scan-footer">
-          <button id="btn-scan-all-players" class="btn-mini btn-accent" data-label="🔥 扫描全部玩家" title="后台扫描【全部玩家 × 全部回合】的低概率移动，结果写入服务端缓存（不显示汇总列表）。预热完成后，点任一玩家的“扫描全部回合”全部命中缓存、秒回。">🔥 扫描全部玩家</button>
-          <button id="btn-clear-cache" class="btn-mini" title="释放 demo 解析 / 回合扫描缓存（不卸载模型）">🧹 释放所有缓存</button>
-        </div>
-      </div>
-
-      <!-- 预测结果（点击扫描条目后紧跟扫描列表显示，含 预测分/实际分/差 对比） -->
-      <div id="pred-results" class="pred-results"></div>
-
-      <!-- 整回合胜率曲线（spatial-only） -->
-      <div id="metric-chart-wrap" class="metric-chart-wrap hidden">
-        <div class="metric-chart-head">
-          <span id="metric-chart-title" class="metric-chart-title">聚合 CT 胜率曲线（整回合）</span>
-        </div>
-        <canvas id="metric-chart" class="metric-chart"></canvas>
-        <div class="metric-legend">
-          <span class="ml-item"><span class="ml-line" style="background:#00e676"></span>模型预测 CT 胜率</span>
-          <span class="ml-item"><span class="ml-dot" style="background:#ff5252"></span>当前 tick</span>
-          <span class="ml-item" id="curve-winner-tag"></span>
-        </div>
-      </div>
     </aside>
   </div>
 
-  <!-- 底部时间线 -->
   <footer id="timeline" class="timeline">
     <div class="tl-controls">
-      <button id="btn-prev-round" class="btn-icon" title="上一回合">⏮</button>
-      <button id="btn-play" class="btn-icon play" title="播放/暂停">
+      <button id="btn-prev-round" class="btn-icon" title="上一回合" data-i18n-title="replay.timeline.prev.title">⏮</button>
+      <button id="btn-play" class="btn-icon play" title="播放/暂停" data-i18n-title="replay.timeline.play.title">
         <svg viewBox="0 0 24 24" width="18" height="18">
           <polygon points="6,3 21,12 6,21" fill="currentColor" id="play-icon"/>
           <g id="pause-icon" style="display:none">
@@ -271,8 +341,9 @@
           </g>
         </svg>
       </button>
-      <button id="btn-next-round" class="btn-icon" title="下一回合">⏭</button>
+      <button id="btn-next-round" class="btn-icon" title="下一回合" data-i18n-title="replay.timeline.next.title">⏭</button>
       <select id="speed-select" class="speed-select">
+        <option value="0.1">0.1×</option>
         <option value="0.25">0.25×</option>
         <option value="0.5">0.5×</option>
         <option value="1" selected>1×</option>
@@ -286,39 +357,82 @@
       <div id="timeline-progress" class="tl-progress"></div>
     </div>
     <div class="tl-toggles">
-      <label class="toggle"><input type="checkbox" id="toggle-trails" checked><span>轨迹</span></label>
-      <label class="toggle"><input type="checkbox" id="toggle-names" checked><span>名称</span></label>
-      <label class="toggle"><input type="checkbox" id="toggle-smokes" checked><span>烟雾</span></label>
-      <label class="toggle"><input type="checkbox" id="toggle-pred" checked><span>预测</span></label>
-      <button id="btn-reset-cam" class="btn-mini">📷 重置视角</button>
+      <label class="toggle"><input type="checkbox" id="toggle-trails" checked><span data-i18n="replay.toggle.trails">轨迹</span></label>
+      <label class="toggle"><input type="checkbox" id="toggle-names" checked><span data-i18n="replay.toggle.names">名称</span></label>
+      <label class="toggle" title="在玩家头顶显示选手 ID。" data-i18n-title="replay.toggle.playerIds.title"><input type="checkbox" id="toggle-player-ids" checked><span data-i18n="replay.toggle.playerIds">选手 ID</span></label>
+      <label class="toggle"><input type="checkbox" id="toggle-smokes" checked><span data-i18n="replay.toggle.smokes">烟雾</span></label>
+      <label class="toggle"><input type="checkbox" id="toggle-fire" checked><span data-i18n="replay.toggle.fire">火焰</span></label>
+      <label class="toggle" title="把表面点云的凸包填满；取消只画表面壳。" data-i18n-title="replay.toggle.solid.title"><input type="checkbox" id="toggle-solid" checked><span data-i18n="replay.toggle.solid">实心体素（重建）</span></label>
+      <label class="toggle" title="用游戏贴图渲染烟雾外观。" data-i18n-title="replay.toggle.smokeSprites.title"><input type="checkbox" id="toggle-smoke-sprites" checked><span data-i18n="replay.toggle.smokeSprites">烟雾贴图</span></label>
+      <label class="toggle" title="用三层贴图渲染火焰。" data-i18n-title="replay.toggle.fireSprites.title"><input type="checkbox" id="toggle-fire-sprites" checked><span data-i18n="replay.toggle.fireSprites">火焰三层贴图</span></label>
+      <label class="toggle" title="玩家手上显示武器模型。" data-i18n-title="replay.toggle.weaponModels.title"><input type="checkbox" id="toggle-weapon-models" checked><span data-i18n="replay.toggle.weaponModels">武器模型</span></label>
+      <label class="toggle" title="飞行中的投掷物显示模型。" data-i18n-title="replay.toggle.nadeModels.title"><input type="checkbox" id="toggle-nade-models" checked><span data-i18n="replay.toggle.nadeModels">投掷物模型</span></label>
+      <label class="toggle" title="玩家头顶用 CS2 武器图标代替文字。" data-i18n-title="replay.toggle.weaponIcons.title"><input type="checkbox" id="toggle-weapon-icons" checked><span data-i18n="replay.toggle.weaponIcons">武器图标</span></label>
+      <label class="toggle" title="画碰撞盒、眼睛位置和脚到眼的标尺。" data-i18n-title="replay.toggle.crouch.title"><input type="checkbox" id="toggle-crouch"><span data-i18n="replay.toggle.crouch">碰撞盒 / 眼睛</span></label>
+      <label class="toggle" title="从眼睛沿瞄准方向画射线，在最近的遮挡处截断。" data-i18n-title="replay.toggle.aim.title"><input type="checkbox" id="toggle-aim"><span data-i18n="replay.toggle.aim">瞄准射线</span></label>
+      <label class="toggle" title="每次开火画一段曳光，打到人或墙就停。" data-i18n-title="replay.toggle.tracers.title"><input type="checkbox" id="toggle-tracers" checked><span data-i18n="replay.toggle.tracers">子弹曳光</span></label>
+      <label class="toggle"><input type="checkbox" id="toggle-xray"><span data-i18n="replay.toggle.xray">透视地图</span></label>
+      <label class="toggle" title="被墙挡住的选手显示为半透明。" data-i18n-title="replay.toggle.playerXray.title"><input type="checkbox" id="toggle-player-xray" checked><span data-i18n="replay.toggle.playerXray">选手 X 光</span></label>
+      <label class="toggle" title="标出选中选手当前能看见的人。" data-i18n-title="replay.toggle.spotted.title"><input type="checkbox" id="toggle-spotted" checked><span data-i18n="replay.toggle.spotted">可见性（眼睛，实时几何）</span></label>
+      <label class="toggle" title="画出选中选手的视锥。" data-i18n-title="replay.toggle.frustum.title"><input type="checkbox" id="toggle-frustum"><span data-i18n="replay.toggle.frustum">视锥</span></label>
+      <label class="toggle" title="画到每个目标碰撞盒角落的射线，颜色表示判定结果。" data-i18n-title="replay.toggle.visCorners.title"><input type="checkbox" id="toggle-vis-corners"><span data-i18n="replay.toggle.visCorners">可见性角落射线</span></label>
+      <label class="toggle" title="选中选手后镜头跟着他走，仍可自由旋转缩放。" data-i18n-title="replay.toggle.camFollow.title"><input type="checkbox" id="toggle-cam-follow" checked><span data-i18n="replay.toggle.camFollow">跟随选中玩家</span></label>
+      <label class="toggle toggle-ai" title="显示回合胜率曲线和每位选手的五项概率。" data-i18n-title="replay.toggle.aiSpatial.title"><input type="checkbox" id="toggle-ai-spatial"><span data-i18n="replay.toggle.aiSpatial">AI 预测面板</span></label>
+      <label class="toggle toggle-ai" title="在死前 3 秒画出对枪弧线，颜色表示胜率。" data-i18n-title="replay.toggle.aiDuel.title"><input type="checkbox" id="toggle-ai-duel"><span data-i18n="replay.toggle.aiDuel">AI 对枪</span></label>
+      <button id="btn-reset-cam" class="btn-mini">📷 <span data-i18n="replay.timeline.reset">重置视角</span></button>
     </div>
   </footer>
 </div>
 
-<!-- 玩家指标曲线弹窗（点击左侧玩家卡片上的概率数值打开） -->
-<div id="curve-modal" class="curve-modal hidden">
-  <div class="curve-modal-card">
-    <div class="curve-modal-head">
-      <div class="curve-modal-title">
-        <span id="cm-team" class="team-tag"></span>
-        <span id="cm-title">—</span>
-      </div>
-      <button id="cm-close" class="cm-close" title="关闭 (Esc)">✕</button>
+<div id="toast" class="toast hidden"></div>
+
+<!-- 表头释义（悬停 `#ai-table` 的列头时显示）。
+     放在 body 下、用 position:fixed：`#ai-table` 有 backdrop-filter，那个属性会
+     给 fixed 后代造一个包含块，跟着面板定位就跑偏了。 -->
+<div id="ai-tip" class="ai-tip" role="tooltip">
+  <div class="ai-tip-head">
+    <i id="ai-tip-dot" class="ai-tip-dot"></i>
+    <b id="ai-tip-title" class="ai-tip-title"></b>
+    <span id="ai-tip-src" class="ai-tip-src"></span>
+  </div>
+  <div id="ai-tip-body" class="ai-tip-body"></div>
+  <div id="ai-tip-hint" class="ai-tip-hint"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     比赛统计弹窗（右侧栏最上面的「统计」按钮打开）
+
+     两个页签，共用一块内容区：
+       传统数据 → /api/stats     服务端扫整场 demo 算一次
+        AI 数据 → /api/ai/stats   逐回合跑模型（几分钟，之后走磁盘缓存）
+
+     AI 那一页**点到才会请求**（需求就是"只有切到 AI 页签才触发预测"），
+     所以初次打开是几十秒到几分钟的进度条，第二次是几十毫秒。
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="stats-modal" class="stats-overlay hidden">
+  <div class="stats-card">
+    <div class="stats-head">
+      <span class="stats-title">📊 <span data-i18n="replay.stats.title">比赛统计</span></span>
+      <span id="stats-subtitle" class="stats-sub"></span>
+      <button id="btn-stats-close" class="stats-close" title="关闭（Esc）" data-i18n-title="replay.stats.close.title">✕</button>
     </div>
-    <canvas id="cm-canvas" class="cm-canvas"></canvas>
-    <div class="curve-modal-foot" id="cm-foot"></div>
+    <div class="stats-tabs" role="tablist">
+      <button id="stats-tab-trad" class="stats-tab active" role="tab" aria-selected="true"
+              data-tab="trad" data-i18n="replay.stats.tab.trad">传统数据</button>
+      <button id="stats-tab-ai" class="stats-tab" role="tab" aria-selected="false"
+              data-tab="ai" data-i18n="replay.stats.tab.ai">AI 数据</button>
+    </div>
+    <div id="stats-body" class="stats-body">
+      <div class="placeholder-text">—</div>
+    </div>
   </div>
 </div>
 
-<!-- 错误提示 -->
-<div id="toast" class="toast hidden"></div>
-
-<!-- 加载遮罩 -->
 <div id="loading-overlay" class="loading-overlay hidden">
   <canvas id="loading-canvas" class="loading-canvas" width="160" height="150"></canvas>
-  <div id="loading-overlay-text">加载中…</div>
+  <div id="loading-overlay-text" data-i18n="common.action.loading">加载中…</div>
 </div>
 
-<script type="module" src="/static/js/main.js?v=20260903j"></script>
+<script type="module" src="/static/js/main.js?v=20261118e"></script>
 </body>
 </html>

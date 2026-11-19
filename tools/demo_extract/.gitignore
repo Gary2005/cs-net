@@ -1,0 +1,7 @@
+# Go helper binary — rebuild with ./build_sidechannel.sh
+# 不带扩展名的是 Linux/macOS 产物，`.exe` 是 Windows 的（`go build -o cs2sidechannel.exe`，
+# 打包流水线里编出来就放在这儿，随 PyInstaller 一起进包，不进 git）。
+sidechannel_go/cs2sidechannel
+sidechannel_go/cs2sidechannel.exe
+__pycache__/
+*.pyc

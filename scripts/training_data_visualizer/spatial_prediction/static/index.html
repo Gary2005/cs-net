@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spatial_prediction · 训练数据可视化</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">◈</span>
+    <div class="brand-text">
+      <h1>spatial_prediction · 训练数据可视化</h1>
+      <p class="sub mono" id="data-dir">正在扫描 data/demos/prepared/spatial_prediction …</p>
+    </div>
+  </div>
+  <div class="picker">
+    <label class="sr-only" for="file-select">选择 npz</label>
+    <select id="file-select" title="一个 npz = 一个回合里被随机抽到的 K 帧"></select>
+    <button id="prev" class="icon-btn" title="上一个样本帧 (← / Alt+←)">◀</button>
+    <button id="next" class="icon-btn" title="下一个样本帧 (→ / Alt+→)">▶</button>
+    <span id="sample-readout" class="mono readout">— / —</span>
+    <button id="rescan" class="ghost-btn" title="重新扫描磁盘（prepare 重跑之后用）">重新扫描</button>
+  </div>
+</header>
+
+<div id="warning-bar" class="warning-bar" hidden></div>
+<div id="loading" class="loading" hidden><div class="spinner"></div><span>读取 npz …</span></div>
+
+<main>
+
+  <!-- ① 这一行样本是什么 -->
+  <section class="panel meta-panel">
+    <div class="meta-title">
+      <h2 id="sample-name">未选择样本</h2>
+      <span id="sample-path" class="mono dim"></span>
+    </div>
+    <div class="chips" id="meta-chips"></div>
+    <div class="row-nav">
+      <span class="dim small">同一文件里的帧（按时间升序，拖拽跳到别的帧）</span>
+      <input id="row-slider" type="range" min="0" max="0" value="0" step="1">
+      <span class="mono small" id="row-readout">—</span>
+    </div>
+  </section>
+
+  <!-- ② 5 个标签 -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>标签 <span class="dim">这一帧之后会发生什么（训练目标）</span></h2>
+      <span class="mono dim" id="label-time"></span>
+    </div>
+    <div class="cards" id="label-cards"></div>
+    <div class="label-lists">
+      <div class="label-list">
+        <h3>终局存活 <span class="dim mono">alive_end[10]</span>
+          <span class="dim small" id="alive-end-n"></span></h3>
+        <div class="plist" id="list-alive-end"></div>
+      </div>
+      <div class="label-list">
+        <h3>还能获得击杀 <span class="dim mono">can_kill[10]</span>
+          <span class="dim small" id="can-kill-n"></span></h3>
+        <div class="plist" id="list-can-kill"></div>
+      </div>
+    </div>
+    <p class="dim small legend-line">
+      两个列表都是<b>逐玩家</b>的 10 个 bool。<b>终局存活</b> = 回合最后一帧还活着
+      （和"问的是哪一帧"无关，同一个文件里恒为同一个值）；<b>还能获得击杀</b> = 这一帧
+      之后还会拿到击杀（之前的击杀不算，随时间是单调收缩的）。
+      <span class="dead-key">灰色 ×</span> = 这一帧已经死了的人。
+    </p>
+  </section>
+
+  <!-- ③ 这一帧的场面 -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>这一帧 <span class="dim">俯视雷达 · 10 名玩家 · 道具 · 炸弹</span></h2>
+      <span class="mono dim" id="field-readout">—</span>
+    </div>
+    <div class="field-grid">
+      <div class="radar-card">
+        <canvas id="radar" width="700" height="700"></canvas>
+        <div class="radar-legend" id="radar-legend"></div>
+      </div>
+      <div class="side">
+        <div class="block">
+          <h3>玩家 <span class="dim">mask / 血量 / 武器 / 标签</span></h3>
+          <div class="table-scroll">
+            <table class="p-table" id="player-table"></table>
+          </div>
+        </div>
+        <div class="block">
+          <h3>全局 <span class="dim">炸弹 / 回合时间</span></h3>
+          <table class="kv" id="global-table"></table>
+        </div>
+        <div class="block">
+          <h3>道具 <span class="dim">当前帧生效 / 飞行中</span></h3>
+          <div class="table-scroll short">
+            <table class="grid-table" id="proj-table"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="dim small legend-line">
+      雷达画的是<b>当前帧活着的人</b>：颜色 = 队伍（CT 蓝 / T 橙），短线 = yaw 朝向
+      （0° = +x、90° = +y），圆环 = 血量，右下角小字 = 玩家下标。
+      <span class="mk-death">☠</span> = 标签里的「下一个死亡」，
+      <span class="mk-kill">✛</span> = 「下一个击杀」。死人没有有效坐标（位置列可能是 0），
+      所以只出现在右下角的表里，不画在图上。
+    </p>
+  </section>
+
+  <!-- ④ 遮挡矩阵 -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>遮挡矩阵 <span class="dim">当前帧 · 行 i 的眼睛看列 j 的身体</span></h2>
+      <span class="mono obstr-readout" id="obstr-readout">—</span>
+    </div>
+    <div class="obstr-grid">
+      <div class="obstr-wrap">
+        <table class="obstr-table" id="obstr-table"></table>
+      </div>
+      <div class="obstr-side">
+        <div class="obstr-legend">
+          <span><i class="sw o0"></i>0 通</span>
+          <span><i class="sw o1"></i>1 烟</span>
+          <span><i class="sw o2"></i>2 墙</span>
+          <span><i class="sw odead"></i>死人 / 自己看自己</span>
+        </div>
+        <p class="dim small" id="obstr-note">
+          有方向：<code>[i][j]</code> 是 i 看 j，和 <code>[j][i]</code> 可以不同
+          （两个人的眼睛不在同一个高度）。死人的行 / 列恒为 0。
+          <code>0 通</code> 只说明"中间没有墙 / 烟"，<b>不代表看得见</b> ——
+          朝哪看由 <code>yaw</code> 决定，不在这个矩阵里。
+        </p>
+        <p class="dim small">
+          行 / 列的 <span class="hd-death">☠</span> / <span class="hd-kill">✛</span>
+          是标签里的「下一个死亡 / 下一个击杀」。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑤ 原始特征 -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>原始特征 <span class="dim">ctx_player (10, 20)</span></h2>
+      <div class="opts">
+        <label><input type="checkbox" id="opt-phys"> 显示物理值（逆变换）</label>
+        <span class="dim small">悬停任意格子看该列的说明</span>
+      </div>
+    </div>
+    <div class="table-scroll feat-scroll">
+      <table class="feat-table" id="feat-table"></table>
+    </div>
+    <details class="files-details">
+      <summary>样本里存了哪些 key（共 <span id="files-count">0</span> 个）</summary>
+      <div class="table-scroll short">
+        <table class="grid-table" id="files-table"></table>
+      </div>
+    </details>
+  </section>
+
+  <footer class="foot">
+    <p>这个数据集是什么（和 <code>tasks/spatial_prediction.py</code> 的约定一致）：</p>
+    <ul>
+      <li><b>一个样本 = 一帧</b>：<code>ctx_player (10,20)</code> + 逐帧武器 + 两两遮挡 +
+        道具 + 全局状态。输入侧和 <code>aim</code> 逐列一致，只是没有 257 帧的窗口。</li>
+      <li><b>一个 npz = 一个回合里被随机抽到的 K 帧</b>（文件名末尾的
+        <code>_n{K}</code>）。抽帧是 demo 级的：<code>T / density</code> 帧在整局上
+        均匀随机选，所以同一个文件里的第 k 行要比第 k-1 行晚（按时间升序）。</li>
+      <li><b>5 个标签都是"这一帧之后"</b>（严格 <code>i &gt; t</code>，不含当前帧）：
+        <code>ct_win</code> / <code>alive_end</code> / <code>can_kill</code> /
+        <code>next_death</code> / <code>next_kill</code>。后两个是<b>11 类</b>：
+        <code>0..9</code> 是玩家下标，<code>10</code> 表示本回合不会再有了 —— 它是一个
+        有信息量的类别，训练侧直接 <code>CE</code>，不用掩码。</li>
+      <li><code>next_death</code> / <code>next_kill</code> 满足「当事人<b>当前帧还活着</b>」。
+        页面上如果出现「标签里的人当帧是死的」警告，那是造数 / 切片的问题，不是前端。</li>
+      <li>角度：文件里存的是 <code>sin/cos</code> 四列（yaw 在 ±180 会跳变，模型插值不了），
+        这里用 <code>atan2</code> 还原成度。眼高 = <code>z + 64.0938 − 18·crouch</code>。</li>
+      <li><code>ctx_player_mask</code> 是<b>真 bool</b>（True = 这一帧活着），所以
+        <code>to_torch()</code> 会把它变成 <code>torch.bool</code>，可以径直当
+        <code>key_padding_mask</code> 用；<b>队伍在 <code>ctx_player_team</code></b>
+        （0 = CT / 1 = T / -1 = 未知），死人也保留队伍 —— "哪队"和"死没死"是两个正交的量。
+        <code>ctx_player</code> 第 15 列虽然也是 team，但它是 [0,1] 浮点，-1 会被压成 0，
+        别拿它判队伍。</li>
+    </ul>
+  </footer>
+
+</main>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

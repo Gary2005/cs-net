@@ -1,35 +1,55 @@
-# macOS
 .DS_Store
-
-# IDE
 .vscode/
-.idea/
-.claude/
-
-# Python
 __pycache__/
 *.pyc
-*.pyo
 
-# Checkpoints & model weights
-*.pt
-*.pth
-checkpoints/
-outputs/
+# Build caches: the Go side-channel's GOPATH/GOCACHE and measure_weapons.mjs's
+# vendored three.js copy.
+.build/
 
-# Large/generated data
-maps/obj_files/
-examples/demo/
-examples/json/*
-!examples/json/test.json.gz
-examples/dataset/
-data/
-dataset/
-matches.json
-tmp/
-out
-wandb/
+# PyInstaller's scratch (`build/cs-net/`) and its output (`dist/cs-net/`, ~1.5 GB).
+# `packaging/out/` holds the zips that end up on the Release, `.selftest-data/` is
+# what `cs-net.exe --packaging-selftest` writes when CI points the data dir here,
+# and `.smoke-data/` is the scratch data dir of CI's "double-click" smoke test.
+/build/
+/dist/
+/packaging/out/
+/.selftest-data/
+/.smoke-data/
 
-# Logs / artifacts
-*.log
-attn_weights.html
+# Uncompressed map geometry. The tracked form is
+# maps/optimized_obj_files/*.obj.zip, unpacked by scripts/extract_maps.py
+# (~134 MB per map once unpacked).
+*.obj
+# Optional per-triangle colour sidecar; a map is 7-21 MB and the feature is off
+# by default (map-loader.js BAKED_COLORS).
+maps/optimized_obj_files/*.colors.bin
+
+# The web app's own data: config, the SQLite library, .csz files, thumbnails,
+# avatars. Anchored on purpose -- it lives under app/ now, and the repo root's
+# data/ is a different thing entirely (training data).
+/app/data/
+
+# Replays written by visualizer/server.py on POST /api/load.
+visualizer/outputs/
+
+# Training data, checkpoints and runs.
+/data/
+/models/
+/runs/
+
+# huggingface_hub's local-directory metadata: `scripts/download_models.py` puts
+# the weights in models/ with `local_dir=<repo>`, and hub keeps etags / partial
+# downloads under <repo>/.cache/huggingface/.
+/.cache/
+
+# Local demo files. Anchored to the repo root on purpose: an unanchored
+# "examples/" also matches visualizer/static/three/examples/, which would
+# silently block the vendored three.js addons (GLTFLoader,
+# BufferGeometryUtils) from ever being committed -- and that only shows up on
+# a fresh clone, where the importmap would then 404.
+/examples/
+
+# visualizer/static/assets/ (weapon models, textures, sprites, HUD icons,
+# radars) is tracked on purpose: a clean checkout cannot rebuild it without a
+# local CS2 install. It is Valve's content, not MIT -- see README "Licensing".

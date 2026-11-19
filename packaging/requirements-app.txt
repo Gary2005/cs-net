@@ -1,0 +1,34 @@
+# Runtime dependencies of the packaged app — the ones that end up inside the zip.
+#
+# This is **not** the dev list (that is the repo-root requirements.txt): training
+# only packages (matplotlib / tqdm / pyyaml) are left out, and every version is
+# pinned so a release build is reproducible.  Python must be 3.12: every native
+# wheel here (demoparser2 / numba / llvmlite / torch) is cp312-only, no abi3.
+#
+# torch is the CPU build on purpose.  The default Windows wheel is +cu128 (4.4 GB
+# of CUDA DLLs, plus a `DLL load failed` risk on machines without the CUDA
+# runtime); the app's inference is a few hundred milliseconds on 10 players, so
+# the GPU buys nothing and costs ~3.5 GB in the zip.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+numpy==2.5.3
+pandas==3.0.6
+flask==3.1.3
+Pillow==12.3.0
+demoparser2==0.42.2
+zstandard==0.25.0
+huggingface_hub==2.4.0
+numba==0.68.0
+
+# demoparser2 的运行时依赖，必须显式钉住、并由 cs-net.spec 整包收进来：
+# 它是纯 Rust 扩展，在 Rust 里 `PyImport_ImportModule("polars")` / ("pyarrow")，
+# PyInstaller 的静态分析看不见 —— 少一个，玩家点"提取"就是
+# `ModuleNotFoundError: No module named 'polars'`（0.42.2 上真的发生过）。
+polars==2.1.0
+pyarrow==26.0.1
+
+# 托盘图标（只有 --tray 用得上：默认是控制台模式，不建托盘图标）。
+# 纯 Python + ctypes，依赖只有已经装好的 Pillow。
+pystray==0.19.5
+
+torch==2.11.0+cpu

@@ -1,11 +1,26 @@
+# Core: demo extraction (.dem -> .csz), the demo library and the 3D replay studio.
 numpy
-torch
-webdataset
-zstandard
-open3d
-tqdm
 demoparser2
+zstandard
 flask
-matplotlib
+pandas
+Pillow
+
+# The occlusion kernel (scripts/training_data/obstruction.py) and the smoke
+# stats are numba-compiled.  Without it the AI panels lose their occlusion
+# features and the players page's "穿烟" column degrades to "—"; the first call
+# pays ~7 s of compilation.  It arrives with llvmlite (~150 MB) and caps
+# numpy at <2.6.
+numba
+
+# Weight download for the AI panels: scripts/download_models.py uses
+# hf_hub_download (resume + checksums). The web app's "download models" button
+# runs the same script, so the app needs it too.
+huggingface_hub
+
+# Training: the PyTorch models under training/. For GPU, install torch from
+# https://pytorch.org instead of the default CPU wheel.
+torch
 pyyaml
-huggingface_hub  # 仅下载/验证模型 checkpoint 需要
+tqdm
+matplotlib

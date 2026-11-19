@@ -1,213 +1,134 @@
 <p align="center">
-  <img src="visualizer/static/logo.svg" width="120" height="120" alt="cs-net-logo">
+  <img src="visualizer/static/logo.svg" width="120" height="120" alt="cs-net logo">
 </p>
 
-<h1 align="center">CS-NET v4</h1>
+<h1 align="center">CS-NET <img src="https://img.shields.io/badge/version-v5-38bdf8?style=flat-square" alt="v5"></h1>
 
 <p align="center">
-  <strong>基于 Transformer 的 CS2 路径预测与局面预测框架</strong>
+  <strong>CS2 3D AI 分析回放工具</strong>
 </p>
 
 <p align="center">
   <a href="README.md">English</a>
   ·
-  <a href="#-模型权重">模型权重</a>
+  <a href="#快速开始">快速开始</a>
   ·
-  <a href="#-快速开始">快速开始</a>
+  <a href="#下载-ai-模型">下载模型</a>
   ·
-  <a href="#-训练">训练</a>
+  <a href="#怎么用">怎么用</a>
   ·
-  <a href="#-文档">文档</a>
+  <a href="#目录结构">目录结构</a>
+  ·
+  <a href="#文档">文档</a>
+  ·
+  <a href="#许可">许可</a>
+</p>
+
+<p align="center">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
 ---
 
-## 本仓库包含什么
+## 这是什么
 
-CS-NET v4 是 CS2（反恐精英 2）深度学习框架的开源版本，包含三部分：
-
-| 组件 | 说明 | 入口 |
-|---|---|---|
-| **路径预测模型** | 预训练 Transformer：输入 16 tick 完整局面窗口（10 玩家 + 炸弹 + 投掷物 + 射线深度图），**自回归预测每个玩家未来的移动路径**（世界坐标），以离散移动/角度 token 表示。 | `scripts/pretrain_model.py`、`scripts/prediction_engine.py`、`scripts/pretrain.py` |
-| **spatial-only 模型** | 最简下游任务族：仅凭**单个 tick** 的完整局面，预测每玩家**胜率 / 回合末存活 / 未来击杀**概率。每个模型 = 预训练 embedder + spatial transformer + 线性头（无路径、无历史窗口），一个任务一个 checkpoint。 | `scripts/spatial_only_predictor.py`、`scripts/downstream-spatial-only/finetune_spatial_only.py` |
-| **3D 可视化工具** | Flask Web 应用：上传 `.dem` / `.json` / `.json.gz` 录像，3D 平滑回放（Three.js + 地图 OBJ），上传 checkpoint 可视化 **AI 预测路径 vs 真实路径**，加载 spatial-only 模型后整回合实时查看每玩家概率曲线。 | `visualizer/server.py` |
-
-```
-demo (.dem) ──demo_parser──▶ 回合 JSON ──create_training_data──▶ round WDS
-round WDS ──create_pretrain_data──▶ 窗口 WDS ──pretrain.py──▶ 路径预测 ckpt
-round WDS + 路径 ckpt ──finetune_spatial_only.py──▶ winrate / alive_end / future_kill
-任意录像 ──visualizer/server.py──▶ 3D 回放 + AI 路径预测 + spatial-only 曲线
-```
-
-## 模型权重
-
-Pro 架构（d_model=768，138.7M 参数）的已训练模型可在
-[Releases](../../releases) 页面下载：
-
-| 文件 | 任务 | 说明 |
-|---|---|---|
-| `cs-net-v4-pro.pt` | 路径预测（预训练） | 600k 步；完整模型（`model` + `global_step` 键） |
-| `pretrain-v4-pro-win_rate.pt` | spatial-only `winrate` | `{task, model_state, head_state, config}` |
-| `pretrain-v4-pro-alive_end.pt` | spatial-only `alive_end` | 同格式 |
-| `pretrain-v4-pro-future_kill.pt` | spatial-only `future_kill` | 同格式 |
-
-> spatial-only checkpoint 只含 embedder + spatial transformer 权重（外加线性头），
-> 因此远小于完整路径预测模型。模型架构必须与 `config/pretrain-a100-pro.yaml` 一致。
-
-### 下载
-
-```bash
-pip install huggingface_hub
-python scripts/download_checkpoints.py                    # 全部 4 个 ckpt → checkpoints/
-python scripts/download_checkpoints.py --pretrain-only    # 只下路径预测模型
-```
-
-或直接用 `hf` CLI：
-
-```bash
-hf download gary2oos/cs-net-v4 --local-dir checkpoints
-```
-
-### 验证模型能正确加载
-
-```bash
-python scripts/test_checkpoints.py --models-dir checkpoints
-```
-
-该测试会：按 config 构建模型并加载每个 checkpoint，检查架构完全匹配
-（无 missing / unexpected 键）、所有权重有限值，并对 spatial-only 模型
-跑一遍合成回合的逐 tick 推理；然后用仓库内置的回合数据
-[`examples/json/test.json.gz`](examples/json/test.json.gz)（de_mirage，
-24 回合）跑一遍**完整 pipeline**：
-`json.gz → filter → 武器索引重映射 → process_round → 模型推理`，
-与训练和可视化工具完全相同的预处理链路。加 `--forward` 可额外对路径预测
-模型跑自回归推理（合成局面 + 真实回合数据，CPU 各约 1-3 分钟）。
+cs-net v5 是一个本地运行的AI分析工具，同时具有3D回放功能。
 
 ## 快速开始
 
-### 1. 环境
+需要 Python ≥ 3.10，以及 Go 工具链（只用来编译烟雾/火焰辅助程序，一次就够）。
 
 ```bash
-conda create -n cs2demo python=3.10
-conda activate cs2demo
+git clone https://github.com/Gary2005/cs-net.git
+cd cs-net
+
+conda create -n cs-net-v5 python=3.10 -y
+conda activate cs-net-v5
 pip install -r requirements.txt
+
+# 1) 编译 Go 辅助程序（烟雾体素 + 火焰格子，每台机器跑一次）
+bash tools/demo_extract/build_sidechannel.sh      # PowerShell 里用 Git Bash
+
+# 2) 解压地图几何（maps/*.obj.zip -> *.obj，解压后约 1 GB）
+python scripts/extract_maps.py
+
+# 3) 起工作台
+python -m app.server --port 5000                  # → http://127.0.0.1:5000/library
 ```
 
-用 `python scripts/check_env.py` 验证环境。推理支持 CPU / MPS / CUDA。
+第 2 步也可以在网页里做：`maps/` 还没解压时，库页面顶上会出现一条 **解压地图**
+的横幅，点一下排进后台任务（和上面的命令是同一个脚本）。和权重一样，每个检出
+只需要做一次。
 
-### 2. 3D 可视化工具 + AI 路径预测
+### 不想配环境：下 zip 就行
 
-```bash
-# 启动并预加载本地 checkpoint（路径预测 + spatial-only 模型目录）
-python visualizer/server.py --port 5000 \
-    --checkpoint /path/to/cs-net-v4-pro.pt \
-    --spatial-model-dir /path/to/spatial-ckpts \
-    --device cpu            # 或 mps / cuda
-```
+每个 Release 带两个 Windows x64 的压缩包，不需要 Python，也不需要 conda：
 
-打开 `http://127.0.0.1:5000/`，把 `.dem`/`.json`/`.json.gz` 录像拖进页面即可；
-也可把录像放到 `examples/demo` / `examples/json` 下使用内置示例列表。
-模型 checkpoint 也可以在页面内上传，不必走命令行参数。
+* `cs-net-5.0.0-win64-lite.zip` —— 不带权重，第一次开 AI 面板时点横幅下载（665 MB）；
+* `cs-net-5.0.0-win64-full.zip` —— 权重随包，离线就能用。
 
-完整功能与 API 列表见 [visualizer/README.md](visualizer/README.md)。
+解压后双击 `cs-net.exe` 即可。两个包里的地图几何都已经解压好，库、配置、`.csz`
+都在 exe 旁边的 `data\` 里，整个文件夹拷走就是换机器。细节见
+[packaging/README.md](packaging/README.md)。
 
-### 3. 路径预测推理（库 / CLI）
+### 下载 AI 模型
 
-```python
-from scripts.prediction_engine import PredictionEngine
+两份权重合计 665 MB，**不在 git 里**，放在 Hugging Face 上。**下过一次就行**，
+两种方式等价：
 
-engine = PredictionEngine(
-    "config/pretrain-a100-pro.yaml",
-    "cs-net-v4-pro.pt",
-    device="cpu",
-    maps_dir="maps/optimized_obj_files",
-)
-result = engine.predict_at_tick(sample, query_tick=120)
-# result["trajectories"][p] = {"pred_traj": [...], "gt_traj": [...], ...}（世界坐标）
-```
+* 在网页里：打开 Demo 库页面，`models/` 缺东西时顶上会出现横幅，点
+  **下载模型**；
+* 在命令行：`python scripts/download_models.py`。
 
-`sample` 是 `scripts/training_data/round_processor.py`（`process_round`）产出的
-回合级 dict，与训练数据格式一致。
+两边跑的是同一个脚本（底层是 `huggingface_hub`，断点续传和校验都交给它）。
+它先探 `huggingface.co`，**连不上就把 `HF_ENDPOINT` 切到 `hf-mirror.com`** ——
+和你自己 `$env:HF_ENDPOINT = "https://hf-mirror.com"` 是同一件事
+（`--mirror` 强制走镜像，`--endpoint URL` 指定站点，`--check` 只报状态不下载）。
 
-另有独立测试 CLI（读取 round 级 WDS shard）：
+环境有哪儿不对，跑 `python scripts/check_env.py`（Python、依赖、辅助程序、浏览器、unrar）。
 
-```bash
-python scripts/prediction_engine.py \
-    --config config/pretrain-a100-pro.yaml \
-    --checkpoint /path/to/cs-net-v4-pro.pt \
-    --data-dir /path/to/round_wds \
-    --tick 200 --device cpu
-```
+## 怎么用
 
-### 4. spatial-only 推理
+1. **加监听目录** —— 顶栏 **设置** → 粘贴放 demo 的目录（本机探测到的候选目录会列出来）→ **保存** → **扫描**。库默认是空的，这是有意的：目录必须由你指定。
+2. **等提取** —— 后台把 `.dem` 提成 `.csz`（110 MB → 约 7 MB），进度在列表和顶栏 **任务** 抽屉里。
+3. **看回放** —— 勾选一场（可多选）→ **载入分析** → 进 3D 回放页：选手、投掷物、烟雾体、火焰格子、击杀信息、Minimap、可见性。
+4. **看玩家** —— **玩家** 页按人聚合库里的所有比赛；玩家档案里有传统统计，也有 **AI 数据** 一栏。
+5. **开 AI** —— 回放页底部打开 **AI 预测面板**（回合胜率 + 每人五项指标）和 **AI 对枪**（下一次对枪谁赢，画成弧线）。
 
-```python
-from scripts.spatial_only_predictor import SpatialOnlyPredictor
-
-predictor = SpatialOnlyPredictor("/path/to/spatial-ckpts", device="cpu")
-out = predictor.predict_round_full(sample)   # 逐 tick 每玩家概率
-```
-
-模型目录按 ckpt 内 `task` 字段（`winrate` / `alive_end` / `future_kill`）自动发现，
-每个任务加载一个模型。
-
-## 训练
-
-两个训练脚本均为 config 驱动（命令行参数可覆盖 yaml）：
-
-```bash
-# 预训练（路径预测）— A100 80GB 配置，600k 步
-python scripts/pretrain.py --config config/pretrain-a100-pro.yaml
-
-# spatial-only 下游微调（一次一个任务）
-python scripts/downstream-spatial-only/finetune_spatial_only.py \
-    --config config/finetune-spatial-only-a100.yaml \
-    --checkpoint /path/to/cs-net-v4-pro.pt \
-    --task winrate
-```
-
-详细文档：
-- [docs/pretrain.md](docs/pretrain.md) — 预训练数据管线与训练
-- [docs/training-data-format.md](docs/training-data-format.md) — round 级 WDS 格式
-- [docs/torch-dataset.md](docs/torch-dataset.md) — 窗口数据集 / collate 内部实现
-- [docs/demo-json-format.md](docs/demo-json-format.md) — 回合 JSON 格式（可视化工具输入）
-- [scripts/downstream-spatial-only/README.md](scripts/downstream-spatial-only/README.md) — spatial-only 微调指南
-
-数据管线入口：
-- `demo_parser/` — `.dem` → 回合 JSON（`python -m demo_parser` 或 `scripts/demo_to_json.py`）
-- `scripts/create_training_data.py` — 回合 JSON → round 级 WebDataset shards
-- `scripts/create_pretrain_data.py` — round shards → 定长窗口 shards
-
-## 仓库结构
+## 目录结构
 
 ```
-config/                          # 训练配置（Pro 架构）
-demo_parser/                     # .dem → 回合 JSON
-maps/optimized_obj_files/        # 优化后的地图 OBJ（可视化 + 深度图）
-replay_tool/filter.py            # JSON 后处理（可视化工具共用）
-scripts/
-  pretrain_model.py              # CS2PretrainModel / PretrainConfig
-  prediction_engine.py           # 路径预测推理引擎
-  pretrain.py                    # 预训练入口
-  create_pretrain_data.py        # 窗口 shard 生成
-  test_pretrain.py               # 单 sample teacher-forcing / AR 评估
-  evaluate_pretrain.py           # 多样本评估
-  spatial_only_predictor.py      # spatial-only 推理（可视化工具共用）
-  create_training_data.py        # round shard 生成
-  evaluate_demos.py              # demo 级评估（可视化工具扫描功能使用）
-  training_data/                 # config / 深度图 / 特征 / 标签 / WDS IO / 数据集
-  downstream-spatial-only/       # spatial-only 微调
-visualizer/                      # Flask 3D 回放 + 预测 Web 应用
-docs/                            # 详细中文文档
+app/                              Web app 本体：Demo 库、玩家页、AI 面板（Flask + SQLite）
+visualizer/                       3D 回放页（Flask + Three.js），站点 logo 也在这
+tools/demo_extract/               .dem -> .csz 提取器：逐 tick、zstd、烟雾/火焰解码
+training/                         PyTorch 模型与训练脚本（AI 面板加载的就是它训出来的权重）
+scripts/training_data/            .csz -> 训练用数据集
+scripts/                          辅助脚本：download_models.py、extract_maps.py、check_env.py、export_weights.py
+packaging/                        PyInstaller spec 和组包脚本（打双击即用的 Windows zip）
+maps/optimized_obj_files/         减面后的地图几何（.obj.zip，用 extract_maps.py 解压）
+models/                           两份写死的权重（不进 git，下载得到）
 ```
 
-## 说明
+`.csz` 的编解码是**严格无损**的：`codec.save` → `codec.load` 逐位相同
+（`codec.equal`），不是近似、不是四舍五入。提取器每个 tick 都采（≈64 Hz），
+烟雾体素和火焰格子通过一个小 Go 辅助程序取到 `demoparser2` 拿不到的字段。
 
-- 所有输入窗口为 16 tick = 4 秒（0.25s/tick）；demo 解析固定 `interval=0.25` 与训练一致。
-- 数据管线使用世界对齐（v5）坐标系；预测引擎会自动转换旧 v4 标签。
-- `maps/optimized_obj_files/` 下的地图 OBJ 已针对可视化（Three.js）与射线深度
-  （Open3D）做过优化。
+## 文档
 
-## License
+| 文档 | 内容 |
+|---|---|
+| [app/README.md](app/README.md) | Demo 库、缩略图、玩家页、AI 面板、HTTP 接口 |
+| [visualizer/README.md](visualizer/README.md) | 回放页的行为与内部实现 |
+| [tools/demo_extract/README.md](tools/demo_extract/README.md) | `.csz` 字段树、采样方式、烟雾体素、火焰格子 |
+| [tools/demo_extract/API.md](tools/demo_extract/API.md) | 字段级手册、实测量级、坑 |
+| [scripts/training_data/README.md](scripts/training_data/README.md) | 怎么写任务、怎么切样本、数据集上的坑 |
+| [packaging/README.md](packaging/README.md) | 双击即用的 Windows 包：spec、体积、发版流程 |
 
-[MIT](LICENSE)
+## 许可
+
+本仓库的**代码**是 MIT —— 见 [LICENSE](LICENSE)。
+
+**游戏内容不是。** `visualizer/static/assets/`（武器模型、贴图、烟/火精灵、HUD
+图标、雷达图）和 `maps/optimized_obj_files/` 的几何都派生自 Valve 的
+Counter-Strike 2 内容，版权归 Valve Corporation 所有。

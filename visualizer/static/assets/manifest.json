@@ -1,0 +1,1985 @@
+{
+  "weapon_icons": {
+    "map": "weapon_icons/map.json",
+    "names": 63
+  },
+  "sprites": {
+    "smokeloop_i_0_sc_hardedge": {
+      "base": "smokeloop_i_0_sc_hardedge",
+      "dir": "smokeloop_i_0_sc_hardedge",
+      "sequences": [
+        {
+          "index": 0,
+          "loop": true,
+          "frames": [
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_0.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_1.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_2.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_3.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_4.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_5.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_6.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_7.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_8.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_9.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_10.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_11.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_12.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_13.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_14.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_15.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_16.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_17.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_18.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_19.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_20.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_21.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_22.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_23.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_24.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_25.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_26.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_27.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_28.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_29.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_30.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_31.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_32.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_33.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_34.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_35.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_36.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_37.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_38.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_39.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_40.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_41.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_42.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_43.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_44.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_45.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_46.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_47.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_48.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_49.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_50.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_51.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_52.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_53.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_54.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_55.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_56.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_57.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_58.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_59.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_60.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_61.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_62.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq0_63.png",
+              "duration": 1
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "loop": true,
+          "frames": [
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_0.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_1.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_2.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_3.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_4.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_5.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_6.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_7.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_8.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_9.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_10.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_11.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_12.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_13.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_14.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_15.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_16.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_17.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_18.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_19.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_20.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_21.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_22.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_23.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_24.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_25.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_26.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_27.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_28.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_29.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_30.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_31.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_32.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_33.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_34.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_35.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_36.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_37.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_38.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_39.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_40.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_41.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_42.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_43.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_44.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_45.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_46.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_47.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_48.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_49.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_50.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_51.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_52.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_53.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_54.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_55.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_56.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_57.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_58.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_59.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_60.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_61.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_62.png",
+              "duration": 1
+            },
+            {
+              "file": "smokeloop_i_0_sc_hardedge_seq1_63.png",
+              "duration": 1
+            }
+          ]
+        }
+      ],
+      "frame_count": 128,
+      "role": "albedo"
+    },
+    "flames": {
+      "base": "flames",
+      "dir": "flames",
+      "sequences": [
+        {
+          "index": 0,
+          "loop": true,
+          "frames": [
+            {
+              "file": "flames_seq0_0.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_1.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_2.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_3.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_4.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_5.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_6.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_7.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_8.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_9.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_10.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_11.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_12.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_13.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_14.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_15.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_16.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_17.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_18.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_19.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_20.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_21.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_22.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_23.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_24.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_25.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_26.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_27.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_28.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_29.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_30.png",
+              "duration": 1
+            },
+            {
+              "file": "flames_seq0_31.png",
+              "duration": 1
+            }
+          ]
+        }
+      ],
+      "frame_count": 32
+    },
+    "flame_omni": {
+      "base": "flame_omni",
+      "dir": "flame_omni",
+      "sequences": [
+        {
+          "index": 0,
+          "loop": true,
+          "frames": [
+            {
+              "file": "flame_omni_seq0_0.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_1.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_2.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_3.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_4.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_5.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_6.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_7.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_8.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_9.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_10.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_11.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_12.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_13.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_14.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_15.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_16.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_17.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_18.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_19.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_20.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_21.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_22.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_23.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_24.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_25.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_26.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_27.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_28.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_29.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_30.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_31.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_32.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_33.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_34.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_35.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_36.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_37.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_38.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_39.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_40.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_41.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_42.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_43.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_44.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_45.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_46.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_47.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_48.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_49.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_50.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_51.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_52.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_53.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_54.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_55.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_56.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_57.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_58.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_omni_seq0_59.png",
+              "duration": 1
+            }
+          ]
+        }
+      ],
+      "frame_count": 60
+    },
+    "flame_wisp": {
+      "base": "flame_wisp",
+      "dir": "flame_wisp",
+      "sequences": [
+        {
+          "index": 0,
+          "loop": true,
+          "frames": [
+            {
+              "file": "flame_wisp_seq0_0.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_1.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_2.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_3.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_4.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_5.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_6.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_7.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_8.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_9.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_10.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_11.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_12.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_13.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_14.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_15.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_16.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_17.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_18.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_19.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_20.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_21.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_22.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_23.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_24.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_25.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_26.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_27.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_28.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_29.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_30.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_31.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_32.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_33.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_34.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_35.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_36.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_37.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_38.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_39.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_40.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_41.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_42.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_43.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_44.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_45.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_46.png",
+              "duration": 1
+            },
+            {
+              "file": "flame_wisp_seq0_47.png",
+              "duration": 1
+            }
+          ]
+        }
+      ],
+      "frame_count": 48
+    },
+    "fire_onsurface": {
+      "base": "fire_onsurface",
+      "dir": "fire_onsurface",
+      "sequences": [
+        {
+          "index": 0,
+          "loop": true,
+          "frames": [
+            {
+              "file": "fire_onsurface_seq0_0.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_1.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_2.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_3.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_4.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_5.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_6.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_7.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_8.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_9.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_10.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_11.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_12.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_13.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_14.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_15.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_16.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_17.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_18.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_19.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_20.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_21.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_22.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_23.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_24.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_25.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_26.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_27.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_28.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq0_29.png",
+              "duration": 1
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "loop": true,
+          "frames": [
+            {
+              "file": "fire_onsurface_seq1_0.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_1.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_2.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_3.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_4.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_5.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_6.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_7.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_8.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_9.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_10.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_11.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_12.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_13.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_14.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_15.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_16.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_17.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_18.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_19.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_20.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_21.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_22.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_23.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_24.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_25.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_26.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_27.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_28.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq1_29.png",
+              "duration": 1
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "loop": true,
+          "frames": [
+            {
+              "file": "fire_onsurface_seq2_0.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_1.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_2.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_3.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_4.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_5.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_6.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_7.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_8.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_9.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_10.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_11.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_12.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_13.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_14.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_15.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_16.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_17.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_18.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_19.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_20.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_21.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_22.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_23.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_24.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_25.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_26.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_27.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_28.png",
+              "duration": 1
+            },
+            {
+              "file": "fire_onsurface_seq2_29.png",
+              "duration": 1
+            }
+          ]
+        }
+      ],
+      "frame_count": 90
+    }
+  },
+  "weapons": [
+    {
+      "name": "weapon_rif_ak47",
+      "key": "ak47",
+      "dir": "weapons\\ak47",
+      "glb": "weapon_rif_ak47.glb",
+      "files": 11
+    },
+    {
+      "name": "weapon_rif_aug",
+      "key": "aug",
+      "dir": "weapons\\aug",
+      "glb": "weapon_rif_aug.glb",
+      "files": 16
+    },
+    {
+      "name": "weapon_snip_awp",
+      "key": "awp",
+      "dir": "weapons\\awp",
+      "glb": "weapon_snip_awp.glb",
+      "files": 11
+    },
+    {
+      "name": "weapon_smg_bizon",
+      "key": "bizon",
+      "dir": "weapons\\bizon",
+      "glb": "weapon_smg_bizon.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_c4",
+      "key": "c4",
+      "dir": "weapons\\c4",
+      "glb": "weapon_c4.glb",
+      "files": 10
+    },
+    {
+      "name": "weapon_pist_cz75a",
+      "key": "cz75a",
+      "dir": "weapons\\cz75a",
+      "glb": "weapon_pist_cz75a.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_pist_deagle",
+      "key": "deagle",
+      "dir": "weapons\\deagle",
+      "glb": "weapon_pist_deagle.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_decoy",
+      "key": "decoy",
+      "dir": "weapons\\decoy",
+      "glb": "weapon_decoy.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_pist_elite",
+      "key": "elite",
+      "dir": "weapons\\elite",
+      "glb": "weapon_pist_elite.glb",
+      "files": 10
+    },
+    {
+      "name": "weapon_rif_famas",
+      "key": "famas",
+      "dir": "weapons\\famas",
+      "glb": "weapon_rif_famas.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_pist_fiveseven",
+      "key": "fiveseven",
+      "dir": "weapons\\fiveseven",
+      "glb": "weapon_pist_fiveseven.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_flashbang",
+      "key": "flashbang",
+      "dir": "weapons\\flashbang",
+      "glb": "weapon_flashbang.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_snip_g3sg1",
+      "key": "g3sg1",
+      "dir": "weapons\\g3sg1",
+      "glb": "weapon_snip_g3sg1.glb",
+      "files": 11
+    },
+    {
+      "name": "weapon_rif_galilar",
+      "key": "galilar",
+      "dir": "weapons\\galilar",
+      "glb": "weapon_rif_galilar.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_pist_glock18",
+      "key": "glock18",
+      "dir": "weapons\\glock18",
+      "glb": "weapon_pist_glock18.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_healthshot",
+      "key": "healthshot",
+      "dir": "weapons\\healthshot",
+      "glb": "weapon_healthshot.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_hegrenade",
+      "key": "hegrenade",
+      "dir": "weapons\\hegrenade",
+      "glb": "weapon_hegrenade.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_pist_hkp2000",
+      "key": "hkp2000",
+      "dir": "weapons\\hkp2000",
+      "glb": "weapon_pist_hkp2000.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_incendiarygrenade",
+      "key": "incendiary",
+      "dir": "weapons\\incendiary",
+      "glb": "weapon_incendiarygrenade.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_bayonet",
+      "key": "knife_bayonet",
+      "dir": "weapons\\knife_bayonet",
+      "glb": "weapon_knife_bayonet.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_bowie",
+      "key": "knife_bowie",
+      "dir": "weapons\\knife_bowie",
+      "glb": "weapon_knife_bowie.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_butterfly",
+      "key": "knife_butterfly",
+      "dir": "weapons\\knife_butterfly",
+      "glb": "weapon_knife_butterfly.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_canis",
+      "key": "knife_canis",
+      "dir": "weapons\\knife_canis",
+      "glb": "weapon_knife_canis.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_cord",
+      "key": "knife_cord",
+      "dir": "weapons\\knife_cord",
+      "glb": "weapon_knife_cord.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_css",
+      "key": "knife_css",
+      "dir": "weapons\\knife_css",
+      "glb": "weapon_knife_css.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_default_ct",
+      "key": "knife_default_ct",
+      "dir": "weapons\\knife_default_ct",
+      "glb": "weapon_knife_default_ct.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_default_t",
+      "key": "knife_default_t",
+      "dir": "weapons\\knife_default_t",
+      "glb": "weapon_knife_default_t.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_falchion",
+      "key": "knife_falchion",
+      "dir": "weapons\\knife_falchion",
+      "glb": "weapon_knife_falchion.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_flip",
+      "key": "knife_flip",
+      "dir": "weapons\\knife_flip",
+      "glb": "weapon_knife_flip.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_gut",
+      "key": "knife_gut",
+      "dir": "weapons\\knife_gut",
+      "glb": "weapon_knife_gut.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_karambit",
+      "key": "knife_karambit",
+      "dir": "weapons\\knife_karambit",
+      "glb": "weapon_knife_karambit.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_kukri",
+      "key": "knife_kukri",
+      "dir": "weapons\\knife_kukri",
+      "glb": "weapon_knife_kukri.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_m9",
+      "key": "knife_m9",
+      "dir": "weapons\\knife_m9",
+      "glb": "weapon_knife_m9.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_navaja",
+      "key": "knife_navaja",
+      "dir": "weapons\\knife_navaja",
+      "glb": "weapon_knife_navaja.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_outdoor",
+      "key": "knife_outdoor",
+      "dir": "weapons\\knife_outdoor",
+      "glb": "weapon_knife_outdoor.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_push",
+      "key": "knife_push",
+      "dir": "weapons\\knife_push",
+      "glb": "weapon_knife_push.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_skeleton",
+      "key": "knife_skeleton",
+      "dir": "weapons\\knife_skeleton",
+      "glb": "weapon_knife_skeleton.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_stiletto",
+      "key": "knife_stiletto",
+      "dir": "weapons\\knife_stiletto",
+      "glb": "weapon_knife_stiletto.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_tactical",
+      "key": "knife_tactical",
+      "dir": "weapons\\knife_tactical",
+      "glb": "weapon_knife_tactical.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_talon",
+      "key": "knife_talon",
+      "dir": "weapons\\knife_talon",
+      "glb": "weapon_knife_talon.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_knife_ursus",
+      "key": "knife_ursus",
+      "dir": "weapons\\knife_ursus",
+      "glb": "weapon_knife_ursus.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_mach_m249",
+      "key": "m249",
+      "dir": "weapons\\m249",
+      "glb": "weapon_mach_m249.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_rif_m4a1_silencer",
+      "key": "m4a1_silencer",
+      "dir": "weapons\\m4a1_silencer",
+      "glb": "weapon_rif_m4a1_silencer.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_rif_m4a4",
+      "key": "m4a4",
+      "dir": "weapons\\m4a4",
+      "glb": "weapon_rif_m4a4.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_smg_mac10",
+      "key": "mac10",
+      "dir": "weapons\\mac10",
+      "glb": "weapon_smg_mac10.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_shot_mag7",
+      "key": "mag7",
+      "dir": "weapons\\mag7",
+      "glb": "weapon_shot_mag7.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_molotov",
+      "key": "molotov",
+      "dir": "weapons\\molotov",
+      "glb": "weapon_molotov.glb",
+      "files": 11
+    },
+    {
+      "name": "weapon_smg_mp5sd",
+      "key": "mp5sd",
+      "dir": "weapons\\mp5sd",
+      "glb": "weapon_smg_mp5sd.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_smg_mp7",
+      "key": "mp7",
+      "dir": "weapons\\mp7",
+      "glb": "weapon_smg_mp7.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_smg_mp9",
+      "key": "mp9",
+      "dir": "weapons\\mp9",
+      "glb": "weapon_smg_mp9.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_mach_negev",
+      "key": "negev",
+      "dir": "weapons\\negev",
+      "glb": "weapon_mach_negev.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_shot_nova",
+      "key": "nova",
+      "dir": "weapons\\nova",
+      "glb": "weapon_shot_nova.glb",
+      "files": 11
+    },
+    {
+      "name": "weapon_pist_p250",
+      "key": "p250",
+      "dir": "weapons\\p250",
+      "glb": "weapon_pist_p250.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_smg_p90",
+      "key": "p90",
+      "dir": "weapons\\p90",
+      "glb": "weapon_smg_p90.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_pist_revolver",
+      "key": "revolver",
+      "dir": "weapons\\revolver",
+      "glb": "weapon_pist_revolver.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_shot_sawedoff",
+      "key": "sawedoff",
+      "dir": "weapons\\sawedoff",
+      "glb": "weapon_shot_sawedoff.glb",
+      "files": 11
+    },
+    {
+      "name": "weapon_snip_scar20",
+      "key": "scar20",
+      "dir": "weapons\\scar20",
+      "glb": "weapon_snip_scar20.glb",
+      "files": 11
+    },
+    {
+      "name": "weapon_rif_sg556",
+      "key": "sg556",
+      "dir": "weapons\\sg556",
+      "glb": "weapon_rif_sg556.glb",
+      "files": 11
+    },
+    {
+      "name": "weapon_smokegrenade",
+      "key": "smokegrenade",
+      "dir": "weapons\\smokegrenade",
+      "glb": "weapon_smokegrenade.glb",
+      "files": 5
+    },
+    {
+      "name": "weapon_snip_ssg08",
+      "key": "ssg08",
+      "dir": "weapons\\ssg08",
+      "glb": "weapon_snip_ssg08.glb",
+      "files": 13
+    },
+    {
+      "name": "weapon_pist_taser",
+      "key": "taser",
+      "dir": "weapons\\taser",
+      "glb": "weapon_pist_taser.glb",
+      "files": 6
+    },
+    {
+      "name": "weapon_pist_tec9",
+      "key": "tec9",
+      "dir": "weapons\\tec9",
+      "glb": "weapon_pist_tec9.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_smg_ump45",
+      "key": "ump45",
+      "dir": "weapons\\ump45",
+      "glb": "weapon_smg_ump45.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_pist_usp_silencer",
+      "key": "usp_silencer",
+      "dir": "weapons\\usp_silencer",
+      "glb": "weapon_pist_usp_silencer.glb",
+      "files": 8
+    },
+    {
+      "name": "weapon_shot_xm1014",
+      "key": "xm1014",
+      "dir": "weapons\\xm1014",
+      "glb": "weapon_shot_xm1014.glb",
+      "files": 8
+    }
+  ],
+  "radar": {
+    "map": "radar/map.json",
+    "maps": 10
+  }
+}

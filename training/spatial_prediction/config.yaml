@@ -1,0 +1,132 @@
+# spatial_prediction 训练配置：**一帧** → 5 个标签（CT 赢 / 逐人终局存活 / 逐人还能击杀 /
+# 下一个死的 / 下一个杀的）。
+#
+#     python -m training.spatial_prediction.train -c training/spatial_prediction/config.yaml
+#     python -m training.spatial_prediction.train -c ... --set train.lr=1e-4
+#
+# 结构见 `training/spatial_prediction/model.py`：一帧摊成
+#
+#     [CLS_WIN, CLS_KILL, map, global, player×10, projectile×P]
+#
+# 做全连接自注意力（player↔player 之间加遮挡 bias，死人和空道具槽 mask 掉），5 个 head
+# 各自读 CLS 或 player token。
+#
+# 数据规模（本机实测）：train 282,888 个回合 / **24,248,254 行**，valid 16,517 / 1,405,653，
+# test 16,017 / ~1.4M。一行 = 一帧，`DENSITY=1 s` 抽的。
+#
+# 成本（B=512，bf16，RTX 3090 24 G，**数据全在显存里、不含 I/O**，本机实测）：
+#
+#   d_model heads layers   参数     ms/步    行/s   峰值显存   epoch 3090 / 4090
+#      512     8      6   20.1 M    55.0   9,305   2.11 GiB   0.72 / 0.45 h
+#      512     8      8   26.4 M    73.3   6,984   2.75 GiB   0.96 / 0.60 h
+#      768    12      8   58.5 M   130.2   3,932   4.34 GiB   1.71 / 1.07 h
+#     1024    16      6   78.0 M   147.7   3,467   4.62 GiB   1.94 / 1.21 h
+#     1024    16      8  103.2 M   198.8   2,575   6.07 GiB   2.62 / 1.64 h   ← 当前
+#
+# 一个 epoch = 47,359 步（B=512）。真实训练循环还要叠上 loader：`buffer_rows: 8192` + 8
+# worker 在本机（Windows / 28 万个文件）能供 7.4k 行/s —— 所以 d=512/L=6 是 **loader 卡住**
+# （循环 69 ms/步 > 模型 55 ms/步），到 d=1024/L=8 就翻过来 **GPU 卡住**（199 ms/步，只需
+# 2.6k 行/s）。4090 那列按算力 1.6× 折算；它更饿，具体见 `data.num_workers`。
+
+data:
+  #: 任务根目录，下面必须有 train / valid / test 三个子目录（`task.json` 不用，索引是按
+  #: `*.npz` 现扫的）。服务器：`/data/spatial_prediction`。
+  #: 本机是 `F:/cs-data/spatial_prediction`：本地跑用
+  #:   --set data.root=F:/cs-data/spatial_prediction
+  root: /data/spatial_prediction
+
+  #: B=1024（当前）：d=1024 时实测 383 ms/步、2,673 行/s、峰值 10.67 GiB —— 只比 B=512 快
+  #: 3.8%，但把 24 G 用掉一半。B=512 是 6.07 GiB / 2,575 行/s。B=2048 不用考虑。
+  batch_size: 1024
+  grad_accum: 1
+
+  #: 打散方式：`buffer_rows: 8192` = **按文件顺序读、行在内存里打散**（ShuffleBufferSampler），
+  #: 一个文件一个 epoch 只解压一次。改成 null 就是 `DataLoader` 自带的 `RandomSampler` ——
+  #: 语义最干净，但 28 万个文件时每行都要整文件解压：实测 145 ms/步（3.5k 行/s，一个 epoch
+  #: 115 分钟）；buffer 版本 69 ms/步（7.4k 行/s，54 分钟）。理由和实测在 `dataset.py`。
+  buffer_rows: 8192
+  #: 每个 worker 缓存几个解压后的回合文件。必须能装下一个 `buffer_rows` 窗口的文件
+  #: （8192 / 平均 86 行 ≈ 95 个），256 个 ≈ 30 MB/worker。文件数 ≤ 256 时会自动全缓存。
+  max_cached_files: 256
+  #: 8 个 worker：I/O 已经是"每文件解压一次"的量级，再多是给 row 切片和 collate 加并行度。
+  #: ⚠ **换 4090 时这个数要重新量，别照抄 8**：3090 上训练循环 69 ms/步、纯模型 55 ms/步，
+  #: 说明那一刻已经有 20% 在等数据；4090 算力 ≈ 1.6×，瓶颈会整体移位到 loader。加 worker
+  #: 买的是并行核数（每个 worker 仍各解压一遍自己路径上的文件，总解压量不变）；盘是本地
+  #: NVMe + 核多就往 16 试。Linux 是 fork，比 Windows 的 spawn 便宜，不用怕起进程。
+  #: 反过来说 d_model=1024 时 GPU 一步 199 ms、只吃 2.6k 行/s，8 个 worker（7.4k 行/s）就
+  #: 绰绰有余 —— 16 个只是让同一批文件被多解压几遍，白烧 CPU。d=512 那种才需要往上加。
+  num_workers: 8
+  pin_memory: true
+  #: 采样器种子（null = 系统熵）。固定它之后同一个 loader 的前几个 epoch 顺序可复现。
+  seed: null
+
+model:
+  d_model: 1024
+  #: 16 × 64 = 1024：和 512/8 一样是 64 维一个头（别写成 8 头，那会变成 128 维的粗头）。
+  #: 16 个头里若干个专门看遮挡（见 model.py 的遮挡一节，`ob_bias` 是
+  #: `layers × n_heads × 4` 个数，逐层独立 —— 512 个，相对 103 M 可以忽略）。
+  n_heads: 16
+  #: 全连接自注意力的层数。S ≈ 17 时每层只有 `12 d² × S`，比 aim 的 257 步时间
+  #: transformer 便宜一个量级 —— 想加容量先加这个，再加 d_model。
+  layers: 8
+  ffn_mult: 4.0
+  dropout: 0.1
+  #: 5 个 head 的隐层宽度（`d → 256 → 1`）。
+  head_hidden: 256
+  #: `[0,1]` 小特征的 Fourier 展开（和 aim 同一套 `FourierFeatures`）。
+  player_freq: 8
+  proj_freq: 8
+  global_freq: 8
+  fourier_f_min: 1.0
+  #: 128 时 0.004 的差异就有 ~90° 相位差（位置 ≈ 10 HU、hp ≈ 0.4%）。
+  fourier_f_max: 128.0
+
+train:
+  #: 名字为空时用时间戳，不会覆盖上一次的 checkpoint / 日志。
+  name: null
+  save_dir: /data/runs/spatial
+  #: d=1024/L=8 一个 epoch ≈ 1.64 h（4090）→ 10 个 epoch **≈ 16.5 小时**；一夜跑完就 6~8，
+  #: 换 512/L=8 则是 0.6 h × 10 ≈ 6 小时。checkpoint 也跟着变大：103 M 参数一份 ~1.2 GB
+  #: （权重 + AdamW 的 m/v），`last.pt` + `best.pt` 共 2.4 GB。
+  epochs: 10
+  #: 断点续训：填 `runs/spatial/<name>/last.pt`（也可以用 `--resume`）。
+  resume: null
+  #: 调试用：跑到第 N 个优化步就停（null = 不限）。
+  max_steps: null
+  #: 3e-4 是 20~70 M 级参数 + 有效 batch 512 的经验值；103 M（d=1024）建议 2e-4 ~ 2.5e-4 起，
+  #: 训崩/震荡才往下压。B 也变大的话可以往上抬。
+  lr: 2.0e-4
+  weight_decay: 0.05
+  betas: [0.9, 0.95]
+  #: 线性 warmup 占总步数的比例（B=1024 → 23,680 步/epoch × 10 = 236,800 步 → warmup 4,736
+  #: 步），之后余弦退火到 `lr * min_lr_frac`。
+  warmup_frac: 0.02
+  min_lr_frac: 0.1
+  grad_clip: 1.0
+  #: bf16（3090/4090 原生支持，不用 GradScaler）/ fp16 / off。
+  amp: bf16
+  #: 5 个 head 的 loss 权重。`next_*` 的 CE 起点是 ln 11 = 2.40，`win` 是 ln 2 = 0.69，
+  #: 看 loss 曲线时先在心里乘一下，别以为 `next_death` 学得差。
+  loss_weights:
+    win: 1.0
+    alive: 1.0
+    can_kill: 1.0
+    next_death: 1.0
+    next_kill: 1.0
+  #: 每多少个优化步打一次 wandb。
+  log_every: 50
+  #: 每多少个优化步在 stdout 打一行（stderr 不是终端时 tqdm 是关的，靠这个看进度）。
+  print_every: 1024
+  #: 每多少个 epoch 验一次 valid（1.4M 行，一轮约 1~2 分钟）。
+  eval_every: 1
+  #: 调试用：valid 只跑前 N 个 batch（null = 全量）。
+  eval_max_batches: null
+  #: 训练结束后用 `best.pt` 在 **test** 上跑一遍（1.4M 行，约 1 分钟）。只在最后用一次 ——
+  #: 每 epoch 都测就等于拿 test 调参了。没有 valid 时退回 `last.pt`，打印里会写明用的哪个。
+  eval_test: false
+  wandb:
+    enabled: true
+    project: cs-net-spatial
+    #: online / offline。内网出不去时 `online` 会先卡几十秒再降级，甚至直接抛错 ——
+    #: 服务器上拿不准就 `--no-wandb`，或者这里改 offline（`wandb sync` 之后再补传）。
+    mode: online

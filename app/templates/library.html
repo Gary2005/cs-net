@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="doc.library">cs-net — Demo 库</title>
+<link rel="stylesheet" href="/static/css/topbar.css?v=20261119a">
+<link rel="stylesheet" href="/lib-static/css/library.css?v=20261120a">
+</head>
+<body>
+
+<div class="bg-glow glow-1"></div>
+<div class="bg-glow glow-2"></div>
+
+<!-- ══ 顶栏 ══════════════════════════════════════════════════════════ -->
+<header class="topbar">
+  <div class="brand">
+    <img src="/static/logo.svg" alt="cs-net" width="34" height="26">
+    <span class="brand-name">cs-<b>net</b></span>
+    <span class="brand-ver" data-i18n-title="common.brand.version" title="第 5 版">v5</span>
+    <span class="brand-sub" data-i18n="common.nav.library">Demo 库</span>
+  </div>
+
+  <nav class="nav">
+    <span class="nav-link active" data-i18n="common.nav.library">Demo 库</span>
+    <a class="nav-link" href="/players" data-i18n="common.nav.players">玩家</a>
+    <a class="nav-link" href="/replay" data-i18n="common.nav.replay">可视化回放</a>
+  </nav>
+
+  <div class="tb-actions">
+    <button id="btn-scan" class="btn-glass" data-i18n-title="lib.topbar.scanTitle" title="立即扫描所有已启用的监听目录">
+      <span class="ico">⟳</span> <span data-i18n="lib.topbar.scan">扫描</span>
+    </button>
+    <button id="btn-activity" class="btn-glass" data-i18n-title="lib.topbar.tasksTitle" title="后台任务">
+      <span class="ico">⚙</span> <span data-i18n="lib.topbar.tasks">任务</span>
+      <span id="job-badge" class="badge hidden">0</span>
+    </button>
+    <button id="btn-settings" class="btn-glass accent" data-i18n-title="lib.topbar.settingsTitle" title="监听目录 / 关注玩家 / 采样">
+      <span class="ico">☰</span> <span data-i18n="lib.topbar.settings">设置</span>
+    </button>
+  </div>
+</header>
+
+<!-- ══ 顶部横幅：仓库里缺的东西 ══════════════════════════════════════════
+     干净检出之后有两样东西一定不在：`models/` 里的权重（665 MB，不进 git）
+     和 `maps/optimized_obj_files/` 里的 `.obj`（仓库只带 .obj.zip，解压后
+     943 MB）。两条横幅都只在**真缺**的时候出现，各自问一个只读本地文件的
+     接口，按钮起一个后台任务。任务进的是同一个 jobs 队列，顶栏「任务」抽屉
+     看到的就是它。 -->
+<div id="model-banner" class="setup-banner ai hidden">
+  <span class="sb-tag">AI</span>
+  <div class="sb-body">
+    <div class="sb-title">
+      <b data-i18n="lib.models.title">AI 模型还没下载</b>
+      <span id="model-detail" class="sb-detail"></span>
+    </div>
+    <div id="model-bar" class="sb-bar hidden"><i id="model-bar-fill"></i></div>
+  </div>
+  <button id="btn-download-models" class="btn-primary"
+          data-i18n-title="lib.models.btnTitle"
+          title="从 Hugging Face 下载 v5 权重；连不上时自动改用 hf-mirror.com">
+    ⬇ <span data-i18n="lib.models.btn">下载模型</span>
+  </button>
+</div>
+
+<div id="map-banner" class="setup-banner map hidden">
+  <span class="sb-tag">MAP</span>
+  <div class="sb-body">
+    <div class="sb-title">
+      <b data-i18n="lib.maps.title">地图几何还没解压</b>
+      <span id="map-detail" class="sb-detail"></span>
+    </div>
+    <div id="map-bar" class="sb-bar hidden"><i id="map-bar-fill"></i></div>
+  </div>
+  <button id="btn-extract-maps" class="btn-primary"
+          data-i18n-title="lib.maps.btnTitle"
+          title="把 maps/*.obj.zip 解压成 *.obj；回放的建筑和雷达缩略图都要它">
+    ⬇ <span data-i18n="lib.maps.btn">解压地图</span>
+  </button>
+</div>
+
+<!-- ══ 统计条 ════════════════════════════════════════════════════════ -->
+<div id="stats-strip" class="stats-strip"></div>
+
+<!-- ══ 工具栏 ════════════════════════════════════════════════════════ -->
+<div class="toolbar">
+  <div class="view-toggle" role="group" data-i18n-aria-label="lib.toolbar.view" aria-label="视图">
+    <button id="view-grid" class="vt-btn active" data-i18n-title="lib.toolbar.viewGrid" title="网格视图">▦</button>
+    <button id="view-list" class="vt-btn" data-i18n-title="lib.toolbar.viewList" title="列表视图">☰</button>
+  </div>
+
+  <input id="search" class="input search" type="search"
+         data-i18n-placeholder="lib.toolbar.search" placeholder="搜索文件名 / 展示名 / 备注 / 地图 / 玩家…">
+
+  <select id="sort" class="input select">
+    <option value="library" data-i18n="lib.sort.default">默认排序</option>
+    <option value="added" data-i18n="lib.sort.added">入库时间</option>
+    <option value="date" data-i18n="lib.sort.fileTime">文件时间</option>
+    <option value="size" data-i18n="lib.sort.size">文件大小</option>
+    <option value="duration" data-i18n="lib.sort.duration">时长</option>
+    <option value="rounds" data-i18n="lib.sort.rounds">回合数</option>
+    <option value="map" data-i18n="lib.sort.map">地图</option>
+    <option value="source" data-i18n="lib.sort.source">比赛来源</option>
+    <option value="name" data-i18n="lib.sort.name">名称</option>
+  </select>
+
+  <select id="filter-status" class="input select">
+    <option value="" data-i18n="lib.filter.allStatus">全部状态</option>
+  </select>
+  <select id="filter-source" class="input select">
+    <option value="" data-i18n="lib.filter.allSource">全部来源</option>
+  </select>
+  <select id="filter-map" class="input select">
+    <option value="" data-i18n="lib.filter.allMap">全部地图</option>
+  </select>
+
+  <label class="chk" data-i18n-title="lib.filter.watchedTitle" title="只显示命中「关注玩家」的 Demo">
+    <input type="checkbox" id="filter-watched"> <span data-i18n="lib.filter.watched">只看关注</span>
+  </label>
+
+  <button id="btn-clear-filters" class="btn-ghost" data-i18n="lib.toolbar.clearFilters">清空筛选</button>
+</div>
+
+<!-- ══ 选择操作条 ════════════════════════════════════════════════════ -->
+<div id="selection-bar" class="selection-bar hidden">
+  <span class="sel-info"><span data-i18n="lib.sel.selectedPrefix">已选</span> <b id="sel-count">0</b> <span data-i18n="lib.sel.selectedSuffix">个</span></span>
+  <button id="btn-select-page" class="btn-ghost" data-i18n="lib.sel.selectPage">全选本页</button>
+  <button id="btn-clear-selection" class="btn-ghost" data-i18n="lib.sel.clear">取消选择</button>
+  <span class="spacer"></span>
+  <button id="btn-extract-selected" class="btn-glass" data-i18n-title="lib.sel.refreshTitle" title="从已有的 .csz 重算比分、名单和高亮，不重新解析 demo"><span data-i18n="lib.sel.refreshInfo">刷新信息</span></button>
+  <button id="btn-reextract-selected" class="btn-glass" data-i18n-title="lib.sel.reparseTitle" title="忽略已有的 .csz，按当前的采样设置重新解析 demo。改了采样设置后用这个"><span data-i18n="lib.sel.reparse">重新解析</span></button>
+  <button id="btn-load-analysis" class="btn-primary">▶ <span data-i18n="lib.sel.loadAnalysis">载入分析</span></button>
+  <button id="btn-delete-selected" class="btn-danger" data-i18n="common.action.delete">删除</button>
+</div>
+
+<!-- ══ 内容 ══════════════════════════════════════════════════════════ -->
+<main id="content" class="content grid-view"></main>
+<footer id="pager" class="pager"></footer>
+
+<!-- ══ 设置弹窗 ══════════════════════════════════════════════════════ -->
+<div id="settings-modal" class="modal hidden">
+  <div class="modal-card wide">
+    <div class="modal-head">
+      <h2 data-i18n="lib.settings.title">设置</h2>
+      <button class="modal-close" data-close="settings-modal">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <section class="sect">
+        <h3><span data-i18n="lib.settings.watchRoots">Demo 监听目录</span> <span class="hint" data-i18n="lib.settings.watchRootsHint">放新 demo 进去会自动入库</span></h3>
+        <p class="sect-note"><span data-i18n="lib.settings.watchRootsNote">来源按 demo 的服务器名和文件名判断，一个目录里混放几个平台也能分对。</span></p>
+
+        <div id="watch-roots" class="root-list"></div>
+
+        <div class="root-add">
+          <input id="new-root-path" class="input grow" data-i18n-placeholder="lib.settings.rootPlaceholder" placeholder="粘贴一个目录路径，例如 D:\Steam\...\replays">
+          <select id="new-root-depth" class="input select narrow" data-i18n-title="lib.settings.depthTitle" title="扫描深度">
+            <option value="0" data-i18n="lib.settings.depthSelf">仅本层</option>
+            <option value="1" data-i18n="lib.settings.depth1">1 层</option>
+            <option value="2" data-i18n="lib.settings.depth2" selected>2 层</option>
+            <option value="4" data-i18n="lib.settings.depth4">4 层</option>
+            <option value="8" data-i18n="lib.settings.depth8">8 层</option>
+          </select>
+          <button id="btn-add-root" class="btn-glass" data-i18n="common.action.add">添加</button>
+        </div>
+        <div id="new-root-msg" class="inline-msg"></div>
+
+        <div class="suggest">
+          <div class="suggest-head" data-i18n="lib.settings.suggestHead">本机探测到的候选目录</div>
+          <div id="suggest-list" class="suggest-list"><span class="dim" data-i18n="lib.settings.suggestLoading">探测中…</span></div>
+        </div>
+
+        <div class="row-inline">
+          <label class="chk">
+            <input type="checkbox" id="watch-enabled"> <span data-i18n="lib.settings.watchEnabled">启用目录监听</span>
+          </label>
+          <label class="chk">
+            <span data-i18n="lib.settings.intervalLabel">轮询间隔</span>
+            <input id="watch-interval" class="input tiny" type="number" min="1" max="300" step="1"> <span data-i18n="lib.settings.seconds">秒</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="sect">
+        <h3><span data-i18n="lib.settings.watched">关注玩家</span> <span class="hint" data-i18n="lib.settings.watchedHint">列表里高亮</span></h3>
+        <p class="sect-note"><span data-i18n="lib.settings.watchedNote">一行一个，或用逗号分隔。按玩家名匹配，不区分大小写。 保存后已经入库的记录会立刻重新匹配。</span></p>
+        <textarea id="watched-players" class="input textarea" rows="4"
+                  placeholder="ZywOo&#10;donk&#10;m0NESY"></textarea>
+      </section>
+
+      <section class="sect">
+        <h3><span data-i18n="lib.settings.avatar">Steam 头像</span> <span class="hint" data-i18n="lib.settings.avatarHint">玩家页用</span></h3>
+        <p class="sect-note"><span data-i18n="lib.settings.avatarNote">头像从 Steam 公开页面取，取不到就显示名字首字。</span></p>
+        <div class="row-inline">
+          <label class="chk"><input type="checkbox" id="fetch-avatars"> <span data-i18n="lib.settings.fetchAvatars">自动获取玩家头像</span></label>
+          <label class="chk"><span data-i18n="lib.settings.cacheTtlPrefix">缓存</span>
+            <input id="avatar-ttl" class="input tiny" type="number" min="1" max="365" step="1"> <span data-i18n="lib.settings.cacheTtlSuffix">天后重取</span>
+          </label>
+          <span id="avatar-cache-stat" class="inline-msg"></span>
+        </div>
+      </section>
+
+      <section class="sect">
+        <h3 data-i18n="lib.settings.extraction">提取设置</h3>
+        <div class="row-inline">
+          <label class="chk"><span data-i18n="lib.settings.samplingMode">采样方式</span>
+            <select id="sampling-mode" class="input select">
+              <option value="tick" data-i18n="lib.settings.samplingTick">每个 tick（约 64 Hz，最完整）</option>
+              <option value="interval" data-i18n="lib.settings.samplingInterval">按秒间隔</option>
+              <option value="stride" data-i18n="lib.settings.samplingStride">按 tick 步长</option>
+            </select>
+          </label>
+          <label class="chk" id="row-interval"><span data-i18n="lib.settings.interval">间隔</span>
+            <input id="sampling-interval" class="input tiny" type="number" min="0.05" max="10" step="0.05"> <span data-i18n="lib.settings.seconds">秒</span>
+          </label>
+          <label class="chk" id="row-stride"><span data-i18n="lib.settings.stride">步长</span>
+            <input id="sampling-stride" class="input tiny" type="number" min="1" max="256" step="1"> tick
+          </label>
+        </div>
+        <p class="sect-note"><span data-i18n="lib.settings.samplingNote">下蹲过渡约 200 ms（13 tick），降采样会把它丢掉。想看完整蹲起就不要降采样。</span></p>
+        <div class="row-inline">
+          <label class="chk"><input type="checkbox" id="auto-extract"> <span data-i18n="lib.settings.autoExtract">发现新 demo 后自动提取</span></label>
+          <label class="chk"><input type="checkbox" id="make-thumbnails"> <span data-i18n="lib.settings.thumbnails">生成雷达缩略图</span></label>
+        </div>
+      </section>
+
+      <section class="sect">
+        <h3><span data-i18n="lib.settings.storage">存储管理</span> <span class="hint">app/data</span></h3>
+        <p class="sect-note" id="storage-note" data-i18n="lib.settings.storageLoading">正在统计…</p>
+        <div id="storage-list" class="storage-list"></div>
+      </section>
+
+    </div>
+    <div class="modal-foot">
+      <span id="settings-msg" class="inline-msg"></span>
+      <button id="btn-save-settings" class="btn-primary" data-i18n="lib.settings.save">保存设置</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 删除确认 ══════════════════════════════════════════════════════ -->
+<div id="delete-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="delete-title" data-i18n="lib.delete.title">移除 Demo</h2>
+      <button class="modal-close" data-close="delete-modal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="delete-body" class="del-body"></div>
+    </div>
+    <div class="modal-foot">
+      <button id="btn-del-cancel" class="btn-ghost" data-close="delete-modal" data-i18n="common.action.cancel">取消</button>
+      <span class="spacer"></span>
+      <label id="del-with-file-label" class="chk danger">
+        <input type="checkbox" id="del-with-file">
+        <span data-i18n="lib.delete.withFile">同时移走原始 .dem</span>
+      </label>
+      <button id="btn-del-confirm" class="btn-danger" data-i18n="lib.delete.confirm">移除记录</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 清理缓存确认 ══════════════════════════════════════════════════ -->
+<div id="clean-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="clean-title" data-i18n="lib.clean.title">清理缓存</h2>
+      <button class="modal-close" data-close="clean-modal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="clean-body" class="del-body"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-ghost" data-close="clean-modal" data-i18n="common.action.cancel">取消</button>
+      <span class="spacer"></span>
+      <button id="btn-clean-confirm" class="btn-danger" data-i18n="lib.clean.action">清理</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 任务抽屉 ══════════════════════════════════════════════════════ -->
+<div id="activity-drawer" class="drawer hidden">
+  <div class="drawer-head">
+    <h2 data-i18n="lib.job.title">后台任务</h2>
+    <button class="modal-close" data-close="activity-drawer">✕</button>
+  </div>
+  <div id="job-list" class="job-list"></div>
+  <div class="drawer-foot">
+    <button id="btn-clear-jobs" class="btn-ghost" data-i18n="lib.job.clearDone">清除已完成</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script type="module" src="/lib-static/js/library.js?v=20261120a"></script>
+</body>
+</html>
