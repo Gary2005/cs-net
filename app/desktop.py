@@ -32,13 +32,16 @@ import argparse
 import json
 import logging
 import os
+import re
 import socket
+import subprocess
 import sys
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 import webbrowser
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -47,6 +50,10 @@ from typing import Optional
 from . import config, paths
 
 log = logging.getLogger("cs-net.desktop")
+
+#: 「浏览器真的打开了」的凭据：URL 里带的一次性 token → 事件。
+#: 服务端在 `before_request` 里看到 token 就置位（见 :func:`serve`）。
+_OPENED: dict[str, threading.Event] = {}
 
 #: 单实例用的命名互斥体（Windows）。没释放就说明已经有一个在跑了。
 _MUTEX_NAME = "Local\\cs-net-v5-single-instance"
@@ -224,11 +231,160 @@ def _hide_own_console() -> None:
         pass
 
 
-def open_in_browser(url: str) -> None:
+def open_in_browser(url: str, *, verify: bool = True, timeout: float = 3.0) -> bool:
+    """用默认浏览器打开库页面。**真的打开成功才返回 True。**
+
+    这里有两个坑，都是实测踩出来的：
+
+    * `webbrowser.open` / `os.startfile` 失败时是**返回 False，不抛异常**；
+    * 更糟的是，PyInstaller 打出来的 exe 里它们会**返回 True 但什么也不发生**
+      —— 同一台机器上源码能开、冻结后不能。
+
+    所以除了逐个降级（自己起浏览器 → ShellExecute → cmd start），还要**验证**：
+    给 URL 加一个一次性 token，页面真被请求过才算成功（服务端 `before_request`
+    看见 token 就置位）。都不行就返回 False，由调用方把窗口弹出来 —— 玩家至少
+    能看到地址，而不是以为程序闪退了。
+    """
+    token = uuid.uuid4().hex[:12]
+    probe = f"{url}{'&' if '?' in url else '?'}open={token}"
+    seen = threading.Event()
+    if verify:
+        _OPENED[token] = seen
     try:
-        webbrowser.open(url)
-    except Exception as exc:  # noqa: BLE001 - 开不了浏览器不影响服务
-        log.warning("打开浏览器失败（%s），请手动访问 %s", exc, url)
+        for name, fn in (
+            # 首选：自己起浏览器进程。冻结后的 exe 里 ShellExecute 会"假成功"。
+            ("直接启动浏览器", lambda: _launch_browser(probe)),
+            ("webbrowser", lambda: webbrowser.open(probe)),
+            ("startfile", lambda: _startfile(probe)),
+            ("cmd start", lambda: _cmd_start(probe)),
+        ):
+            try:
+                ok = fn()
+            except Exception as exc:  # noqa: BLE001 - 换下一种方式
+                log.warning("用 %s 打开浏览器失败：%s: %s", name, type(exc).__name__, exc)
+                continue
+            if not ok:
+                log.warning("%s 说没打开（返回 False）", name)
+                continue
+            if not verify or seen.wait(timeout):
+                log.info("已用 %s 打开 %s", name, url)
+                return True
+            log.warning("%s 返回成功，但浏览器 %ss 内没来请求页面", name, timeout)
+        return False
+    finally:
+        _OPENED.pop(token, None)
+
+
+#: 注册表里查不到默认浏览器时的兜底：按顺序找这几个 exe。
+_BROWSER_CANDIDATES = (
+    r"%ProgramFiles%\Google\Chrome\Application\chrome.exe",
+    r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe",
+    r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe",
+    r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe",
+    r"%ProgramFiles%\Mozilla Firefox\firefox.exe",
+)
+
+
+def _default_browser_command() -> Optional[list[str]]:
+    """默认浏览器的命令行模板（``HKCU`` 的 ``UserChoice`` → ``ProgId`` → 命令）。
+
+    不解析模板、直接照抄命令串里的 ``%1`` 占位符，别家浏览器也认。
+    """
+    try:
+        import winreg
+    except ImportError:                      # 非 Windows
+        return None
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"SOFTWARE\Microsoft\Windows\Shell\Associations"
+            r"\UrlAssociations\http\UserChoice",
+        ) as key:
+            prog_id = str(winreg.QueryValueEx(key, "ProgId")[0])
+        with winreg.OpenKey(
+            winreg.HKEY_CLASSES_ROOT, rf"{prog_id}\shell\open\command"
+        ) as key:
+            command = str(winreg.QueryValueEx(key, "")[0])
+    except OSError:
+        return None
+
+    # `"C:\...\chrome.exe" --single-argument %1` → 按 Windows 的引号规则切
+    parts = re.findall(r'"([^"]*)"|(\S+)', command)
+    args = [quoted or bare for quoted, bare in parts]
+    return args or None
+
+
+def _browser_args(url: str) -> Optional[list[str]]:
+    """把 URL 塞进浏览器命令行；找不到任何浏览器就返回 None。"""
+    template = _default_browser_command()
+    if template:
+        filled, replaced = [], False
+        for part in template:
+            if re.search(r"%[1l]", part):
+                filled.append(re.sub(r"%[1l]", lambda _m: url, part, flags=re.IGNORECASE))
+                replaced = True
+            else:
+                filled.append(part)
+        if not replaced:
+            filled.append(url)
+        return filled
+    for raw in _BROWSER_CANDIDATES:
+        path = os.path.expandvars(raw)
+        if Path(path).is_file():
+            return [path, url]
+    return None
+
+
+def _launch_browser(url: str) -> bool:
+    """直接起浏览器进程。
+
+    **为什么不信 ShellExecute**：PyInstaller 打出来的 exe 里 ``os.startfile``
+    （以及走它的 ``webbrowser.open``）会**返回成功但什么也不发生** —— 实测同一台
+    机器上源码跑能开、冻结后就不能，而返回值都是 True。所以先自己找浏览器 exe
+    直接 ``Popen``，这条路和 ShellExecute 无关，稳定得多。
+    """
+    args = _browser_args(url)
+    if not args:
+        return False
+    subprocess.Popen(args, close_fds=True)
+    return True
+
+
+def _startfile(url: str) -> bool:
+    """ShellExecute 直接开。非 Windows 返回 False。"""
+    if os.name != "nt":
+        return False
+    os.startfile(url)  # type: ignore[attr-defined]
+    return True
+
+
+def _cmd_start(url: str) -> bool:
+    """``cmd /c start "" <url>``。Windows 上最土也最稳的一条路。"""
+    if os.name != "nt":
+        return False
+    subprocess.Popen(["cmd", "/c", "start", "", url], close_fds=True)
+    return True
+
+
+def _tell_url(url: str) -> None:
+    """浏览器打不开时，至少把地址摆到人眼前（顺便复制到剪贴板）。"""
+    copied = False
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        copied = _copy_to_clipboard(root, url)
+        messagebox.showinfo(
+            "cs-net v5",
+            "已经有一个 cs-net 在运行了，但浏览器没打开。\n\n"
+            + ("地址已经复制到剪贴板，粘到浏览器里就能用。\n\n" if copied else "")
+            + url,
+        )
+        root.destroy()
+    except Exception:  # noqa: BLE001 - 弹窗失败就打印
+        print(f"cs-net 已在运行：{url}", file=sys.stderr or sys.stdout)
 
 
 def open_folder(path: Path) -> None:
@@ -332,7 +488,8 @@ def show_tray(url: str, summary: str, on_quit) -> bool:
     _relax_pystray_filter()
 
     def _open(icon, item) -> None:
-        open_in_browser(url)
+        if not open_in_browser(url):
+            _tell_url(url)
 
     def _data(icon, item) -> None:
         open_folder(Path(config.DATA_DIR))
@@ -392,6 +549,17 @@ def _apply_window_icon(root) -> None:
         pass
 
 
+def _copy_to_clipboard(root, text: str) -> bool:
+    """把地址塞进剪贴板。浏览器打不开时，这是最实在的兜底。"""
+    try:
+        root.clipboard_clear()
+        root.clipboard_append(text)
+        root.update()
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def show_window(url: str, summary: str, on_quit) -> None:
     """一个小窗口：显示地址、能开浏览器 / 开数据目录、点关闭就退出。"""
     import tkinter as tk
@@ -424,11 +592,17 @@ def show_window(url: str, summary: str, on_quit) -> None:
     row = tk.Frame(root)
     row.pack(anchor="w", pady=(14, 0))
     tk.Button(row, text="打开界面", width=12, command=lambda: open_in_browser(url)).pack(side="left")
+    tk.Button(row, text="复制地址", width=10,
+              command=lambda: hint.configure(
+                  text="已复制，粘到浏览器地址栏就能用。"
+                  if _copy_to_clipboard(root, url) else "复制失败，请手动选中上面那行。")
+              ).pack(side="left", padx=8)
     tk.Button(row, text="打开数据目录", width=12,
-              command=lambda: open_folder(Path(config.DATA_DIR))).pack(side="left", padx=8)
-    tk.Button(row, text="退出", width=8, command=quit_app).pack(side="left")
+              command=lambda: open_folder(Path(config.DATA_DIR))).pack(side="left")
+    tk.Button(row, text="退出", width=8, command=quit_app).pack(side="left", padx=8)
 
-    tk.Label(root, text="关闭这个窗口 = 停止服务。", fg="#888").pack(anchor="w", pady=(12, 0))
+    hint = tk.Label(root, text="关闭这个窗口 = 停止服务。", fg="#888")
+    hint.pack(anchor="w", pady=(12, 0))
     root.protocol("WM_DELETE_WINDOW", quit_app)
     # 窗口已经建起来了，藏控制台是安全的：万一 Tk 起不来会在上面抛异常、走控制台
     # 兜底，那条路上不会藏。
@@ -441,11 +615,22 @@ def show_window(url: str, summary: str, on_quit) -> None:
 
 def serve(host: str, port: int):
     """起 HTTP 服务，返回 ``(server, thread, app)``。"""
+    from flask import request
     from werkzeug.serving import make_server
 
     from .server import create_app
 
     app = create_app(start_background=True)
+
+    @app.before_request
+    def _mark_opened() -> None:
+        """浏览器带着 `?open=<token>` 来了 —— 说明它真的打开了那个页面。"""
+        token = request.args.get("open")
+        if token:
+            event = _OPENED.get(token)
+            if event is not None:
+                event.set()
+
     srv = make_server(host, port, app, threaded=True)
     thread = threading.Thread(target=srv.serve_forever, name="http", daemon=True)
     thread.start()
@@ -496,16 +681,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         running = _running_instance()
         if running:
             log.info("已经有一个实例在跑：%s", running)
-            if not args.no_browser:
-                open_in_browser(running)
+            if not args.no_browser and not open_in_browser(running, verify=False):
+                _tell_url(running)
             return 0
 
         if not _acquire_single_instance():
             running = _running_instance()
             if running:
                 log.info("已经有一个实例在跑：%s", running)
-                if not args.no_browser:
-                    open_in_browser(running)
+                if not args.no_browser and not open_in_browser(running, verify=False):
+                    _tell_url(running)
                 return 0
             # 端口记录丢了但锁还在：让用户自己判断，总比悄悄起第二个好。
             log.warning("检测到另一个 cs-net 正在运行，但没有可用的地址记录")
@@ -526,8 +711,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         if not _healthy(url):
             raise RuntimeError(f"服务起来了但 /healthz 一直没响应：{url}")
 
+        opened = True
         if not args.no_browser:
-            open_in_browser(url)
+            opened = open_in_browser(url)
 
         def shutdown() -> None:
             log.info("正在退出…")
@@ -552,8 +738,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         # 托盘里没有"窗口"，正是双击一个本地工具时最舒服的样子；但它必须有，
         # 否则进程就没有退出的入口了。
         ui = "none" if args.no_window else ("window" if args.window else "tray")
-        if ui == "tray" and args.no_tray:
+        if ui == "tray" and not args.no_tray and not opened:
+            # 浏览器没打开还只留一个托盘图标，玩家会以为程序闪退了 —— 弹窗口，
+            # 地址和两个按钮都在窗口里。
+            log.warning("浏览器没打开，改成显示窗口（地址在窗口里）")
             ui = "window"
+        elif ui == "tray" and args.no_tray:
+            ui = "window"
+        log.info("界面形态：%s", ui)
 
         if ui == "tray":
             if show_tray(url, summary, shutdown):
