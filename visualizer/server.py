@@ -517,12 +517,29 @@ def create_app(maps_dir: Optional[Path] = None, *, default_page: str = "replay")
 
     resolved_maps = _resolve_maps_dir(str(maps_dir) if maps_dir else None)
 
+    def _maps_now() -> Optional[Path]:
+        """现在这个进程该用哪个地图目录（启动时没找到就再找一遍）。
+
+        `resolved_maps` 是**启动时**算的，而 `maps/optimized_obj_files/*.obj`
+        并不进 git —— 用户很可能是在 app 已经跑起来之后，点库页面顶上那条
+        「解压地图」横幅才把它解出来的。不在这里重算的话，`/api/map/<name>`
+        会一直 404，回放里始终是一块空地，非得重启一次才看得见建筑。
+
+        找到之后就记住（`nonlocal`），所以解压完最多每个请求多一次 `glob`，
+        之后和原来一样。找不到时返回 None，路由照旧 404。
+        """
+        nonlocal resolved_maps
+        if resolved_maps is None:
+            resolved_maps = _resolve_maps_dir(str(maps_dir) if maps_dir else None)
+        return resolved_maps
+
     # ── 页面 ────────────────────────────────────────────────────────────
     def _render_replay():
+        found = _maps_now()
         resp = make_response(render_template(
             "index.html",
-            maps_available=resolved_maps is not None,
-            maps_dir=str(resolved_maps) if resolved_maps else "",
+            maps_available=found is not None,
+            maps_dir=str(found) if found else "",
             # 顶栏的导航指向 Demo 库和玩家页，那两个路由是 app.server 注册的。
             # 单独跑这个 server 时它们不存在，所以那时候不画导航 —— 与其给两
             # 个 404 的链接，不如老实只留品牌块。
@@ -575,21 +592,23 @@ def create_app(maps_dir: Optional[Path] = None, *, default_page: str = "replay")
     # ── 地图 ────────────────────────────────────────────────────────────
     @app.route("/api/maps")
     def api_maps():
-        if resolved_maps is None:
+        found = _maps_now()
+        if found is None:
             return jsonify({"maps": [], "dir": None})
         return jsonify(
             {
-                "maps": sorted(p.stem for p in resolved_maps.glob("*.obj")),
-                "dir": str(resolved_maps),
+                "maps": sorted(p.stem for p in found.glob("*.obj")),
+                "dir": str(found),
             }
         )
 
     @app.route("/api/map/<name>")
     def api_map(name: str):
-        if resolved_maps is None:
+        found = _maps_now()
+        if found is None:
             return jsonify({"error": "地图目录未配置（--maps-dir）"}), 404
         safe = Path(name).name
-        path = resolved_maps / f"{safe}.obj"
+        path = found / f"{safe}.obj"
         if not path.is_file():
             return jsonify({"error": f"no map {safe}"}), 404
         return send_file(path, mimetype="text/plain")
@@ -602,10 +621,11 @@ def create_app(maps_dir: Optional[Path] = None, *, default_page: str = "replay")
     # 没有这个文件时返回 404，前端退回原来的水泥灰顶点色 —— 地图仍然能看。
     @app.route("/api/map/<name>/colors")
     def api_map_colors(name: str):
-        if resolved_maps is None:
+        found = _maps_now()
+        if found is None:
             return jsonify({"error": "地图目录未配置（--maps-dir）"}), 404
         safe = Path(name).name
-        path = resolved_maps / f"{safe}.colors.bin"
+        path = found / f"{safe}.colors.bin"
         if not path.is_file():
             return jsonify({"error": f"no baked colours for {safe}"}), 404
         return send_file(path, mimetype="application/octet-stream")

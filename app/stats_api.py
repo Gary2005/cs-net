@@ -10,7 +10,7 @@
 ----------------------
 1. **传统统计**（`app/data/stats/<demo_key>.json`）：解码一次 `.csz` + 扫事件
    （含"穿烟"要建地图几何），第一场 5~10 s，之后每场几十毫秒。键是 `.csz` 的
-   size+mtime（和 AI 缓存同一套 `service.demo_key`），换了文件自动失效。
+   size+mtime（和 AI 缓存同一套 `service.demo_key`），重新提取就换文件、自动失效。
 2. **AI 统计**（`app/data/ai/<demo>/<model>_s16_match.json`）：一场比赛每个回合各
    跑一次模型，冷启动是**几分钟**；有了回合缓存之后 ≈ 读 N 个 JSON。这一层由
    `app/ai/stats.py` 管，这里只是按 SteamID 取自己那一行。
@@ -64,8 +64,8 @@ def trad_cache_root() -> Path:
 
 
 def _demo_key(csz_path: str | Path | None) -> str:
-    """和 AI 缓存同一套键（`.csz` 的 size+mtime）；懒 import 是为了不在启动时
-    把 torch / numba 那一串拖进来。"""
+    """和 AI 缓存同一套键（`.csz` 的 size+mtime，重新提取即失效）；懒 import 是
+    为了不在启动时把 torch / numba 那一串拖进来。"""
     from .ai.service import demo_key
 
     return demo_key(csz_path, {})

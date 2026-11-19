@@ -57,6 +57,10 @@ python scripts/extract_maps.py
 python -m app.server --port 5000                  # → http://127.0.0.1:5000/library
 ```
 
+第 2 步也可以在网页里做：`maps/` 还没解压时，库页面顶上会出现一条 **解压地图**
+的横幅，点一下排进后台任务（和上面的命令是同一个脚本）。和权重一样，每个检出
+只需要做一次。
+
 ### 下载 AI 模型
 
 两份权重合计 665 MB，**不在 git 里**，放在 Hugging Face 上。**下过一次就行**，

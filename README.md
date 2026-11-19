@@ -58,6 +58,10 @@ python scripts/extract_maps.py
 python -m app.server --port 5000                  # → http://127.0.0.1:5000/library
 ```
 
+Step 2 can also be done in the browser: while `maps/` is still packed, the library
+page shows an **解压地图 / Unpack maps** banner, and one click queues the same
+script. Like the weights, it is a one-time thing per checkout.
+
 ### Download the AI models
 
 The two checkpoints behind the AI panels are 665 MB together and do not belong in

@@ -181,6 +181,17 @@ export default {
     'lib.models.done': '模型下载完成，AI 面板现在可以用了',
     'lib.models.failed': '下载失败：{msg}',
 
+    // ── 地图几何解压 ─────────────────────────────────────────────────────
+    'lib.maps.title': '地图几何还没解压',
+    'lib.maps.btn': '解压地图',
+    'lib.maps.btnTitle': '把 maps 里的 .obj.zip 解压成 .obj；回放的建筑和雷达缩略图都要它',
+    'lib.maps.missing': '还有 {n} 张地图没解压（约 {size}），解压后回放里才有建筑和雷达缩略图',
+    'lib.maps.running': '正在解压',
+    'lib.maps.queued': '排队中…',
+    'lib.maps.preparing': '准备解压…',
+    'lib.maps.done': '地图解压完成，回放和缩略图现在有地图了',
+    'lib.maps.failed': '解压失败：{msg}',
+
     // ── 任务抽屉 ────────────────────────────────────────────────────────
     'lib.job.title': '后台任务',
     'lib.job.clearDone': '清除已完成',
@@ -411,6 +422,17 @@ export default {
     'lib.models.preparing': 'Preparing (probing which host is reachable)…',
     'lib.models.done': 'Models downloaded — the AI panels are ready now',
     'lib.models.failed': 'Download failed: {msg}',
+
+    // ── map geometry unpacking ──────────────────────────────────────────
+    'lib.maps.title': 'Map geometry is not unpacked yet',
+    'lib.maps.btn': 'Unpack maps',
+    'lib.maps.btnTitle': 'Unpack the .obj.zip files in maps into .obj; the replay buildings and the radar thumbnails need them',
+    'lib.maps.missing': '{n} map(s) still packed (about {size}). Unpack them to get buildings in the replay and on the thumbnails',
+    'lib.maps.running': 'Unpacking',
+    'lib.maps.queued': 'Queued…',
+    'lib.maps.preparing': 'Preparing…',
+    'lib.maps.done': 'Maps unpacked. The replay and the thumbnails have geometry now',
+    'lib.maps.failed': 'Unpack failed: {msg}',
 
     // ── task drawer ─────────────────────────────────────────────────────
     'lib.job.title': 'Background tasks',

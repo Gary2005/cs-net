@@ -16,6 +16,7 @@ export default {
     'common.nav.replay': '可视化回放',
 
     'common.brand.player': '玩家档案',
+    'common.brand.version': '第 5 版',
 
     'doc.library': 'cs-net — Demo 库',
     'doc.players': 'cs-net — 玩家',
@@ -34,6 +35,7 @@ export default {
     'common.nav.replay': '3D replay',
 
     'common.brand.player': 'Player profile',
+    'common.brand.version': 'Version 5',
 
     'doc.library': 'cs-net — Demo library',
     'doc.players': 'cs-net — Players',

@@ -44,6 +44,10 @@ python visualizer/server.py --host 127.0.0.1 --port 5000 \
 启动后访问 `/api/maps` 可以看到实际生效的目录（返回里的 `dir` 字段）。
 不要指向 `maps/obj_files` —— 那是未优化的原始导出，de_inferno 有 482 MB。
 
+地图目录是**懒解析**的：启动时一个 `.obj` 都没找到（仓库里只带 `.obj.zip`），之后
+每个请求会再找一遍，找到就记住。所以在库页面点完「解压地图」横幅之后，回放页刷新
+一次就有建筑了，**不用重启 app**。`visualizer/tests/test_maps_api.py` 钉着这条。
+
 打开 `http://127.0.0.1:5000/`。
 
 **正常用法是从 Demo 库进**：完整应用 `python -m app.server --port 5000`，在

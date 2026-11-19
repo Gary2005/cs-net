@@ -13,9 +13,9 @@
    换一场比赛（`_clear_session`）自然就没了。一个回合约 10 MB，只留最近 3 个。
 2. **进程内 · 模型**：`Predictor` 单例，两个模型常驻显存（约 0.7 GB）。
 3. **磁盘 · 预测结果**：`app/data/ai/<demo>/<models>_s<stride>_r<回合>.json`。
-   键里带 `.csz` 的 size+mtime 和权重的 size+mtime，所以"换了 demo"或"重训了
-   模型"都会自动失效，不会拿旧预测骗人。重复点同一回合 = 读一个 130 KB 的
-   JSON，毫秒级。
+   键里带 `.csz` 的 size+mtime 和权重的**内容**指纹（大小 + 头尾 1 MB），所以
+   "换了 demo"或"换了模型"都会自动失效；而"把同样的权重重下一遍"不会 ——
+   见 `models.file_fingerprint`。重复点同一回合 = 读一个 130 KB 的 JSON，毫秒级。
 
 预测了什么（spatial 的 5 个头全给）
 ----------------------------------
@@ -224,6 +224,9 @@ class Predictor:
             self._aim_ref = model_lib.pinned_run("aim")
             self._spatial_ref = model_lib.pinned_run("spatial_prediction")
             self._model_key = model_lib.signature_key(self._aim_ref, self._spatial_ref)
+            _migrate_legacy_model_prefix(
+                self._aim_ref, self._spatial_ref, self._model_key
+            )
         return self._aim_ref, self._spatial_ref
 
     @property
@@ -530,8 +533,68 @@ def cache_root() -> Path:
     return Path(config.DATA_DIR) / "ai"
 
 
+def _legacy_model_key(
+    aim: model_lib.RunRef, spatial: model_lib.RunRef
+) -> Optional[str]:
+    """**旧公式**（`size + mtime`）算出来的模型指纹。
+
+    只给 :func:`_migrate_legacy_model_prefix` 用。权重指纹换成内容指纹之后，
+    磁盘上那些预测结果还是同一份权重的结果，只是前缀是旧公式算的。
+    """
+    try:
+        payload = []
+        for task, ref in (("aim", aim), ("spatial_prediction", spatial)):
+            st = ref.weights.stat()
+            payload.append({
+                "task": task,
+                "run": ref.name,
+                "weights": ref.weights.name,
+                "bytes": st.st_size,
+                "mtime": st.st_mtime_ns,
+                "config_mtime": ref.config.stat().st_mtime_ns,
+            })
+    except OSError:
+        return None
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _migrate_legacy_model_prefix(
+    aim: model_lib.RunRef, spatial: model_lib.RunRef, new_key: str
+) -> None:
+    """把缓存文件名里的旧模型前缀改成新的（一次性；找不到就什么都不做）。
+
+    不搬的话，用户换公式那一刻会**再**冷启动一次（一场比赛几分钟），尽管
+    `app/data/ai/<demo>/` 里躺着的是同一份权重的结果。搬只是重命名：同一场
+    demo 的同一个回合，payload 格式没变。
+    """
+    old_key = _legacy_model_key(aim, spatial)
+    if not old_key or old_key == new_key:
+        return
+    root = cache_root()
+    if not root.is_dir():
+        return
+    moved = 0
+    for demo_dir in root.iterdir():
+        if not demo_dir.is_dir():
+            continue
+        for path in demo_dir.glob(f"{old_key}_*"):
+            try:
+                path.replace(demo_dir / (new_key + path.name[len(old_key):]))
+            except OSError:  # 文件被占用 / 只读：下次启动再试，不影响结果
+                continue
+            moved += 1
+    if moved:
+        _log(f"AI 缓存前缀迁移 {old_key} -> {new_key}（{moved} 个文件）")
+
+
 def demo_key(csz_path: Optional[str | Path], data: dict) -> str:
     """".csz 的 size+mtime" 的短哈希；没有文件时退回"内容形状"。
+
+    这一份**故意还带 mtime**（权重那一侧已经换成内容指纹了）：`.csz` 是本机
+    产物，"重新解析"就是真的换了文件，让缓存作废是对的。换成内容指纹要再搬一遍
+    `app/data/ai/<demo>/` 和 `app/data/stats/` 的目录名，收益只是"重提取出一份
+    一模一样的 .csz 也能命中" —— 不值。
 
     形状回退只用于 `/api/load` 直接吃内存的情况（现在的流程都会落 .csz），
     所以不追求唯一 —— 但同一个形状的两场比赛会共用缓存，这一点必须写在
@@ -817,7 +880,6 @@ def clear_cache(root: Optional[Path] = None) -> int:
 #: 预热只跑一次。
 _warmed = False
 
-
 def warmup(map_name: Optional[str] = None) -> None:
     """后台预热：把 numba 遮挡内核和地图 BVH 编好（第一次要 ~10 s）。
 
@@ -833,6 +895,7 @@ def warmup(map_name: Optional[str] = None) -> None:
     _warmed = True
 
     def _run() -> None:
+        global _warmed
         try:
             import numpy as _np
 
@@ -850,6 +913,10 @@ def warmup(map_name: Optional[str] = None) -> None:
             _log(f"预热完成 {map_name or 'de_dust2'} · "
                  f"{(time.perf_counter() - t0) * 1000:.0f} ms")
         except Exception as exc:  # noqa: BLE001 —— 预热失败不该影响任何功能
+            # 把"只跑一次"的标记放回去：失败最常见的原因是**地图还没解压**
+            # （`maps/*.obj` 是用户跑起来之后点横幅才解出来的），那之后下一次
+            # 打开回放页应该再试一次，否则这一进程永远等不到预热。
+            _warmed = False
             _log(f"预热跳过（{type(exc).__name__}: {exc}）")
 
     threading.Thread(target=_run, name="ai-warmup", daemon=True).start()

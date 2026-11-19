@@ -44,6 +44,10 @@ Step 'AI stats (impact / position / duel score)'       'app/tests/test_ai_stats.
 # /api/ai/models* routes.  A local HTTP server impersonates the HF repo, so this
 # neither downloads 665 MB nor needs the real checkpoints.
 Step 'model download (mirror fallback / resume / api)' 'app/tests/test_download_models.py'
+# scripts/extract_maps.py (.part + atomic rename, byte progress, bad zips) and the
+# two /api/library/maps* routes.  Every zip here is a few hundred bytes, so this
+# never unpacks the real 943 MB of map geometry.
+Step 'map unpacking (.part / progress / api)'            'app/tests/test_extract_maps.py'
 
 Write-Host ""
 if ($failed.Count -gt 0) {

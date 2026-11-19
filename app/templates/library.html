@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title data-i18n="doc.library">cs-net — Demo 库</title>
 <link rel="stylesheet" href="/static/css/topbar.css?v=20261119a">
-<link rel="stylesheet" href="/lib-static/css/library.css?v=20261119a">
+<link rel="stylesheet" href="/lib-static/css/library.css?v=20261120a">
 </head>
 <body>
 
@@ -17,7 +17,7 @@
   <div class="brand">
     <img src="/static/logo.svg" alt="cs-net" width="34" height="26">
     <span class="brand-name">cs-<b>net</b></span>
-    <span class="brand-ver" title="第 5 版">v5</span>
+    <span class="brand-ver" data-i18n-title="common.brand.version" title="第 5 版">v5</span>
     <span class="brand-sub" data-i18n="common.nav.library">Demo 库</span>
   </div>
 
@@ -41,24 +41,41 @@
   </div>
 </header>
 
-<!-- ══ AI 模型横幅 ════════════════════════════════════════════════════
-     `models/` 里那两份权重合计 665 MB，不进 git，所以干净检出之后 AI 面板一定
-     报"权重不存在"。这一条只在**真缺**的时候出现（问 /api/ai/models，只查
-     本地文件，不联网）。按钮起一个后台任务，跑的是
-     scripts/download_models.py，和命令行下载的是同一份代码。 -->
-<div id="model-banner" class="model-banner hidden">
-  <span class="mb-tag">AI</span>
-  <div class="mb-body">
-    <div class="mb-title">
+<!-- ══ 顶部横幅：仓库里缺的东西 ══════════════════════════════════════════
+     干净检出之后有两样东西一定不在：`models/` 里的权重（665 MB，不进 git）
+     和 `maps/optimized_obj_files/` 里的 `.obj`（仓库只带 .obj.zip，解压后
+     943 MB）。两条横幅都只在**真缺**的时候出现，各自问一个只读本地文件的
+     接口，按钮起一个后台任务。任务进的是同一个 jobs 队列，顶栏「任务」抽屉
+     看到的就是它。 -->
+<div id="model-banner" class="setup-banner ai hidden">
+  <span class="sb-tag">AI</span>
+  <div class="sb-body">
+    <div class="sb-title">
       <b data-i18n="lib.models.title">AI 模型还没下载</b>
-      <span id="model-detail" class="mb-detail"></span>
+      <span id="model-detail" class="sb-detail"></span>
     </div>
-    <div id="model-bar" class="mb-bar hidden"><i id="model-bar-fill"></i></div>
+    <div id="model-bar" class="sb-bar hidden"><i id="model-bar-fill"></i></div>
   </div>
   <button id="btn-download-models" class="btn-primary"
           data-i18n-title="lib.models.btnTitle"
           title="从 Hugging Face 下载 v5 权重；连不上时自动改用 hf-mirror.com">
     ⬇ <span data-i18n="lib.models.btn">下载模型</span>
+  </button>
+</div>
+
+<div id="map-banner" class="setup-banner map hidden">
+  <span class="sb-tag">MAP</span>
+  <div class="sb-body">
+    <div class="sb-title">
+      <b data-i18n="lib.maps.title">地图几何还没解压</b>
+      <span id="map-detail" class="sb-detail"></span>
+    </div>
+    <div id="map-bar" class="sb-bar hidden"><i id="map-bar-fill"></i></div>
+  </div>
+  <button id="btn-extract-maps" class="btn-primary"
+          data-i18n-title="lib.maps.btnTitle"
+          title="把 maps/*.obj.zip 解压成 *.obj；回放的建筑和雷达缩略图都要它">
+    ⬇ <span data-i18n="lib.maps.btn">解压地图</span>
   </button>
 </div>
 
@@ -275,6 +292,6 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script type="module" src="/lib-static/js/library.js?v=20261119a"></script>
+<script type="module" src="/lib-static/js/library.js?v=20261120a"></script>
 </body>
 </html>

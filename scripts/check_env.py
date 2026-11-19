@@ -43,6 +43,14 @@ def fail(msg: str, hint: str | None = None) -> None:
     _failed.append(msg)
 
 
+def note(msg: str, hint: str | None = None) -> None:
+    """Not a failure: something optional is missing and the app degrades."""
+    print(f"  - {msg}")
+    if hint:
+        for line in hint.strip().splitlines():
+            print(f"      {line}")
+
+
 def section(title: str) -> None:
     print(f"\n{title}")
 
@@ -141,6 +149,43 @@ def check_sidechannel() -> None:
         )
 
 
+def check_maps() -> None:
+    """The map geometry: only the zipped form ships with the repo.
+
+    Not a failure when it is still packed -- the app degrades to an empty patch
+    of ground and the library page offers a one-click unpack -- but "the replay
+    has no buildings" is much easier to answer here than by reading the console.
+    """
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    try:
+        from scripts.extract_maps import inspect
+    except Exception as exc:  # noqa: BLE001 - 报告出来比抛栈好
+        fail(f"scripts/extract_maps.py — {type(exc).__name__}: {exc}")
+        return
+
+    state = inspect()
+    if not state["maps"]:
+        note("map geometry — no *.obj.zip in maps/optimized_obj_files")
+        return
+    total = len(state["maps"])
+    if state["ok"]:
+        ok(f"map geometry ({total}/{total} unpacked, {_mb(state['present_bytes'])})")
+        return
+    note(
+        f"map geometry {total - len(state['missing'])}/{total} unpacked "
+        f"({_mb(state['unpacked_bytes'] - state['present_bytes'])} left)",
+        "the replay falls back to an empty ground and thumbnails stay blank\n"
+        "unpack it: python scripts/extract_maps.py   (or the banner in the library page)",
+    )
+
+
+def _mb(n: int | None) -> str:
+    if not n:
+        return "0 MB"
+    return f"{n / (1024 * 1024):.0f} MB"
+
+
 def check_extras() -> None:
     for mod, name, hint in (
         ("flask", "flask (web app)", "pip install flask"),
@@ -191,6 +236,7 @@ def main() -> int:
     section("Data conversion")
     check_demo_extract()
     check_sidechannel()
+    check_maps()
 
     if args.all:
         section("Extras")

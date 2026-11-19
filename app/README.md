@@ -106,6 +106,30 @@ maps/optimized_obj_files/de_mirage.obj
 拿真实 demo 的选手坐标做投影，要求落在几何上的比例 > 80%，并且必须高于
 四个错误变换（交换轴、翻 x、翻 y、翻两者）。当前实测 98.1%，最好的错误变换 84.1%。
 
+### 地图几何（没解压就解压）
+
+仓库里带的是**压缩过的**几何：`maps/optimized_obj_files/*.obj.zip`（8 个，约
+207 MB），解压出来是 943 MB 的 `.obj`。干净检出之后这个目录里只有 zip，于是
+3D 回放退化成一块空地加网格，雷达缩略图和穿烟判定也一起没有（`stats.py` 会
+`FileNotFoundError: 没有地图几何 …de_anubis.obj`，那一列显示 `—`）。
+
+跟权重同一套处理：库页面顶部会出现一条「地图几何还没解压」的横幅（只在真缺的
+时候出现），点 **解压地图** 就排一个后台任务；命令行等价于
+`python scripts/extract_maps.py`（`--check` 只看状态，`--force` 重新解压）。
+
+解压脚本先写 `<map>.obj.part` 再原子改名，所以断在中途不会留下一个"看起来正常"
+的半个 `.obj`；**判断解压好了没比的是 zip 头里写的大小**，不是"文件存在"。进度
+条读的是真实字节数（每个文件约 25 次更新、合计约 200 次）。
+
+`GET /api/library/maps` 只 `stat()`，外加读 8 个 zip 的中央目录（约 1.5 ms），
+页面一打开就调，不联网。
+
+**解压完不用重启 app**：视觉层的地图目录是懒解析的（`visualizer/server.py::_maps_now()`），
+刷新一次回放页就有建筑；AI 那边的 numba / BVH 预热失败也会在下次开页面时重试。
+
+已经入库的 demo 不会自动重画缩略图（当时地图还没解压，缩略图是空的）：选中它们
+点 **刷新信息**（从已有的 `.csz` 重算，不重新解析 demo）就会补上。
+
 ### 模型预测（AI）
 
 两份权重合计 665 MB，**不在仓库里**（`models/` 被 gitignore）：干净检出之后
@@ -181,7 +205,7 @@ aim 只在死前 3 秒的窗口里有值。
 
 **路径写死**：没有模型选择器，也不看"哪个目录最新"。版本管理的开关就是
 `app/ai/models.py::PINNED_WEIGHTS` 那两行 —— 想换 run / 换文件就改路径，刷新页面
-即生效（缓存键里带权重的 `size + mtime`，旧预测自动作废）。
+即生效（缓存键跟着权重的**内容**走，换文件才作废；把同样的权重重下一遍不作废）。
 
 网页吃的是**扁平布局**：`models/<task>/<run>.pt` + 同名 `<run>.yaml`，由
 `python scripts/export_weights.py` 从训练产物里抽出来（只留 `model` + `epoch` /
@@ -213,8 +237,12 @@ BVH** 每个进程只付一次）；同一个回合再点是**读缓存 3~70 ms*
 磁盘 · 预测结果     app/data/ai/<demo>/<models>_s<stride>_r<回合>.json（约 130 KB）
 ```
 
-磁盘缓存的键 = `.csz` 的 `size+mtime` + 两份权重的 `size+mtime` + `stride` + 回合号，
-所以"换了 demo""重训了模型"都会自然 miss，不会拿旧预测骗人。payload 结构变了就把
+磁盘缓存的键 = `.csz` 的 `size+mtime` + 两份权重的**内容**指纹（大小 + 头尾 1 MB）
++ `stride` + 回合号 —— "换了 demo""换了模型"都会自然 miss，不会拿旧预测骗人；
+而"把同样的权重重下一遍"**不会**让缓存作废（以前权重键里带 mtime，重下一遍就会
+让全部历史缓存集体 miss：文件还在磁盘上，但模型指纹变了，一个都读不到）。改成
+内容指纹的那一刻，磁盘上老前缀的缓存会被**自动改名**到新前缀（同一份权重、同一
+个回合，payload 格式没变），所以升级不用重跑一遍模型。payload 结构变了就把
 `service.CACHE_VERSION` 加一，旧缓存自动作废。
 
 两个前提不满足时**直接报错而不是瞎猜**：地图必须是训练用的那 8 张（坐标归一化
@@ -522,6 +550,8 @@ app/data/
 | POST | `/storage/clean` | `{targets: ["csz" / "thumbs" / "avatars" / "recycle"]}`。回每类的 `files`/`bytes`/`errors` 和一份新统计。有任务在跑时 409 |
 | GET | `/jobs`、`/jobs/<id>` | 任务队列 |
 | POST | `/jobs/clear` | 清除已完成 |
+| GET | `/maps` | 地图几何解压了没（只查本地文件，不解压、不联网）。库页面的「解压地图」横幅读它；`extract` 字段顺手带上最近一次解压任务 |
+| POST | `/maps/extract` | 把 `maps/*.obj.zip` 解压出来，跑在 jobs 队列里（`scripts/extract_maps.py`），返回 `job_id`。`?force=1` 已解压也重来；已经有一个在跑就返回它，不会把同一批 943 MB 解两遍 |
 
 另有 `GET /healthz`。
 
@@ -590,7 +620,7 @@ models     用了哪两份权重、哪个设备
 不需要 pytest，直接跑：
 
 ```powershell
-pwsh -File app/tests/run_all.ps1        # 八个都跑
+pwsh -File app/tests/run_all.ps1        # 九个都跑
 ```
 
 或者单独跑：
@@ -605,6 +635,7 @@ pwsh -File app/tests/run_all.ps1        # 八个都跑
 | `app/tests/test_ai.py` | AI：对枪窗口（只认敌人 / 不认自杀队友 / 死前 3 秒 / 终点取最后一个活帧 / 回合结束那一枪挂在最后一帧 / 重叠归谁）、4 秒窗口的补齐与 `seconds` 对零、进度事件（只增不减 / finish 后变 result）、缓存键与版本作废、写死的扁平 `<run>.pt` 路径与 `<run>.yaml` 配套（老布局 `last.pt` + `config.yaml` 仍认）、三条 `/api/ai/*` 路由的错误码与 NDJSON 流 |
 | `app/tests/test_ai_stats.py` | AI 数据统计：击杀前 2 秒的探针（时间轴是 tick 不是采样下标）、五个指标的**手算**用例（击杀 / 死亡影响力、按胜负补最后一个采样点、站位风险只算活着、对枪评分 `1-p` / `-p`）、跨回合与跨场的聚合口径（先加再除）、一次比赛里坏掉的回合只记 `errors` 不拖垮整场、比赛级缓存（第二次不再跑模型）、玩家页两个端点的合计算法 |
 | `app/tests/test_download_models.py` | 权重下载：要下哪些文件由 `PINNED_WEIGHTS` 推出来（`.pt` 与同名 `.yaml` 必须成套、落盘路径就是网页读的那几条）、`inspect()` 不联网且把几百字节的 LFS 指针文本算成"坏的"、站点优先级与**官方挂掉自动换镜像**（探测时就用镜像 + 下到一半失败再换，两家都挂要报出各自原因）、`local_dir` / `force_download` / 进度递进、没装 hub 时给一句能照做的话、`/api/ai/models*` 两条路由（齐了不排队、连点两下只排一个）。`hf_hub_download` 换成桩，**不下载 665 MB** |
+| `app/tests/test_extract_maps.py` | 地图解压：目标由目录里的 `*.obj.zip` 推出来（zip 里带目录要拍平成 `<map>.obj`）、`inspect()` 只 `stat()` 且把"比 zip 头里写的小"的 `.obj` 算成没解压好、先写 `.part` 再原子改名、进度是真实字节且只增不减、已解压的跳过 / `--force` 重来、坏 zip（CRC 错 / 里面没有 .obj）给一句人话且不留 `.part`、`/api/library/maps*` 两条路由。zip 都是几百字节的假包，**不碰真的 943 MB 几何** |
 
 `test_ui_wiring.py` 值得单独说一句：这里没有浏览器，界面点不了。它静态地交叉检查
 每个 `.js` 引用的元素 id 是否在自己的 `.html` 里、每个 `/api/library/...`

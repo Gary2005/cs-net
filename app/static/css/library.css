@@ -151,40 +151,49 @@ body {
 .stat.warn .n { color: var(--orange); }
 .stat.err .n { color: var(--red); }
 
-/* ── AI 模型横幅 ────────────────────────────────────────────────────── */
-/* 只在 `models/` 缺权重时出现（两份 `.pt` 合计 665 MB，不进 git）。用橙色
-   描边而不是红色：这不是错误，只是"还没下载"，红框会让人以为环境坏了。 */
-.model-banner {
+/* ── 顶部横幅：仓库里缺的东西（AI 权重 / 地图几何） ──────────────────── */
+/* 两条横幅同一个形状，只有配色不同：橙色 = 权重还没下载，青色 = 地图还没
+   解压。都不用红色描边：这不是错误，只是"还没补上"，红框会让人以为环境坏了。 */
+/* 干净检出不带的东西：`models/` 那两份权重（665 MB）、`maps/` 里的 `.obj`
+   （仓库只带 .obj.zip，解压后 943 MB）。 */
+.setup-banner {
   display: flex; align-items: center; gap: 12px;
   margin: 12px 24px 0; padding: 11px 16px;
   border-radius: var(--radius);
-  background: rgba(251, 191, 36, 0.07);
-  border: 1px solid rgba(251, 191, 36, 0.30);
   position: relative; z-index: 1;
 }
-.mb-tag {
-  flex: none; font-size: 9px; font-weight: 800; letter-spacing: 1.4px;
-  color: #0a1020; background: linear-gradient(90deg, #7ad7ff, #b69bff);
-  border-radius: 4px; padding: 2px 6px;
+.setup-banner.ai {
+  background: rgba(251, 191, 36, 0.07);
+  border: 1px solid rgba(251, 191, 36, 0.30);
 }
-.mb-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
-.mb-title { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
-.mb-title b { font-size: 13px; font-weight: 600; }
-.mb-detail {
+.setup-banner.map {
+  background: rgba(122, 215, 255, 0.06);
+  border: 1px solid rgba(122, 215, 255, 0.26);
+}
+.sb-tag {
+  flex: none; font-size: 9px; font-weight: 800; letter-spacing: 1.4px;
+  color: #0a1020; border-radius: 4px; padding: 2px 6px;
+}
+.setup-banner.ai .sb-tag { background: linear-gradient(90deg, #7ad7ff, #b69bff); }
+.setup-banner.map .sb-tag { background: linear-gradient(90deg, #7dd3a0, #7ad7ff); }
+.sb-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.sb-title { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.sb-title b { font-size: 13px; font-weight: 600; }
+.sb-detail {
   font-size: 12px; color: var(--text-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   max-width: 100%;
 }
-.mb-bar {
+.sb-bar {
   height: 4px; border-radius: 2px; overflow: hidden;
   background: rgba(255, 255, 255, 0.09);
 }
-.mb-bar i {
+.sb-bar i {
   display: block; height: 100%; width: 0;
   border-radius: 2px; transition: width 0.2s;
   background: linear-gradient(90deg, var(--cyan), var(--purple));
 }
-.model-banner .btn-primary { flex: none; }
+.setup-banner .btn-primary { flex: none; }
 
 /* ── 工具栏 ─────────────────────────────────────────────────────────── */
 

@@ -3,7 +3,7 @@
 版本管理
 --------
 `PINNED_WEIGHTS` 是唯一的版本开关 —— 改那里的路径就换版本，刷新页面生效
-（缓存键里带权重的 size + mtime，旧预测自动作废）：
+（缓存键跟着权重的**内容**走，换文件才作废；把同样的文件重下一遍不会）：
 
     aim                 models/aim/20261119-013008.pt                 + 同名 .yaml
     spatial_prediction  models/spatial_prediction/20261113-112930.pt  + 同名 .yaml
@@ -52,6 +52,39 @@ class ModelUnavailable(RuntimeError):
     """
 
 
+#: 内容指纹读多少：头尾各 1 MB（见 :func:`file_fingerprint`）。
+_FP_CHUNK = 1 << 20
+
+
+def file_fingerprint(path: str | Path) -> str:
+    """文件的**内容**短指纹：大小 + 头 1 MB + 尾 1 MB 的 sha1。
+
+    缓存键（模型指纹 / `.csz` 的 demo 指纹）都用它，而不是 `mtime`。
+
+    为什么：同一个文件被**原样重写一遍**是常态 —— `hf_hub_download` 每次都会把
+    权重重写，`scripts/download_models.py` 跑的也是它，重新提取一份一模一样的
+    `.csz` 同理。mtime 一进缓存键，重下一遍权重就会让**全部历史 AI 缓存集体
+    miss**：文件还在 `app/data/ai/<demo>/` 里，只是文件名前缀（模型指纹）变成
+    了老的那个，一个都读不到，表现就是"AI 缓存全没了"。
+
+    只读 2 MB 是因为全读一遍几百 MB 会把"开页面"变成"等几秒"；大小 + 头尾足够
+    区分不同的训练产出（导出时中间任何改动都会改变尾部或总大小）。
+
+    **不缓存结果**：文件系统可能延迟更新 mtime（Windows 上连续写两次经常拿到
+    同一个 mtime），拿 `stat` 当缓存键会返回过期指纹 —— 这个坑比读 2 MB 贵得多。
+    页缓存里读 2 MB 约 1 ms，和一次几十秒的预测比可以忽略。
+    """
+    p = Path(path)
+    size = p.stat().st_size
+    with open(p, "rb") as fh:
+        head = fh.read(_FP_CHUNK)
+        tail = b""
+        if size > _FP_CHUNK:
+            fh.seek(max(0, size - _FP_CHUNK))
+            tail = fh.read(_FP_CHUNK)
+    return hashlib.sha1(head + tail).hexdigest()[:16]
+
+
 @dataclass(frozen=True)
 class RunRef:
     """一份权重（扁平 `<run>.pt` 或训练目录 `<run>/last.pt`）和它的 config。
@@ -66,10 +99,10 @@ class RunRef:
     config: Path
 
     def signature(self) -> dict[str, Any]:
-        """缓存键要的"这份权重是什么"：路径 + 大小 + mtime。
+        """缓存键要的"这份权重是什么"：任务 + run + 大小 + **内容**指纹。
 
-        不读文件内容 —— 一个 checkpoint 有几百 MB，为了算个哈希去读一遍
-        会把"开页面"变成"等十秒"。mtime + size 足够区分训练产出。
+        **不带 mtime**，理由见 :func:`file_fingerprint`：重新下载 / 拷贝一遍同样
+        的权重会刷新 mtime，而 mtime 进缓存键会让全部历史 AI 缓存失效。
         """
         st = self.weights.stat()
         cfg = self.config.stat()
@@ -78,8 +111,8 @@ class RunRef:
             "run": self.name,
             "weights": self.weights.name,
             "bytes": st.st_size,
-            "mtime": st.st_mtime_ns,
-            "config_mtime": cfg.st_mtime_ns,
+            "digest": file_fingerprint(self.weights),
+            "config_digest": file_fingerprint(self.config),
         }
 
 
@@ -273,7 +306,10 @@ class Bundle:
 
 
 def signature_key(aim: RunRef, spatial: RunRef) -> str:
-    """两份权重 + config 的短哈希（缓存目录名的一部分）。"""
+    """两份权重 + config 的短哈希（缓存目录名的一部分）。
+
+    跟着**内容**走，不跟 mtime 走（见 :func:`file_fingerprint`）。
+    """
     import json
 
     payload = json.dumps(

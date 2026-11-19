@@ -94,6 +94,14 @@ Step 'baked map colours match their OBJ' {
     & $python visualizer/tests/test_map_colors.py
 }
 
+Step 'map geometry served after unpacking (no restart)' {
+    # /api/maps + /api/map/<name> resolve the maps dir lazily: the .obj files are
+    # unpacked *while the app is running* (banner in the library page), so a dir
+    # that was empty at create_app() time must still start serving them.
+    $env:PYTHONIOENCODING = 'utf-8'
+    & $python visualizer/tests/test_maps_api.py
+}
+
 Step 'startup banner box alignment' {
     # both servers' banners: every line must have the same display width (CJK = 2
     # columns).  A hand-padded line is off by a few cells and nothing else notices.

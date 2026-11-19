@@ -10,7 +10,7 @@
 * `assign_duels` / `duel_entries`：窗口重叠时归谁、4 秒窗口里死过人就不喂模型
 * `RoundTensors.aim_arrays`：补齐、`seconds` 对零、`frame_mask`、窗口边界
 * `Progress`：只增不减、finish 之后变成 result / error 事件
-* 缓存：键随文件 mtime 变、版本不对就作废、写进去能读回来
+* 缓存：键跟着文件**内容**变（mtime 变了不算）、版本不对就作废、写进去能读回来
 * 权重：`PINNED_WEIGHTS` 的扁平 `<run>.pt` + 同名 `<run>.yaml`（老布局也认），
   缺了要报出是哪条路径
 * 路由：没有会话 / 模型不可用 / 数据不合规 各自的状态码；`?progress=1` 的 NDJSON 流
@@ -349,7 +349,7 @@ def test_cache() -> None:
         k2 = service.demo_key(csz, data)
         check("文件变了 → 键也变", k2 != k1, f"{k1} vs {k2}")
 
-        os.utime(csz, (1, 1))                       # mtime 变了
+        os.utime(csz, (1, 1))                       # mtime 变了（= 换了文件）
         k3 = service.demo_key(csz, data)
         check("mtime 变了 → 键也变", k3 != k2, f"{k2} vs {k3}")
 
@@ -414,6 +414,17 @@ def test_pinned_models() -> None:
         key = models.signature_key(ref, ref)
         eq("signature_key 是确定的", models.signature_key(ref, ref), key)
         check("signature_key 是短哈希", len(key) == 12, key)
+
+        # 2a) 同样的文件被重写一遍（`hf_hub_download` 就是这么干的）不该换 key：
+        #     缓存键跟着内容走，不跟 mtime 走。否则用户重下一遍权重，全部历史
+        #     AI 缓存会集体 miss（文件还在，但模型指纹变了，一个都读不到）。
+        os.utime(stem.with_suffix(".pt"), (1, 1))
+        os.utime(stem.with_suffix(".yaml"), (1, 1))
+        eq("mtime 变了但内容没变 → signature_key 不变", models.signature_key(ref, ref), key)
+        stem.with_suffix(".yaml").write_text("model: {a: 1}\n", encoding="utf-8")
+        check("config 内容变了 → signature_key 变",
+              models.signature_key(ref, ref) != key, "换了 config 却还是同一个 key")
+        eq("signature 记下内容指纹", len(ref.signature()["digest"]), 16)
 
         # 2b) 训练目录的老布局也认（`<run>/last.pt` + `<run>/config.yaml`）
         legacy = tmp / "20260102-000000"
@@ -582,6 +593,56 @@ def test_routes() -> None:
         service.Predictor.instance = saved_status
 
 
+def test_cache_migration() -> None:
+    """模型指纹从 mtime 换成内容之后，老前缀的缓存要被搬到新前缀。
+
+    这是"用户重下一遍权重，AI 缓存全没了"的补救：磁盘上那些文件还是同一份权重
+    的结果，不搬就得再冷启动一次（一场比赛几分钟）。
+    """
+    from app.ai import models, service
+
+    tmp = scratch()
+    try:
+        files = {}
+        for tag, body in (("aim", b"a" * 64), ("sp", b"s" * 64)):
+            w = tmp / f"{tag}.pt"
+            y = tmp / f"{tag}.yaml"
+            w.write_bytes(body)
+            y.write_text("model: {}\n", encoding="utf-8")
+            files[tag] = (w, y)
+        aim = models.RunRef(task="aim", name="aim", weights=files["aim"][0],
+                            config=files["aim"][1])
+        sp = models.RunRef(task="spatial_prediction", name="sp",
+                           weights=files["sp"][0], config=files["sp"][1])
+
+        old = service._legacy_model_key(aim, sp)
+        check("旧公式算得出指纹", bool(old) and len(old) == 12, str(old))
+
+        root = tmp / "ai"
+        demo = root / "demoX"
+        demo.mkdir(parents=True)
+        for name in (f"{old}_s16_r0.json", f"{old}_s16_match.json",
+                     "other_s16_r0.json"):
+            (demo / name).write_text("{}", encoding="utf-8")
+
+        saved_root = service.cache_root
+        service.cache_root = lambda: root
+        try:
+            service._migrate_legacy_model_prefix(aim, sp, "newkey000001")
+            names = sorted(p.name for p in demo.iterdir())
+            eq("老前缀的文件都搬到新前缀",
+               names, ["newkey000001_s16_match.json", "newkey000001_s16_r0.json",
+                       "other_s16_r0.json"])
+
+            # 幂等：再跑一次没有东西可搬，也不该报错
+            service._migrate_legacy_model_prefix(aim, sp, "newkey000001")
+            eq("再跑一次什么都不变", sorted(p.name for p in demo.iterdir()), names)
+        finally:
+            service.cache_root = saved_root
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main() -> int:
     print("app/ai 单元测试")
     for name, fn in [
@@ -592,6 +653,7 @@ def main() -> int:
         ("spatial_arrays", test_spatial_arrays),
         ("progress", test_progress),
         ("cache", test_cache),
+        ("cache migration", test_cache_migration),
         ("models pinned", test_pinned_models),
         ("routes", test_routes),
     ]:

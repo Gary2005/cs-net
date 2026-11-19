@@ -775,3 +775,74 @@ def api_job(job_id: str):
 @bp.post("/api/library/jobs/clear")
 def api_jobs_clear():
     return jsonify({"cleared": jobs.manager.clear_finished()})
+
+
+# ── 地图几何：没解压就解压 ───────────────────────────────────────────────────
+#
+# `maps/optimized_obj_files/` 里进 git 的是 `.obj.zip`（8 个，约 207 MB），解压
+# 出来是约 943 MB 的 `.obj`。也就是说干净检出之后这个目录里只有 zip：3D 回放
+# 会退化成一块空地加网格，雷达缩略图也画不出来。
+#
+# 它和"AI 权重还没下载"是同一类事：仓库里缺的东西跑一次补上。所以两个接口
+# 照抄 `/api/ai/models*` 的形状：先查本地（`inspect()` 只 stat，不联网也不解压），
+# 缺了才让页面出按钮，点完把活儿交给 jobs 队列。
+#
+# 解压本身在 `scripts/extract_maps.py` 里 —— 命令行 `python scripts/extract_maps.py`
+# 走的是同一个函数，网页不重复实现"怎么写 .part、怎么原子改名"。
+
+#: 解压地图的任务类型（顶栏「任务」抽屉里看到的也是它）。
+MAPS_JOB_KIND = "maps"
+
+
+@bp.get("/api/library/maps")
+def api_maps():
+    """地图几何解压了没（只碰磁盘，不进 zip 解压）。
+
+    横幅的显隐就靠这次查询，所以响应带 `no-store`：浏览器缓存住一个旧状态，
+    用户会看到一个点了没反应的按钮。
+    """
+    from scripts.extract_maps import inspect
+
+    state = inspect(config.MAPS_DIR)
+    # 正在解压 / 刚解压完的那个任务一起给页面，横幅直接用它的 step + progress，
+    # 不必再为"解压进度"造第二套接口。
+    state["extract"] = next(
+        (job for job in jobs.manager.list() if job.get("kind") == MAPS_JOB_KIND), None
+    )
+    resp = jsonify(state)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@bp.post("/api/library/maps/extract")
+def api_maps_extract():
+    """把 `maps/*.obj.zip` 解压出来，跑在后台任务里。
+
+    943 MB 的解压不能同步做：浏览器的 fetch 会先超时，中间也看不到进度。所以
+    POST 立刻返回 `job_id`，页面去 `/api/library/jobs/<id>` 读 step / progress。
+
+    都解压好了就不排队（除非 `?force=1`）；已经有一个在跑就把它还回去 ——
+    连点两下按钮不该把同一批文件解两遍。
+    """
+    from scripts.extract_maps import extract, inspect
+
+    force = request.args.get("force") in ("1", "true", "yes")
+    root = config.MAPS_DIR
+    if inspect(root)["ok"] and not force:
+        return jsonify({"ok": True, "job_id": None, "already": True})
+
+    for job in jobs.manager.list(active_only=True):
+        if job.get("kind") == MAPS_JOB_KIND:
+            return jsonify({"ok": True, "job_id": job["id"], "already": True})
+
+    def run(job):
+        # `job.set_step(一句话, 0..1)` 是 jobs 队列的进度 API；解压脚本通过
+        # `progress` 回调把真实字节进度报上来。
+        return extract(
+            root=root,
+            force=force,
+            progress=lambda frac, msg: job.set_step(msg, frac),
+        )
+
+    job = jobs.manager.submit(MAPS_JOB_KIND, "解压地图几何", run)
+    return jsonify({"ok": True, "job_id": job.id})
