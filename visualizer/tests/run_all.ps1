@@ -27,14 +27,25 @@ $failed = @()
 # app/tests/run_all.ps1.
 $python = if ($env:CSNET_PYTHON) { $env:CSNET_PYTHON } else { 'D:\conda\envs\cs-net-v5\python.exe' }
 
+# One log per step, kept for the whole run and picked up by the CI artifact step
+# (`build/test-logs/**`).  Without it a failed step in CI leaves nothing to read
+# but its name: the assertion that failed is in the output, and the output used
+# to go straight to the console (which the workflow only keeps if it fits).
+$logDir = Join-Path $root 'build/test-logs/visualizer'
+New-Item -ItemType Directory -Force $logDir | Out-Null
+
 function Step($name, $block) {
     Write-Host ""
     Write-Host "=== $name " -NoNewline
     Write-Host ("=" * [Math]::Max(0, 58 - $name.Length))
+    $log = Join-Path $logDir (($name -replace '[^A-Za-z0-9]+', '-').Trim('-') + '.log')
     $errorsBefore = $Error.Count
-    & $block
+    & $block *> $log
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  -> $name FAILED (exit $LASTEXITCODE)" -ForegroundColor Red
+        Write-Host "  ---- tail of $log ----" -ForegroundColor Red
+        Get-Content $log -Tail 60 -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host "  $_" }
         $script:failed += $name
         return
     }
@@ -113,6 +124,7 @@ Pop-Location
 Write-Host ""
 if ($failed.Count) {
     Write-Host ("FAILED: " + ($failed -join ', ')) -ForegroundColor Red
+    Write-Host "step logs: $logDir" -ForegroundColor Red
     exit 1
 }
 Write-Host "all checks passed" -ForegroundColor Green

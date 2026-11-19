@@ -310,7 +310,17 @@ def test_predict_match() -> None:
     }
 
     saved = service.predict_round
+    # `predict_match` 自己也要问一次模型指纹（缓存目录按 model_key 分），而真实
+    # `Predictor.instance()` 会去查 `models/*.pt` —— 干净检出（CI / 新克隆）上
+    # 权重根本不存在，这条会 `ModelUnavailable: 权重不存在`。整个文件的前提是
+    # "不碰真权重"，所以这里连 Predictor 一起替掉（`test_routes` 也是这么做的）。
+    saved_instance = service.Predictor.instance
     calls = []
+
+    class FakePredictor:
+        model_key = "testmodel"
+
+    service.Predictor.instance = classmethod(lambda cls: FakePredictor())
 
     def fake_predict(d, idx, *, csz_path=None, stride=16, refresh=False, progress=None):
         calls.append(idx)
@@ -335,6 +345,8 @@ def test_predict_match() -> None:
         check("版本字段写进去了（缓存失效靠它）",
               payload["version"] == st.MATCH_VERSION
               and payload["round_version"] == service.CACHE_VERSION)
+        check("模型指纹取自 Predictor（缓存目录按它分）",
+              payload["model_key"] == "testmodel", str(payload.get("model_key")))
 
         # 进度：两个回合各占一半
         seen: list[tuple[float, str]] = []
@@ -348,6 +360,7 @@ def test_predict_match() -> None:
               str([m for _, m in seen][:3]))
     finally:
         service.predict_round = saved
+        service.Predictor.instance = saved_instance
 
 
 def test_routes() -> None:
