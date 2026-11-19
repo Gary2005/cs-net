@@ -80,12 +80,6 @@ Step 'player x-ray (camera occlusion parity + perf)' {
     node visualizer/tests/test_player_xray.mjs
 }
 
-Step 'server serves the staged assets' {
-    # needs a server already listening on 127.0.0.1:5099 (python -m app.server --port 5099)
-    $env:PYTHONIOENCODING = 'utf-8'
-    & $python notes/scratch/probe_server.py
-}
-
 Step 'match stats (aggregation + /api/stats)' {
     # synthetic cases always; the real-.csz half cross-checks app/metadata.py's
     # scoreboard when a .csz is available.

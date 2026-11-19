@@ -285,7 +285,7 @@ def build_targets(
 
         "CCSPlayerPawn.CCSPlayer_MovementServices.m_nButtonDownMaskPrev"
 
-    docs/PLAN.md §7.6 ④ 已验证 13 个键位全在，且两个解析器一致。
+    已实测 13 个键位全在，且两个解析器一致。
     注意 `Zoom` 位整份 demo 从未置起，判断开镜要用 `Attack2`(0x800)。
     """
     return {}

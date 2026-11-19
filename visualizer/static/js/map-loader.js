@@ -61,7 +61,7 @@ let bvhStats = null;
  */
 let colorStats = null;
 
-/** 已烘好的每三角形颜色（+ 可选法线）。见 `tools/cs2_assets/bake_map_colors.py`。 */
+/** 已烘好的每三角形颜色（+ 可选法线）。见 `离线资产管线`。 */
 const COLORS_MAGIC = 0x524c434d;   // "MCLR" little endian
 /** v1 = 只有颜色；v2 = 颜色 + 每面 3 字节 int8 法线。 */
 const COLORS_VERSION = 2;
@@ -384,7 +384,7 @@ function setupMapMaterials(group) {
  * OBJ 是 Open3D 导出的**纯几何**（`vt` / `usemtl` / `vn` 全是 0 条），材质归属
  * 在导出那一步就丢了，所以 `setupMapMaterials()` 只能按法线糊一层水泥灰。
  *
- * 真颜色由 `tools/cs2_assets/bake_map_colors.py` 离线烘出来：从 CS2 地图 VPK
+ * 真颜色由 `离线资产管线` 离线烘出来：从 CS2 地图 VPK
  * 的 `worldnodes/` 导出带 UV + 材质的原始几何，给 OBJ 的每个三角形找最近的原始
  * 三角形，继承它的材质、在材质的 base color 贴图上按 UV 采一个色。
  *

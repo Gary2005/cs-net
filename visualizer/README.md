@@ -91,12 +91,12 @@ curl -X POST http://127.0.0.1:5000/api/load \
 | `panorama/images/overheadmaps/<map>_radar_psd.vtex_c` | 1024²、透明底、带 A/B 点格子和房间名 |
 | `resource/overviews/<map>.txt` | `pos_x` / `pos_y` / `scale`，世界坐标 → 像素的变换 |
 
-从 VPK 里抽出来、归位到 `visualizer/static/assets/radar/`（PNG + `map.json`）：
+从 VPK 里抽出来、归位到 `visualizer/static/assets/radar/`（PNG + `map.json`）。
+这些文件**已随仓库提交**，运行时不需要重新抽取：
 
 ```bash
-python tools/cs2_assets/extract_cs2_assets.py --radars --out notes/scratch/asset_probe
-python tools/cs2_assets/install_web_assets.py \
-    --probe notes/scratch/asset_probe --radars --dest visualizer/static/assets
+visualizer/static/assets/radar/<map>_radar.png
+visualizer/static/assets/radar/map.json
 ```
 
 变换和游戏内雷达是同一个式子（`minimap-radar.js`、`app/radar.py` 都用它）：
@@ -720,7 +720,7 @@ python visualizer/tests/test_voxel_parity.py /path/to/match.csz
 （表里的数字是 24 团烟的中位数。单次测试量到的会随"采样到哪几团烟"在 0.82~0.86
 之间浮动，所以测试的容差区间留得比这个范围宽。）
 
-**量法**（`notes/scratch/smoke_color_probe.mjs`）：同一条视线渲染两次，一次藏掉烟、
+**量法**：同一条视线渲染两次，一次藏掉烟、
 一次画上，逐像素求差 → 差值大的就是烟覆盖的像素，不用去猜"哪些像素算烟"。
 两次渲染在同一个 JS 任务里跑完，所以 `updateSmokeAnimations` 的透明度呼吸插不进来。
 背景取的是**被烟盖住的那部分像素**，不是整个画面 —— 比的是"烟 vs 它背后那块墙"。
@@ -1116,7 +1116,7 @@ node visualizer/tests/test_aim_ray.mjs http://127.0.0.1:5099 /path/to/match.csz
 
 ### 4.7.1 这不是真实弹道
 
-⚠️ demo 里**没有子弹实体**，`docs/PLAN.md` 里提到的 `fire_bullets`
+⚠️ demo 里**没有子弹实体**，`fire_bullets`
 （`origin + angles + seed + spread` 的理想弹道）**没有提取**。所以这里只有：
 
 | 有 | 没有 |
@@ -1871,10 +1871,11 @@ OBJ 是 `[-70.79,-6.78,-90.13] ~ [107.81,38.98,100.60]`，差 1 cm，所以不�
 
 ### 4.14.1 怎么烘的：按位置把颜色"回投影"回去
 
-`tools/cs2_assets/bake_map_colors.py`（一次性离线，4–7 分钟/张图，de_cache 最慢 6.7 分钟）：
+烘焙是一次性离线的（4–7 分钟/张图，de_cache 最慢 6.7 分钟）。**烘焙脚本未随仓库发布**，
+下面保留它跑一次的输出，方便判断数据对不对：
 
 ```bash
-python tools/cs2_assets/bake_map_colors.py --map de_inferno
+# 离线烘焙（脚本未随仓库发布）：bake_map_colors --map de_inferno
 #   [ref] 784 个 worldnode → 785 个 GLB（带 UV + 材质），263 s
 #   [ref] 8,395,911 triangles, 303 materials, 220 colour maps   ← 贴花已剔除
 #   [tex] 300/303 materials have a base colour map
@@ -1934,12 +1935,8 @@ python tools/cs2_assets/bake_map_colors.py --map de_inferno
 面数必须和 OBJ 的 `f` 行数**逐个对上**：这个文件是按 `f` 行顺序存的，错一个面就整张
 图错位一格颜色，不会崩、只会"看起来有点脏"。
 
-**改了 OBJ 就要重跑同一条命令**（重新减面、删东西、挪顶点都算）：
-
-```bash
-python tools/cs2_assets/bake_map_colors.py --map de_inferno      # 单张
-python tools/cs2_assets/bake_map_colors.py --map de_inferno --preview out.png
-```
+**改了 OBJ 就要重跑同一条烘焙**（重新减面、删东西、挪顶点都算）—— 烘焙脚本未随仓库发布，
+`.colors.bin` 本身也是 gitignore 的本地产物，所以这一步只在你自己改过地图时才需要。
 
 * 不用加 `--force`：缓存按**文件签名**失效，OBJ 改过就自动重新解析（CS2 那边的
   `reference.npz` 只在游戏 VPK 变了才重建，所以热缓存下整张图 ~30 秒）。
@@ -1975,7 +1972,7 @@ python tools/cs2_assets/bake_map_colors.py --map de_inferno --preview out.png
 * **是"每材质一个颜色 + 8 色板"，不是贴图**。301 个材质各一个平均色，再 k 均值压到
   8 色。近看是干净的色块（这本来就是想要的效果：不想要"细碎的三角形"），代价是丢掉
   了贴图上的砖缝、木纹这些细节。想要真贴图得再做一个 UV 图集（回投影的中间产物已经
-  够插值出 UV，见 `notes/` 里的方案对比）。
+  够插值出 UV）。
 * **8 色会把绿色防水布合掉**。inferno A 点那种绿色篷布是"小而艳"的色块，k 均值按面积
   分配色号，8 色时没有色号给它，会被并进橄榄灰。想要回来就 `--palette 12`（12 色能保住
   它，见 §4.14.4 的对比图）；`--palette 0` 则是 301 个材质各自一个色、完全不压。
@@ -2417,7 +2414,7 @@ visualizer/
   所以**跳过不渲染**。
   不能拿 `[0,0,0]` 兜底 —— 那会在地图原点凭空多出一团雾，比不画更糟。
 * **地图的材质色是烘出来的，不是实时读的**：`maps/optimized_obj_files/<map>.colors.bin`
-  由 `tools/cs2_assets/bake_map_colors.py` 从 CS2 安装里回投影生成（§4.14，9.4 MB/张）。
+  由离线资产管线从 CS2 安装里回投影生成（§4.14，9.4 MB/张；脚本未随仓库发布）。
   *没有这个文件*时地图退回 `map-loader.js` 的水泥灰顶点色 —— 仍然能看，只是灰的。
   它和 `*.obj` 一样是 gitignore 的本地产物，换机器/游戏更新后要重跑一次烘焙。
 * **地图目录默认指向隔壁 `cs-net`**：本仓库没有 `maps/`，`server.py` 会去

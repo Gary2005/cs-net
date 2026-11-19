@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Fast verification of the cs-net-v5 environment.
+"""Fast verification of the cs-net environment.
 
-Ported from ``cs-net-dev/scripts/check_env.py`` and adapted to v5's dependency
-set (no open3d / webdataset / torch — v5 has no training code; ``demo_extract``
-and the Go side-channel replace ``demo_parser``).
+Checks the Python version, the extraction tool (``tools/demo_extract``) and its
+Go side-channel -- the one moving part that fails silently when a binary built
+for another OS is reused. With ``--all`` it also checks the optional pieces the
+web app and the dataset inspectors need.
 
 Usage:
-    python scripts/check_env.py           # core: scraper + demo_extract
-    python scripts/check_env.py --all     # + visualizer / scratch-probe extras
+    python scripts/check_env.py           # core: demo_extract + side-channel
+    python scripts/check_env.py --all     # + Flask / pandas
 
 Exit code is 0 when everything checked out, 1 otherwise.
 """
@@ -15,9 +16,7 @@ Exit code is 0 when everything checked out, 1 otherwise.
 from __future__ import annotations
 
 import argparse
-import json
 import platform
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -142,99 +141,10 @@ def check_sidechannel() -> None:
         )
 
 
-def _pinned_chromium_revision() -> str | None:
-    try:
-        import playwright
-    except ImportError:
-        return None
-    spec = Path(playwright.__file__).parent / "driver" / "package" / "browsers.json"
-    try:
-        data = json.loads(spec.read_text())
-        return next(b["revision"] for b in data["browsers"] if b["name"] == "chromium")
-    except Exception:
-        return None
-
-
-def check_chromium() -> None:
-    """Playwright pins its browser revision to the pip version, so upgrading
-    the package silently invalidates an already-downloaded browser."""
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        fail("playwright — MISSING", "pip install playwright\npython -m playwright install chromium")
-        return
-
-    rev = _pinned_chromium_revision()
-    rev_label = f"revision {rev}" if rev else "revision unknown"
-
-    with sync_playwright() as p:
-        exe = Path(p.chromium.executable_path)
-        if not exe.exists():
-            fail(
-                f"playwright chromium not downloaded ({rev_label})",
-                f"expected at: {exe}\n"
-                "python -m playwright install chromium\n"
-                f"{_playwright_deps_hint()}\n"
-                "note: upgrading the playwright pip package bumps the pinned revision "
-                "and does NOT re-download the browser",
-            )
-            return
-        try:
-            browser = p.chromium.launch(headless=True)
-            browser.close()
-        except Exception as exc:
-            fail(
-                f"playwright chromium failed to launch ({rev_label}) — {exc}",
-                _playwright_deps_hint(),
-            )
-            return
-    ok(f"playwright chromium ({rev_label}, launch OK)")
-
-
-def _unrar_hint() -> str:
-    """Install instructions for the archive tool, per platform.
-
-    ``rarfile`` shells out to ``unrar``, so the hint has to match the host --
-    telling a Windows user to run ``sudo apt install`` is worse than no hint.
-    """
-    if platform.system() == "Windows":
-        return (
-            "winget install RARLab.WinRAR      # provides unrar.exe\n"
-            "winget install 7zip.7zip          # alternative: add 7z.exe to PATH\n"
-            "(only needed for .rar-packed demos; plain .dem files need nothing)"
-        )
-    if platform.system() == "Darwin":
-        return "brew install unrar             # or: brew install sevenzip"
-    return (
-        "sudo apt install unrar        # Debian/Ubuntu\n"
-        "sudo dnf install unrar        # Fedora (RPM Fusion)"
-    )
-
-
-def _playwright_deps_hint() -> str:
-    """Playwright's system-library install command is Linux-only."""
-    if platform.system() == "Linux":
-        return "sudo python -m playwright install-deps chromium"
-    return "(Windows/macOS: bundled browser needs no extra system libraries)"
-
-
-def check_unrar() -> None:
-    if shutil.which("unrar"):
-        ok("unrar")
-    elif shutil.which("7z") or shutil.which("7za"):
-        # rarfile can be pointed at 7-Zip, so this is usable, just not default.
-        ok("7-Zip present (rarfile can use it via UNRAR_TOOL=7z)")
-    else:
-        fail(
-            "unrar — not found (rarfile needs it to unpack .rar demos)",
-            _unrar_hint(),
-        )
-
-
 def check_extras() -> None:
     for mod, name, hint in (
-        ("flask", "flask (visualizer)", "pip install flask"),
-        ("pandas", "pandas (notes/scratch probes only)", "pip install pandas"),
+        ("flask", "flask (web app)", "pip install flask"),
+        ("pandas", "pandas (web app probe)", "pip install pandas"),
     ):
         try:
             __import__(mod)
@@ -266,7 +176,7 @@ def main() -> int:
     _force_utf8_console()
     ap = argparse.ArgumentParser(description="Verify the cs-net-v5 environment.")
     ap.add_argument("--all", action="store_true",
-                    help="also check visualizer / scratch-probe extras")
+                    help="also check the web app extras")
     args = ap.parse_args()
 
     print("cs-net-v5 environment check")
@@ -281,12 +191,6 @@ def main() -> int:
     section("Data conversion")
     check_demo_extract()
     check_sidechannel()
-
-    section("Browser (scraper)")
-    check_chromium()
-
-    section("Archive tool")
-    check_unrar()
 
     if args.all:
         section("Extras")

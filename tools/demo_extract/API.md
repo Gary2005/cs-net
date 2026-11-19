@@ -151,7 +151,7 @@ rnd["smoke"]              # 见 §6
 | `place` | int | 所在区域 → `data["places"]` 编号 |
 | `flash` `flash_alpha` | float | 被闪剩余秒数 / 最大亮度 |
 | `inventory` | list[int] | 身上所有物品编号（去重升序，**可能是空表**） |
-| `spotted` | list[int] | 能看到他的**敌人**玩家编号。⚠ 这一列是**从 `CCSPlayerPawn.m_bSpottedByMask` 推出来的**（不是引擎那个 `m_bSpotted` bool —— 两者实测 100.0000% 冗余，见 `notes/research-demoparser2.md`），而且**提取时就按队伍过滤过**，所以永远不会有队友。⚠ 引擎写这个字段被限速在 **33 tick = 0.516 s 的网格**上（实测，同一回合 10 人共用一个相位），所以它比真实观测**平均慢约 178 ms**；要逐帧的纯几何可见性用 `visualizer/static/js/visibility.js`（README §4.9） |
+| `spotted` | list[int] | 能看到他的**敌人**玩家编号。⚠ 这一列是**从 `CCSPlayerPawn.m_bSpottedByMask` 推出来的**（不是引擎那个 `m_bSpotted` bool —— 两者实测 100.0000% 冗余），而且**提取时就按队伍过滤过**，所以永远不会有队友。⚠ 引擎写这个字段被限速在 **33 tick = 0.516 s 的网格**上（实测，同一回合 10 人共用一个相位），所以它比真实观测**平均慢约 178 ms**；要逐帧的纯几何可见性用 `visualizer/static/js/visibility.js`（README §4.9） |
 | `shots` | float | 本采样窗口内的开枪数 |
 | `footsteps` | float | ⚠️ **不要当脚步声用** —— 见 §4.3，它是落地声性质的稀有事件 |
 | `on_ground` | bool | **v6**：这一采样点是否踩在地面上（原始标志，死人贴地也算 True） |
@@ -225,7 +225,7 @@ e["sound"]     # [{'t':1213,'ty':'fire','p':4,'w':13,'sil':False}, ...]
 用来做两件事：写归一化、以及**一眼看出数据坏了**（比如速度出现 8000 就知道踩了 §4.10 那个坑）。
 
 > **这些数字是从真实文件量出来的**（`test.dem` / de_ancient / 18 回合 / 74,003 个采样点
-> × 10 个玩家 = 740,030 行），跑 `notes/scratch/measure_ranges.py <file.csz>` 可复现。
+> × 10 个玩家 = 740,030 行）。
 > **不是规范值**：位置那几行随地图变，事件计数随比赛变。
 > 凡是有硬边界或来源的，我在"性质"列单独标出来了 —— 没标的就只是这份 demo 的观测。
 
@@ -335,12 +335,6 @@ X[..., 5:8] /= 250.0          # 速度：武器上限，量级 1e2
 # 3) 数据体检：这些数一超，就是数据坏了而不是模型坏了
 assert np.nanmax(np.abs(X[..., 8])) <= 1152.0 * 1.5   # vz，实测上限 1152
 assert np.nanmax(np.abs(X[..., 0])) < 1e5             # x，地图量级
-```
-
-要重新量一遍自己的数据：
-
-```bash
-PYTHONPATH=tools python notes/scratch/measure_ranges.py match.csz
 ```
 
 ---

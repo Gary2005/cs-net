@@ -132,8 +132,8 @@ data
 * `smoke[i]["changes"][k]` = `{tick, size, update, mode, data}` —— 原始 journal 字节，
   `mode` 是 `"append"` 或 `"full"`，要按序折叠才能还原到某 tick 的体素云
 
-这是这个格式最值钱的部分：`demoparser2` **拿不到**火焰格子坐标和烟雾体素内容
-（`docs/PLAN.md` §7.1–7.2），只有 `demoinfocs` 这条 side-channel 有。
+这是这个格式最值钱的部分：`demoparser2` **拿不到**火焰格子坐标和烟雾体素内容，
+只有 `demoinfocs` 这条 side-channel 有。
 
 ---
 
@@ -1470,7 +1470,7 @@ Windows 用 `spawn` 起 worker，主进程的 dataset 会被序列化 N 份。
 如果你要做行为克隆 `(state, action)`：**当前 csz 没有动作标签**，
 `extract.py` 的 `PLAYER_PROPS` 里没抽按键。
 
-但 `docs/PLAN.md` §7.6 ④ 已经实测确认：**逐 tick 的 13 位按键掩码是能拿到的**，
+但已经实测确认：**逐 tick 的 13 位按键掩码是能拿到的**，
 而且两个解析器完全一致：
 
 ```

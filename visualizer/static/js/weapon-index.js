@@ -73,8 +73,7 @@ const PREFERRED_DEFAULT_KNIFE = 'knife_default_ct';
  * 投掷物类名 → 模型短 key（`modelShortKey` 的那个）。
  *
  * **demo 里 `events.grenades[].ty` 是引擎类名，不是显示名。** 实测
- * （`notes/scratch/grenade_type_probe.py`，de_inferno 24 回合 / 327266 个采样点）
- * 只有这 5 种，没有第 6 种：
+ * （de_inferno 24 回合 / 327266 个采样点）只有这 5 种，没有第 6 种：
  *
  * | 类名 | 采样点 |
  * |---|---|
@@ -113,8 +112,7 @@ export const NADE_MODEL_KEYS = [
  * 不同），而莫洛托夫是自己的瓶子网格（0.0908 × 0.2495 × 0.2097 m）。
  *
  * CS2 里莫洛托夫只有 T 能买、燃烧弹只有 CT 能买，所以按投掷者队伍区分。
- * **但这条规则不是 100%**：把 139 个火焰实例和引爆时刻最近的投掷物配对后
- * （`notes/scratch/molotov_team_probe.py` / `molotov_exception_probe.py`），
+ * **但这条规则不是 100%**：把 139 个火焰实例和引爆时刻最近的投掷物配对后，
  * 135 个吻合、4 个不吻合，其中 2 个是配对误差、2 个是**真的**：
  * 回合 idx=3 有个 CT 丢出了莫洛托夫（火焰 type_name = molotov），
  * 回合 idx=10 有个 T 丢出了燃烧弹。原因是 CS2 允许**捡起地上的投掷物再丢**。

@@ -48,17 +48,14 @@ CS-NET 把一份 `.dem` 变成本地可查的数据，再变成浏览器里的�
 ## 数据流
 
 ```
-本机 .dem ──┐
-            │  scraper/（HLTV，Playwright）──▶ .dem
-            ▼
-       .dem ──demo_extract──▶ .csz    逐 tick，zstd，比 JSON 小 ~26 倍
-             （+ Go 辅助程序：火焰格子 + 烟雾体素）
-                                │
-       ┌────────────────────────┼─────────────────────────┐
-       ▼                        ▼                         ▼
-  app/ Demo 库            visualizer/ 3D 回放      scripts/training_data
-  缩略图 · 玩家          浏览器里看比赛           prepared/<task>/ ──▶ training/
-  AI 面板
+    .dem ──demo_extract──▶ .csz    逐 tick，zstd，比 JSON 小 ~26 倍
+          （+ Go 辅助程序：火焰格子 + 烟雾体素）
+                                 │
+        ┌────────────────────────┼─────────────────────────┐
+        ▼                        ▼                         ▼
+   app/ Demo 库            visualizer/ 3D 回放      scripts/training_data
+   缩略图 · 玩家          浏览器里看比赛           prepared/<task>/ ──▶ training/
+   AI 面板
 ```
 
 ## 快速开始
@@ -143,14 +140,10 @@ python scripts/export_weights.py          # <run>/last.pt + config.yaml -> <run>
 app/                              Demo 库 + 玩家页 + AI 面板（Flask、SQLite）
 visualizer/                       3D 回放工作台（Flask + Three.js）
 tools/demo_extract/               .dem → .csz：逐 tick 提取、编解码、烟雾/火焰解码
-tools/cs2_assets/                 CS2 资产管线（GLB / 贴图、地图材质色烘焙）
-scraper/                          HLTV → .dem → .csz（Playwright）
 scripts/training_data/            任务框架：.csz → prepared 数据集
 scripts/training_data_visualizer/ 独立样本检查器（只依赖 numpy）
 training/                         PyTorch 模型与训练脚本
 maps/optimized_obj_files/         减面地图几何（.obj.zip，用前先解压）
-docs/                             PLAN.md（方案与调研）、TOOLS.md（提取工具）
-notes/                            调研笔记（资产、demoparser2、保真度……）
 ```
 
 ## 文档
@@ -162,10 +155,6 @@ notes/                            调研笔记（资产、demoparser2、保真�
 | [visualizer/README.md](visualizer/README.md) | 回放工作台的行为与内部实现 |
 | [app/README.md](app/README.md) | Demo 库、缩略图、玩家页、AI 面板 |
 | [scripts/training_data/README.md](scripts/training_data/README.md) | 怎么写任务、怎么切样本、数据集上的坑 |
-| [scraper/README.md](scraper/README.md) | HLTV 抓取与 Linux 上重编辅助程序 |
-| [docs/PLAN.md](docs/PLAN.md) | v5 方案：这里的「真实游戏内容」指什么，逐条带出处 |
-| [docs/TOOLS.md](docs/TOOLS.md) | 提取工具调研与实测 |
-| [NOTES.md](NOTES.md) | AnimGraph2 模型移植笔记（资产侧） |
 
 ## 注意事项
 
@@ -186,5 +175,5 @@ notes/                            调研笔记（资产、demoparser2、保真�
 雷达图）和 `maps/optimized_obj_files/` 的几何都派生自 Valve 的 Counter-Strike 2 内容，
 版权归 Valve Corporation 所有，按
 [Steam 用户协议](https://store.steampowered.com/subscriber_agreement/) 仅供个人、
-非商业使用，**不在上面那个 MIT 许可的覆盖范围内**。转发这些文件、或发布捆绑它们的构建之前，
-请先想清楚；`tools/cs2_assets/` 里的脚本可以从你自己的 CS2 安装里在本地重建这一套。
+非商业使用，**不在上面那个 MIT 许可的覆盖范围内**。它们被提交进仓库，是因为干净检出后
+没法重建（那需要本机装着 CS2）。转发这些文件、或发布捆绑它们的构建之前，请先想清楚。

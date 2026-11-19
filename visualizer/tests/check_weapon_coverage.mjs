@@ -28,7 +28,7 @@ const ASSETS = join(ROOT, 'visualizer', 'static', 'assets');
 
 const manifestPath = join(ASSETS, 'manifest.json');
 if (!existsSync(manifestPath)) {
-  console.log('SKIP: 没有 manifest.json —— 先跑 tools/cs2_assets/extract_cs2_assets.py');
+  console.log('SKIP: 没有 manifest.json —— visualizer/static/assets 不完整');
   process.exit(0);
 }
 

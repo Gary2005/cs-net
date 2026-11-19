@@ -24,7 +24,7 @@ Cost of the two parsers
 The demo is read twice: once by demoparser2 (players, events, grenades) and once
 by the demoinfocs-golang side-channel (fire cells, smoke journals).  Measured on
 a 110 MB / 18-round demo: 7.3 s + 5.4 s.  That is the price of not forking
-demoparser2; see docs/TOOLS.md section 1.5.
+demoparser2.
 
 Sampling
 --------
@@ -197,7 +197,7 @@ WEAPON_NAME_NORMALISE: dict[str, str] = {
     "inferno": "Incendiary Grenade",
 }
 
-# m_nInfernoType: measured on real demos (see docs/PLAN.md section 4.5).
+# m_nInfernoType: measured on real demos.
 INFERNO_TYPE_NAMES = {0: "molotov", 1: "incendiary"}
 
 # Sanity bound for pairing a detonate/startburn with its expire, in ticks.

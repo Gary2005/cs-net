@@ -49,11 +49,8 @@ The `.csz` codec is exact: `codec.save` → `codec.load` is **bit-identical**
 ## The pipeline
 
 ```
-local .dem ──┐
-             │  scraper/ (HLTV, Playwright) ──▶ .dem
-             ▼
-        .dem ──demo_extract──▶ .csz    per-tick, zstd, ~26× smaller than JSON
-              (+ Go side-channel: fire cells + smoke voxels)
+    .dem ──demo_extract──▶ .csz    per-tick, zstd, ~26× smaller than JSON
+          (+ Go side-channel: fire cells + smoke voxels)
                                  │
         ┌────────────────────────┼─────────────────────────┐
         ▼                        ▼                         ▼
@@ -149,14 +146,10 @@ python scripts/export_weights.py          # <run>/last.pt + config.yaml -> <run>
 app/                              Demo library + player pages + AI panels (Flask, SQLite)
 visualizer/                       3D replay studio (Flask + Three.js)
 tools/demo_extract/               .dem → .csz: per-tick extractor, codec, smoke/fire decoders
-tools/cs2_assets/                 CS2 asset pipeline (GLB/textures, map colour bake)
-scraper/                          HLTV → .dem → .csz (Playwright)
 scripts/training_data/            task framework: .csz → prepared datasets
 scripts/training_data_visualizer/ standalone sample inspectors (numpy only)
 training/                         PyTorch models and trainers
 maps/optimized_obj_files/         decimated map geometry (.obj.zip — unzip first)
-docs/                             PLAN.md (design + research), TOOLS.md (extraction tooling)
-notes/                            research notes (assets, demoparser2, fidelity, …)
 ```
 
 ## Docs
@@ -168,10 +161,6 @@ notes/                            research notes (assets, demoparser2, fidelity,
 | [visualizer/README.md](visualizer/README.md) | replay studio behaviour and internals |
 | [app/README.md](app/README.md) | demo library, thumbnails, player pages, AI panels |
 | [scripts/training_data/README.md](scripts/training_data/README.md) | writing a task, slicing samples, dataset pitfalls |
-| [scraper/README.md](scraper/README.md) | HLTV crawling and the Linux side-channel rebuild |
-| [docs/PLAN.md](docs/PLAN.md) | the v5 design: what "real game content" means here, with sources |
-| [docs/TOOLS.md](docs/TOOLS.md) | extraction tooling survey and measurements |
-| [NOTES.md](NOTES.md) | AnimGraph2 model-porting notes (asset side) |
 
 ## Caveats
 
@@ -194,6 +183,6 @@ textures, smoke/fire sprites, HUD icons, radar images) and the geometry in
 `maps/optimized_obj_files/` are derived from Valve's Counter-Strike 2 content,
 © Valve Corporation. They are licensed to you for personal, non-commercial use
 under the [Steam Subscriber Agreement](https://store.steampowered.com/subscriber_agreement/),
-**not** by the MIT license above. Keep that in mind before redistributing them
-or publishing builds that bundle them; the extraction scripts in
-`tools/cs2_assets/` can rebuild the set locally from your own CS2 install.
+**not** by the MIT license above. They are checked in because a clean checkout
+cannot rebuild them (that needs a local CS2 install). Keep that in mind before
+redistributing them or publishing builds that bundle them.

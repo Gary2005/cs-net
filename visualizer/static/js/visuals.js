@@ -2430,7 +2430,7 @@ const smokeGeo = new THREE.BoxGeometry(VOXEL_BOX, VOXEL_BOX, VOXEL_BOX);
 export const SMOKE_OPACITY = 0.14;
 
 /**
- * 烟雾基色。**量出来的，不是挑出来的**（`notes/scratch/smoke_color_probe.mjs`）。
+ * 烟雾基色。**量出来的，不是挑出来的**。
  *
  * 云心穿过的体素 ~25 个 → 中心几乎不透明，画出来的颜色基本就是基色被灯光打亮
  * 的结果（实测约为基色亮度的 0.73~0.79）。所以基色直接决定烟有多"深"。
@@ -2448,8 +2448,7 @@ export const SMOKE_OPACITY = 0.14;
  *   烟/天空   0.869 → 0.697
  *   饱和度    0.045 → 0.058（色相没动）
  *
- * （"烟/地图"= 被烟盖住的那些像素，有烟 vs 没烟时的亮度比。复现：
- * `node notes/scratch/smoke_color_probe.mjs http://127.0.0.1:5099 <有烟的.csz>`；
+ * （"烟/地图"= 被烟盖住的那些像素，有烟 vs 没烟时的亮度比。
  * 回归：`node visualizer/tests/test_smoke_color.mjs http://127.0.0.1:5099 <有烟的.csz>`。）
  */
 export const SMOKE_BASE_COLOR = 0xa5a9af;
@@ -2921,7 +2920,7 @@ let _fireTex = null;
 // 这就是"增益"，而渲染器开了 ACES tone mapping（`scene.js`，exposure 0.95），
 // 超过 1 的部分会被压回高光而不是硬切 —— 正好是火芯该有的过曝滚降。
 //
-// tint 的数值**不是猜的**，是用 `tools/cs2_assets/fire_tint_preview.py` 按 three
+// tint 的数值**不是猜的**，是用离线资产管线按 three
 // 的实际 shader 顺序（sRGB 解码 → 乘 tint×opacity → **逐层** ACES → sRGB 编码 →
 // 加色混合 `rgb × (a × opacity)`）合成出来量的。指标是可见像素的 HSV 饱和度分布：
 //

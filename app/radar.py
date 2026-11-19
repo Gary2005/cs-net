@@ -3,8 +3,8 @@ Radar base images for thumbnails: CS2's own radar art, with an OBJ fallback.
 
 Where the image comes from
 --------------------------
-``tools/cs2_assets/install_web_assets.py --radars`` stages the game's radar
-per map into ``visualizer/static/assets/radar/``: the art itself
+The game's radar art is staged per map into
+``visualizer/static/assets/radar/`` (checked in with the repo): the art itself
 (``panorama/images/overheadmaps/<map>_radar_psd``) and ``map.json``, which holds
 the transform read out of ``resource/overviews/<map>.txt``.  That is the same
 image and the same numbers the in-game radar uses, so a player marker lands on
@@ -399,9 +399,8 @@ def map_obj_path(map_name: str) -> Optional[Path]:
     return p if p.is_file() else None
 
 
-#: Staged CS2 radar art, written by ``tools/cs2_assets/install_web_assets.py
-#: --radars``.  Same files the browser loads for the replay minimap, so the
-#: thumbnail and the minimap cannot drift apart.
+#: Staged CS2 radar art (checked in).  Same files the browser loads for the
+#: replay minimap, so the thumbnail and the minimap cannot drift apart.
 RADAR_DIR = config.ROOT / "visualizer" / "static" / "assets" / "radar"
 
 _staged_cache: dict[str, Any] | None = None

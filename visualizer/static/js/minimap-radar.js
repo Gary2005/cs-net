@@ -14,7 +14,7 @@
  * 也就是图左上角对应世界坐标 (pos_x, pos_y)，每个像素宽 scale 个游戏单位，+y 朝上。
  * 所以玩家标记和图上的房间、楼梯天然对得上，不需要再去调偏移。
  *
- * 这份数据由 `tools/cs2_assets/install_web_assets.py --radars` 生成，和
+ * 这份数据已随仓库提交（`visualizer/static/assets/radar/`），和
  * `app/radar.py` 里 Demo 卡缩略图用的是同一批图、同一份 map.json。
  *
  * 关于 `rotate`：de_dust2 的 overview 里写着 `"rotate" "1"`，但导出的 vtex 已经是

@@ -10,7 +10,7 @@
  * **不在文件名里**。而且一个贴图可能有多条序列（`fire_onsurface` 有 3 条，
  * 共 330 帧）。所以帧列表必须从 manifest 读，**绝不能按文件名排序猜**。
  *
- * manifest 由 `tools/cs2_assets/install_web_assets.py` 生成。像素本身是
+ * manifest 由 `离线资产管线` 生成。像素本身是
  * Valve 版权（个人非商业使用），和 manifest 一起**入库**了 —— 代价和它带来的
  * 约束（这个仓库必须保持私有）写在 `.gitignore` 末尾。
  *

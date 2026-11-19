@@ -5,7 +5,7 @@
  *
  * `Source2Viewer-CLI` 把 `.vmdl_c` 导成 GLB，贴图**以裸文件名**引用、和 GLB
  * 同目录，所以一个武器是一个目录（`assets/weapons/ak47/` 里同时有 .glb 和 .webp）。
- * `tools/cs2_assets/optimize_weapon_glb.py` 把贴图从 4096² 缩到 1024² 并把 GLB
+ * `离线资产管线` 把贴图从 4096² 缩到 1024² 并把 GLB
  * 里的 uri 改写成 `.webp`（167 MB → 24 MB）。
  *
  * ## 两个必须知道的限制
@@ -38,7 +38,7 @@ const ASSET_ROOT = '/static/assets';
  *
  * ## 朝向是**量出来的**，不是猜的
  *
- * `tools/cs2_assets/weapon_orientation.py` 沿模型长轴切片、比较两端的横截面
+ * `离线资产管线` 沿模型长轴切片、比较两端的横截面
  * （枪口端远细于枪托端），实测结果：
  *
  * | 模型 | 长轴 | 细端（枪口/刀尖） | 结论 |

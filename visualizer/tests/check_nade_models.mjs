@@ -38,7 +38,7 @@ const ASSETS = join(ROOT, 'visualizer', 'static', 'assets');
 
 const manifestPath = join(ASSETS, 'manifest.json');
 if (!existsSync(manifestPath)) {
-  console.log('SKIP: 没有 manifest.json —— 先跑 tools/cs2_assets/extract_cs2_assets.py');
+  console.log('SKIP: 没有 manifest.json —— visualizer/static/assets 不完整');
   process.exit(0);
 }
 
@@ -47,7 +47,7 @@ const { byShortKey } = buildWeaponIndex(manifest.weapons || [], {});
 
 /**
  * demo 里真实出现过的投掷物类名与采样点数。
- * 来源：`notes/scratch/grenade_type_probe.py`（de_inferno 24 回合 / 327266 个采样点）。
+ * 来源：de_inferno 24 回合 / 327266 个采样点。
  * 这份清单是**观察结果**，不是猜的 —— 所以映射表少一个、多一个都会被这里抓到。
  */
 const OBSERVED_TYPES = {

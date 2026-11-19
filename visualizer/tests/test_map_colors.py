@@ -3,7 +3,7 @@
 
 不需要浏览器、不需要服务器：直接对拍 `maps/optimized_obj_files/` 里的
 `<map>.obj` 和旁边烘好的 `<map>.colors.bin`（由
-`tools/cs2_assets/bake_map_colors.py` 生成）。
+`离线资产管线` 生成）。
 
 为什么不只看文件头：这个文件是**按 OBJ 的 `f` 行顺序**逐面存的，所以"面数对得上"
 就是它能正确贴回去的唯一前提。面数错了不会崩，只会整张图错位一个面的颜色 ——
@@ -351,7 +351,7 @@ def main(argv: list[str]) -> int:
     sidecars = sorted(maps_dir.glob("*.colors.bin"))
     if not sidecars:
         print(f"SKIP: no baked colours under {maps_dir} "
-              f"(run tools/cs2_assets/bake_map_colors.py --map <name>)")
+              f"(run 离线资产管线 --map <name>)")
         return 0
 
     problems: list[str] = []

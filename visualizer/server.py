@@ -595,7 +595,7 @@ def create_app(maps_dir: Optional[Path] = None, *, default_page: str = "replay")
         return send_file(path, mimetype="text/plain")
 
     # 地图的"每三角形颜色"旁车文件（`bake_map_colors.py` 烘的，见
-    # tools/cs2_assets/bake_map_colors.py）。OBJ 本身是 Open3D 导出的纯几何，
+    # 离线资产管线）。OBJ 本身是 Open3D 导出的纯几何，
     # 没有 vt / usemtl，浏览器端靠这个文件把游戏材质的颜色贴回去。
     #
     # 格式：magic "MCLR" + u16 版本 + u16 flags + u32 三角形数 + 每面 3 字节 sRGB。

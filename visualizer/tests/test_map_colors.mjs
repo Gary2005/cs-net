@@ -4,7 +4,7 @@
  *
  * 背景：`maps/optimized_obj_files/*.obj` 是 Open3D 导出的**纯几何**灰模
  * （`vt` / `vn` / `usemtl` 全是 0 条），以前靠 `map-loader.js` 按法线糊一层水泥灰。
- * 现在 `tools/cs2_assets/bake_map_colors.py` 从 CS2 地图 VPK 里回投影出"每个三角形
+ * 现在 `离线资产管线` 从 CS2 地图 VPK 里回投影出"每个三角形
  * 该是什么颜色"，存成 `<map>.colors.bin`，由 `map-loader.js` 在载入地图后涂到
  * `color` 顶点色属性上。
  *
@@ -73,7 +73,7 @@ try {
   const res = await fetch(`${BASE}/api/map/${MAP}/colors`);
   check('HTTP 200', res.ok, `status ${res.status}`);
   if (!res.ok) {
-    console.log(`SKIP: ${MAP} has no baked colours (run tools/cs2_assets/bake_map_colors.py --map ${MAP})`);
+    console.log(`SKIP: ${MAP} has no baked colours (run 离线资产管线 --map ${MAP})`);
     process.exit(0);
   }
   const buf = Buffer.from(await res.arrayBuffer());

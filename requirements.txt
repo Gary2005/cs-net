@@ -12,9 +12,3 @@ torch
 pyyaml
 tqdm
 matplotlib
-
-# Scraper only (HLTV -> .dem). Also needs a browser:
-#   python -m playwright install chromium
-# and unrar on PATH (rarfile shells out to it).
-rarfile
-playwright

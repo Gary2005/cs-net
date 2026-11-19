@@ -138,10 +138,9 @@ for (const g of glbs) {
   console.log(`  max    ${rec.max.join(', ')}`);
   console.log(`  ${rec.meshes} meshes, ${rec.triangles.toLocaleString()} tris`);
 }
-// notes/scratch is not part of the shipped repo (it holds one-off probe output),
-// so the directory may not exist -- create it rather than failing on ENOENT.
+// .build is git-ignored and always writable; create it rather than failing on ENOENT.
 const outPath = process.env.WEAPON_MEASURE_OUT
-              || 'notes/scratch/asset_probe/weapon_measure.json';
+              || '.build/weapon_measure.json';
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, JSON.stringify(out, null, 2));
 console.log(`\nwrote ${outPath}`);
