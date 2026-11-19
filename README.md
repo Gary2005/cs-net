@@ -66,9 +66,9 @@ script. Like the weights, it is a one-time thing per checkout.
 
 Every release ships two Windows x64 zips that need neither Python nor conda:
 
-* `cs-net-5.0.0-win64-lite.zip` — no weights; the AI panel downloads them (665 MB)
+* `cs-net-5.0.1-win64-lite.zip` — no weights; the AI panel downloads them (665 MB)
   the first time you click the banner;
-* `cs-net-5.0.0-win64-full.zip` — weights included, works offline.
+* `cs-net-5.0.1-win64-full.zip` — weights included, works offline.
 
 Unpack, double-click `cs-net.exe`, done. The map geometry is already unpacked in
 both, and the library/`config.json`/`.csz` live in the `data\` folder next to the

@@ -22,4 +22,4 @@ Module map::
 from .config import Config
 
 __all__ = ["Config"]
-__version__ = "5.0.0"
+__version__ = "5.0.1"

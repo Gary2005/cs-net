@@ -65,8 +65,8 @@ python -m app.server --port 5000                  # → http://127.0.0.1:5000/li
 
 每个 Release 带两个 Windows x64 的压缩包，不需要 Python，也不需要 conda：
 
-* `cs-net-5.0.0-win64-lite.zip` —— 不带权重，第一次开 AI 面板时点横幅下载（665 MB）；
-* `cs-net-5.0.0-win64-full.zip` —— 权重随包，离线就能用。
+* `cs-net-5.0.1-win64-lite.zip` —— 不带权重，第一次开 AI 面板时点横幅下载（665 MB）；
+* `cs-net-5.0.1-win64-full.zip` —— 权重随包，离线就能用。
 
 解压后双击 `cs-net.exe` 即可。两个包里的地图几何都已经解压好，库、配置、`.csz`
 都在 exe 旁边的 `data\` 里，整个文件夹拷走就是换机器。细节见
