@@ -20,6 +20,13 @@ zstandard==0.25.0
 huggingface_hub==2.4.0
 numba==0.68.0
 
+# demoparser2 的运行时依赖，必须显式钉住、并由 cs-net.spec 整包收进来：
+# 它是纯 Rust 扩展，在 Rust 里 `PyImport_ImportModule("polars")` / ("pyarrow")，
+# PyInstaller 的静态分析看不见 —— 少一个，玩家点"提取"就是
+# `ModuleNotFoundError: No module named 'polars'`（0.42.2 上真的发生过）。
+polars==2.1.0
+pyarrow==26.0.1
+
 # 托盘图标（只有 --tray 用得上：默认是控制台模式，不建托盘图标）。
 # 纯 Python + ctypes，依赖只有已经装好的 Pillow。
 pystray==0.19.5

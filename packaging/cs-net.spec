@@ -26,7 +26,7 @@
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 ROOT = Path(SPECPATH).parent          # noqa: F821 - SPECPATH 由 PyInstaller 注入
 TOOLS = ROOT / "tools"
@@ -56,6 +56,20 @@ if _sidechannel.is_file():
 else:
     print(f"[cs-net.spec] 警告：{_sidechannel} 不存在，包里将没有火/烟辅助程序")
 
+# demoparser2 是**纯 Rust 扩展**：它在 Rust 里 `PyImport_ImportModule("polars")`
+# 和 ("pyarrow")，PyInstaller 的静态分析完全看不见。源码环境一切正常，玩家的
+# "提取"却在 parse_ticks 那一行炸 `ModuleNotFoundError: No module named 'polars'`
+# （0.42.2 上真的发生过，`--packaging-selftest` 也看不出来，因为它只 import）。
+# 所以整包收进来：polars 的 .py 只是壳，真正的大头是 `_polars_runtime_32` 里那个
+# 160 MB 的 Rust 核心；pyarrow 是 demoparser2 造 pandas DataFrame 用的。
+_extra_binaries: list = []
+_extra_hidden: list = []
+for _pkg in ("polars", "_polars_runtime_32", "pyarrow"):
+    _d, _b, _h = collect_all(_pkg)
+    datas += _d
+    _extra_binaries += _b
+    _extra_hidden += _h
+
 hiddenimports = (
     collect_submodules("app")
     + collect_submodules("demo_extract")
@@ -64,6 +78,7 @@ hiddenimports = (
     # pystray 在 import 时按平台 `from . import _win32`，静态分析不一定跟得进
     # ctypes 后端；显式列出来，免得打出来的包"托盘不可用"。
     + ["pystray", "pystray._win32"]
+    + _extra_hidden
 )
 
 # ── 明确不要的 ──────────────────────────────────────────────────────────────
@@ -87,7 +102,7 @@ excludes = [
 a = Analysis(  # noqa: F821 - PyInstaller 注入
     [str(ROOT / "packaging" / "entry.py")],
     pathex=[str(ROOT), str(TOOLS)],
-    binaries=[],
+    binaries=_extra_binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

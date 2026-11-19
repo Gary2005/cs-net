@@ -13,8 +13,11 @@
 
 检查四组：
 
-1. **重依赖 import**：torch、numba、llvmlite、demoparser2、zstandard、PIL、pandas
-2. **两条最容易漏的链**：`demo_extract.extract`（解压）与 `app.ai.features`（AI）
+1. **重依赖 import**：torch、numba、llvmlite、demoparser2、polars、pyarrow、
+   zstandard、PIL、pandas
+2. **两条最容易漏的链**：`demo_extract.extract`（解压）与 `app.ai.features`（AI）；
+   外加真解析一张 demo —— demoparser2 在 Rust 里 import polars / pyarrow，
+   PyInstaller 看不见，只有真解析一次能证明它们在包里
 3. **真的 HTTP 服务**：随机端口起服务，打 `/healthz`、`/library`、`/players`、
    `/replay`、`/api/library/list`、`/api/library/maps`、`/api/ai/models`、`/api/maps`
 4. **状态报告（不算失败）**：数据目录 / 地图解压进度 / 权重在不在 / side-channel
@@ -25,6 +28,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import urllib.error
@@ -100,6 +104,45 @@ def _check_ai_chain() -> str:
     from app.ai import features, models, service  # noqa: F401
 
     return f"pinned weights={len(models.PINNED_WEIGHTS)}"
+
+
+def _selftest_demo() -> Optional[Path]:
+    """自检要真解析的那张 demo：``CSNET_SELFTEST_DEMO`` > 仓库里的 examples/demo。
+
+    发行包里不带 demo（每个 300 MB），所以 zip 里这条自动跳过；CI 会显式指一张，
+    那才是"打出来的包真能解析"的证据。
+    """
+    env = os.environ.get("CSNET_SELFTEST_DEMO", "").strip()
+    if env:
+        return Path(env)
+    from . import paths
+
+    if paths.is_frozen():
+        return None
+    for candidate in sorted((paths.RESOURCES_DIR / "examples" / "demo").glob("*.dem")):
+        return candidate
+    return None
+
+
+def _check_demo_parse(demo: Path) -> str:
+    """真的让 demoparser2 解析一次，拿回一张表。
+
+    这是**唯一**能挡住 "polars / pyarrow 没进包" 的检查：demoparser2 是纯 Rust
+    扩展，它在 Rust 里 ``PyImport_ImportModule("polars")``，PyInstaller 的静态分析
+    完全看不见 —— 于是源码环境里一切正常，玩家点"提取"却拿到
+    ``ModuleNotFoundError: No module named 'polars'``（0.42.2 上真的发生过）。
+    """
+    from demoparser2 import DemoParser
+
+    if not Path(demo).is_file():
+        raise FileNotFoundError(demo)
+    parser = DemoParser(str(demo))
+    header = parser.parse_header()
+    df = parser.parse_ticks(wanted_props=["tick"])
+    rows = len(df)
+    if rows <= 0:
+        raise RuntimeError(f"parse_ticks 返回 0 行（map={header.get('map_name')}）")
+    return f"{Path(demo).name}: {rows} 行（{type(df).__name__}）"
 
 
 def _check_numba_parallel() -> str:
@@ -245,14 +288,22 @@ def run(verbose: bool = False) -> int:
 
     print("  -- 依赖 --")
     for module in ("numpy", "pandas", "flask", "PIL", "zstandard",
-                   "demoparser2", "numba", "llvmlite", "torch", "huggingface_hub",
-                   "pystray"):
+                   "demoparser2", "polars", "pyarrow", "numba", "llvmlite",
+                   "torch", "huggingface_hub", "pystray"):
         _attempt(f"import {module}", _import_version(module))
 
     print("  -- 内部链路 --")
     _attempt("demo_extract (解压链)", _check_demo_extract)
     _attempt("app.ai (预测链)", _check_ai_chain)
     _attempt("numba 并行内核", _check_numba_parallel)
+    demo = _selftest_demo()
+    if demo is None:
+        _record("demoparser2 解析（polars/pyarrow）", True,
+                "跳过：没有 demo（发行包不带；CI 用 CSNET_SELFTEST_DEMO 指定）",
+                hard=False)
+    else:
+        _attempt("demoparser2 解析（polars/pyarrow）",
+                 lambda: _check_demo_parse(demo))
 
     print("  -- HTTP --")
     srv = thread = None
