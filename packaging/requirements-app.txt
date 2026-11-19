@@ -20,4 +20,8 @@ zstandard==0.25.0
 huggingface_hub==2.4.0
 numba==0.68.0
 
+# 托盘图标（双击启动后不弹窗口，只留一个托盘里的小图标 + 菜单）。
+# 纯 Python + ctypes，依赖只有已经装好的 Pillow。
+pystray==0.19.5
+
 torch==2.11.0+cpu

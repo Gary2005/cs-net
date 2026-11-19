@@ -536,8 +536,10 @@ app/data/
 `CSNET_DATA_DIR` 环境变量覆盖数据目录，两种模式都认（测试和"库放 NAS 上"靠它）。
 
 入口也从 `python -m app.server` 换成了 [`desktop.py`](desktop.py)：找空闲端口、
-先等 `/healthz` 再开浏览器、`server.json` 做单实例、日志写 `数据目录/logs/`、
-窗口关掉就走 `shutdown()` 把 jobs 和 watcher 停干净。打包流程见
+先等 `/healthz` 再开浏览器、`server.json` 做单实例、日志写 `数据目录/logs/`，
+**双击默认不弹窗口**（只在托盘里留一个 logo 图标，右键能打开界面 / 数据目录 / 退出），
+`--window` 是带窗口的老样式，`--no-window` 是纯后台。退出时走 `shutdown()` 把
+jobs 和 watcher 停干净。打包流程见
 [`packaging/README.md`](../packaging/README.md)。
 
 ---

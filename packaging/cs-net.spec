@@ -40,6 +40,14 @@ datas = [
     (str(ROOT / "visualizer" / "static"), "visualizer/static"),
 ]
 
+# 图标：exe 的图标在 EXE(icon=) 里，这两份是给托盘 / 小窗口运行时读的。
+for _icon in ("cs-net.ico", "cs-net.png"):
+    _path = ROOT / "packaging" / _icon
+    if _path.is_file():
+        datas.append((str(_path), "packaging"))
+    else:
+        print(f"[cs-net.spec] 警告：{_path} 不存在（图标会缺席，功能不受影响）")
+
 _sidechannel = TOOLS / "demo_extract" / "sidechannel_go" / (
     "cs2sidechannel.exe" if __import__("os").name == "nt" else "cs2sidechannel"
 )
@@ -53,6 +61,9 @@ hiddenimports = (
     + collect_submodules("demo_extract")
     + collect_submodules("scripts.training_data")
     + collect_submodules("training")
+    # pystray 在 import 时按平台 `from . import _win32`，静态分析不一定跟得进
+    # ctypes 后端；显式列出来，免得打出来的包"托盘不可用"。
+    + ["pystray", "pystray._win32"]
 )
 
 # ── 明确不要的 ──────────────────────────────────────────────────────────────
@@ -105,7 +116,7 @@ exe = EXE(  # noqa: F821
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon=str(ROOT / "packaging" / "cs-net.ico"),   # 还没有 .ico
+    icon=str(ROOT / "packaging" / "cs-net.ico"),
 )
 
 coll = COLLECT(  # noqa: F821

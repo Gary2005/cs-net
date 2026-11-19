@@ -64,6 +64,17 @@ if str(_REPO_ROOT) not in sys.path:
 
 from app.ai.models import MODELS_DIR, PINNED_WEIGHTS  # noqa: E402  (要先加 sys.path)
 
+
+def default_root() -> Path:
+    """四个文件的下落根：``<root>/models/<task>/<file>``。
+
+    开发态就是仓库根。打包后权重和 exe 并排（``<bundle>/models``），而本文件的
+    ``__file__`` 在 ``_internal/`` 里 —— 直接用 ``_REPO_ROOT`` 会让 full 版的横幅
+    永远说"缺 4 个文件、合计 665 MB"，明明权重就躺在 exe 旁边。所以从
+    :data:`MODELS_DIR` 反推：它会按冻结态 / portable / %LOCALAPPDATA% 解析。
+    """
+    return Path(MODELS_DIR).parent
+
 #: 权重所在的 HF 仓库。改了版本号这里也要跟着改，同时改 `PINNED_WEIGHTS`。
 REPO_ID = "gary2oos/cs-net-v5"
 HF_ENDPOINT = "https://huggingface.co"
@@ -100,9 +111,9 @@ class Target:
 def targets(root: Optional[Path] = None) -> list[Target]:
     """`PINNED_WEIGHTS` → 四个文件（两份 `.pt` + 各自同名的 `.yaml`）。
 
-    `root` 只在测试/自测时用（把文件下到别处），默认就是仓库根目录。
+    `root` 只在测试/自测时用（把文件下到别处），默认是 :func:`default_root`。
     """
-    base = Path(root) if root is not None else _REPO_ROOT
+    base = Path(root) if root is not None else default_root()
     out: list[Target] = []
     for task, weights in PINNED_WEIGHTS.items():
         rel = weights.relative_to(MODELS_DIR)  # aim/20261119-013008.pt
@@ -152,7 +163,7 @@ def inspect(root: Optional[Path] = None) -> dict[str, Any]:
     return {
         "ok": not missing,
         "repo": REPO_ID,
-        "root": str(Path(root) if root is not None else _REPO_ROOT),
+        "root": str(Path(root) if root is not None else default_root()),
         "files": files,
         "missing": missing,
         "present_bytes": sum(f["bytes"] or 0 for f in files if f["exists"]),
@@ -416,7 +427,7 @@ def download(
             "elapsed": 0.0,
         }
 
-    root_dir = Path(root) if root is not None else _REPO_ROOT
+    root_dir = Path(root) if root is not None else default_root()
     # `local_dir` 给仓库根：仓库里的路径 `models/aim/<run>.pt` 就是落盘相对路径，
     # 文件直接压在网页读的那几个位置上。hub 自己的元数据在 `<repo>/.cache/`。
     local_dir = root_dir

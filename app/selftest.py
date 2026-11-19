@@ -207,8 +207,26 @@ def _http_checks(base: str) -> None:
     _attempt("GET /replay", page_ok("/replay", "cs-net"))
     _attempt("GET /api/library/list", json_ok("/api/library/list"))
     _attempt("GET /api/library/maps", json_ok("/api/library/maps"))
-    _attempt("GET /api/ai/models", json_ok("/api/ai/models"))
     _attempt("GET /api/maps", json_ok("/api/maps"))
+
+    def models_agree() -> str:
+        """权重在本地，`/api/ai/models` 就必须说 ok。
+
+        这条专门挡 full 版那个 bug：权重躺在 exe 旁边，但 `download_models`
+        默认根目录还按 `__file__` 算成了 `_internal/`，于是横幅永远喊
+        "缺 4 个文件、合计约 665 MB"。
+        """
+        from app.ai.models import PINNED_WEIGHTS
+
+        _status, body = _fetch(base + "/api/ai/models")
+        payload = json.loads(body.decode("utf-8"))
+        local = all(Path(p).is_file() for p in PINNED_WEIGHTS.values())
+        if local and not payload.get("ok"):
+            missing = ", ".join(payload.get("missing") or [])
+            raise RuntimeError(f"权重就在本地，接口却说缺：{missing}")
+        return f"ok={payload.get('ok')} 本地权重={'在' if local else '未下载'}"
+
+    _attempt("GET /api/ai/models 与磁盘一致", models_agree)
 
 
 def run(verbose: bool = False) -> int:
@@ -227,7 +245,8 @@ def run(verbose: bool = False) -> int:
 
     print("  -- 依赖 --")
     for module in ("numpy", "pandas", "flask", "PIL", "zstandard",
-                   "demoparser2", "numba", "llvmlite", "torch", "huggingface_hub"):
+                   "demoparser2", "numba", "llvmlite", "torch", "huggingface_hub",
+                   "pystray"):
         _attempt(f"import {module}", _import_version(module))
 
     print("  -- 内部链路 --")

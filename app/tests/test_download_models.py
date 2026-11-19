@@ -104,6 +104,10 @@ def test_targets() -> None:
     eq("… 落点跟着根走",
        other[0].local, _ROOT / ".build" / "elsewhere" / "models" / "aim" / other[0].local.name)
 
+    # 默认根不能再用 `__file__` 推：打包后那是 `_internal/`，而权重和 exe 并排。
+    # 用 MODELS_DIR 反推，这样 full 版的横幅才不会一直喊"缺 4 个文件"。
+    eq("默认根由 MODELS_DIR 反推", dm.default_root(), models.MODELS_DIR.parent)
+
 
 def test_inspect() -> None:
     tmp = scratch()

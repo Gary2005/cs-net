@@ -14,13 +14,17 @@
 
 ```
 cs-net-5.0.0-win64\
-├─ cs-net.exe                 双击这个
+├─ cs-net.exe                 双击这个（图标是 logo）
 ├─ _internal\                 Python 运行时 + 依赖 + 模板/静态资源（不能删）
 ├─ maps\optimized_obj_files\*.obj
 ├─ models\...                 仅 full 版
 ├─ build-info.json            版本、commit、torch 版本、权重 sha256
 └─ data\                      首次运行自动生成：config.json、library.db、csz、thumbs、logs
 ```
+
+双击之后**不弹窗口**：浏览器直接打开库页面，程序只在托盘里留一个 logo 图标，
+右键有「打开界面 / 打开数据目录 / 退出」。想要带窗口的老样子就
+`cs-net.exe --window`；纯后台跑用 `--no-window`（Ctrl+C 退）。
 
 `data\` 在 exe 旁边（绿色版）：换电脑整目录拷走，不写注册表。如果 exe 所在目录
 不可写（比如被塞进 `Program Files`），会自动退到 `%LOCALAPPDATA%\cs-net` —— 规则

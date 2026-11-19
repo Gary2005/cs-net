@@ -1,10 +1,11 @@
-"""双击启动器：起服务、打开浏览器、给一个能退出的窗口。
+"""双击启动器：起服务、打开浏览器、在托盘里留一个能退出的图标。
 
 打包成 exe 之后的入口就是它（``cs-net.exe`` → ``app.desktop.main``）。开发态也能
 用，和原来的 ``python -m app.server`` 等价，只是多了"自动找端口 + 开浏览器"：
 
-    python -m app.desktop              # 有窗口，点"退出"才停
-    python -m app.desktop --no-window  # 只起服务（调试 / CI）
+    python -m app.desktop              # 托盘图标 + 开浏览器（双击时的样子）
+    python -m app.desktop --window     # 弹那个小窗口（没有托盘时的退路）
+    python -m app.desktop --no-window  # 完全没有界面（调试 / CI）
     python -m app.desktop --packaging-selftest   # 打包后的自检，见 app/selftest.py
 
 为什么不用 ``app.run()``
@@ -274,12 +275,130 @@ def assets_summary() -> str:
 # ── 窗口 ────────────────────────────────────────────────────────────────────
 
 
+def _ui_icon():
+    """托盘 / 窗口用的图标。打包时 `packaging/cs-net.png` 随 datas 进来。
+
+    拿不到就返回 None —— 图标缺失不该让程序起不来（任务栏会用默认图标）。
+    """
+    path = Path(paths.RESOURCES_DIR) / "packaging" / "cs-net.png"
+    try:
+        from PIL import Image
+
+        if path.is_file():
+            return Image.open(path)
+    except Exception as exc:  # noqa: BLE001
+        log.debug("图标读不出来（%s）：%s", path, exc)
+    return None
+
+
+def _relax_pystray_filter() -> None:
+    """让 pystray 跳过 `ChangeWindowMessageFilterEx`。
+
+    那一步只是"提权进程也还能收到 WM_TASKBARCREATED"的可选优化，但它在**冻结后的
+    exe** 里返回 ``ERROR_ACCESS_DENIED``（开发态 python 里没事），pystray 把它当
+    致命错误抛出来，于是打包后托盘永远起不来、退回那个小窗口。我们本来就不是提权
+    进程，跳过它没有任何副作用；explorer 重启那一幕也用 NIM_ADD 重加一次就够了
+    （pystray 自己还有 WM_TASKBARCREATED 的处理）。
+    """
+    try:
+        from pystray._util import win32 as _w
+
+        def _noop(*_args, **_kwargs):
+            return 1
+
+        _w.ChangeWindowMessageFilterEx = _noop
+    except Exception as exc:  # noqa: BLE001 - 换别的 pystray 版本就静默跳过
+        log.debug("没法给 pystray 打补丁（%s），按它本来的路子来", exc)
+
+
+def show_tray(url: str, summary: str, on_quit) -> bool:
+    """托盘图标 + 菜单，**不弹窗口**。返回 False 表示托盘起不来。
+
+    为什么默认走托盘：双击一个本地工具，最想要的是"浏览器打开、然后别烦我"。
+    但总得留一个退出入口 —— 没有窗口也没有托盘的进程只能去任务管理器杀，
+    那是 bug 级别的体验。
+    """
+    try:
+        import pystray
+    except Exception as exc:  # noqa: BLE001
+        log.warning("托盘不可用（%s）", exc)
+        return False
+
+    image = _ui_icon()
+    if image is None:
+        log.warning("没有图标，托盘不建")
+        return False
+
+    _relax_pystray_filter()
+
+    def _open(icon, item) -> None:
+        open_in_browser(url)
+
+    def _data(icon, item) -> None:
+        open_folder(Path(config.DATA_DIR))
+
+    def _quit(icon, item) -> None:
+        icon.stop()
+
+    icon = pystray.Icon(
+        "cs-net",
+        image,
+        f"cs-net v5 — {url}" + (f"\n{summary}" if summary else ""),
+        menu=pystray.Menu(
+            pystray.MenuItem("打开界面", _open, default=True),
+            pystray.MenuItem("打开数据目录", _data),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("退出", _quit),
+        ),
+    )
+    try:
+        # Windows 上 run() 自己起消息循环，阻塞到 icon.stop()。setup 回调在循环
+        # 起来之后执行 —— 那时才知道托盘真活了，再藏控制台就不会把唯一的退路弄没。
+        def _setup(ic) -> None:
+            try:
+                ic.visible = True
+            except Exception:  # noqa: BLE001
+                pass
+            _hide_own_console()
+
+        icon.run(setup=_setup)
+    except Exception as exc:  # noqa: BLE001
+        # 带上栈：托盘在打包后失败过一次（WinError 5），只有 message 没法定位。
+        log.warning("托盘跑不起来（%s: %s），退回窗口", type(exc).__name__, exc,
+                    exc_info=True)
+        return False
+    on_quit()
+    return True
+
+
+def _apply_window_icon(root) -> None:
+    """窗口左上角 / 任务栏的图标。拿不到就算了，不该因此打不开窗口。"""
+    try:
+        ico = Path(paths.RESOURCES_DIR) / "packaging" / "cs-net.ico"
+        if os.name == "nt" and ico.is_file():
+            root.iconbitmap(str(ico))
+            return
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from PIL import ImageTk
+
+        image = _ui_icon()
+        if image is not None:
+            photo = ImageTk.PhotoImage(image)
+            root.iconphoto(True, photo)
+            root._cs_net_icon = photo      # 留住引用，否则会被 GC 掉变空白
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def show_window(url: str, summary: str, on_quit) -> None:
     """一个小窗口：显示地址、能开浏览器 / 开数据目录、点关闭就退出。"""
     import tkinter as tk
 
     root = tk.Tk()
     root.title("cs-net v5")
+    _apply_window_icon(root)
     root.resizable(False, False)
     root.configure(padx=18, pady=14)
 
@@ -344,7 +463,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=0, help="0 = 让系统挑空闲端口")
     ap.add_argument("--maps-dir", default=None)
-    ap.add_argument("--no-window", action="store_true", help="不显示窗口（调试 / CI）")
+    ap.add_argument("--window", action="store_true",
+                    help="弹那个小窗口（默认不弹，只在托盘里留一个图标）")
+    ap.add_argument("--no-tray", action="store_true",
+                    help="不建托盘图标（没给 --window 时会退回窗口，不然就没法退出了）")
+    ap.add_argument("--no-window", action="store_true",
+                    help="完全没有界面（调试 / CI；Ctrl+C 退出）")
     ap.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
     ap.add_argument("--no-watch", action="store_true", help="不启动目录监听")
     ap.add_argument("--verbose", action="store_true")
@@ -367,13 +491,14 @@ def main(argv: Optional[list[str]] = None) -> int:
 
             return selftest.run(verbose=args.verbose)
 
-        if not args.no_window:
-            running = _running_instance()
-            if running:
-                log.info("已经有一个实例在跑：%s", running)
-                if not args.no_browser:
-                    open_in_browser(running)
-                return 0
+        # 单实例：不管有没有界面，第二个都该直接打开浏览器然后退出 —— 两个进程
+        # 抢同一个 SQLite 库不会有好事。
+        running = _running_instance()
+        if running:
+            log.info("已经有一个实例在跑：%s", running)
+            if not args.no_browser:
+                open_in_browser(running)
+            return 0
 
         if not _acquire_single_instance():
             running = _running_instance()
@@ -421,27 +546,35 @@ def main(argv: Optional[list[str]] = None) -> int:
             _clear_state()
             log.info("已退出")
 
-        if args.no_window or sys.platform not in ("win32", "darwin") and not os.environ.get("DISPLAY"):
+        summary = assets_summary()
+
+        # 三种界面形态：托盘（默认）> 窗口（--window）> 纯后台（--no-window）。
+        # 托盘里没有"窗口"，正是双击一个本地工具时最舒服的样子；但它必须有，
+        # 否则进程就没有退出的入口了。
+        ui = "none" if args.no_window else ("window" if args.window else "tray")
+        if ui == "tray" and args.no_tray:
+            ui = "window"
+
+        if ui == "tray":
+            if show_tray(url, summary, shutdown):
+                return 0
+            log.warning("托盘起不来，改用窗口")
+            ui = "window"
+
+        if ui == "window":
             try:
-                while True:
-                    time.sleep(1.0)
-            except KeyboardInterrupt:
-                pass
-            finally:
-                shutdown()
-            return 0
+                show_window(url, summary, shutdown)
+                return 0
+            except Exception as exc:  # noqa: BLE001 - 没有 tkinter 就退化成控制台
+                log.warning("窗口打不开（%s），退化成控制台模式；Ctrl+C 退出", exc)
 
         try:
-            show_window(url, assets_summary(), shutdown)
-        except Exception as exc:  # noqa: BLE001 - 没有 tkinter 就退化成控制台
-            log.warning("窗口打不开（%s），退化成控制台模式；Ctrl+C 退出", exc)
-            try:
-                while True:
-                    time.sleep(1.0)
-            except KeyboardInterrupt:
-                pass
-            finally:
-                shutdown()
+            while True:
+                time.sleep(1.0)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            shutdown()
         return 0
     except Exception as exc:  # noqa: BLE001 - 这里是最后一道防线
         log.exception("启动失败")

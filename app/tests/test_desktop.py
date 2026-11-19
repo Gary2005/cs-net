@@ -118,6 +118,31 @@ def test_assets_summary() -> None:
     check("提到了地图", "地图" in text, repr(text))
 
 
+def test_ui_mode() -> None:
+    print("界面形态 / 图标 + 托盘")
+    desktop = _load_desktop(_scratch())
+
+    # 图标：仓库里有 packaging/cs-net.png 就该读得出来；没有也该是 None 而不是抛异常
+    # （图标缺失不该让程序起不来）。
+    image = desktop._ui_icon()
+    check("图标能读出来（或者干脆没有）", image is None or image.size[0] > 0, repr(image))
+    check("show_tray 可调用", callable(desktop.show_tray))
+    check("show_window 可调用", callable(desktop.show_window))
+
+    # 三个界面开关要真的注册了：--help 的输出里能看到。
+    env = dict(os.environ)
+    env["CSNET_DATA_DIR"] = str(_scratch())
+    proc = subprocess.run(
+        [sys.executable, "-m", "app.desktop", "--help"],
+        cwd=str(_ROOT), env=env, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120,
+    )
+    out = (proc.stdout or "") + (proc.stderr or "")
+    eq("--help 退出码 0", proc.returncode, 0)
+    for flag in ("--window", "--no-tray", "--no-window"):
+        check(f"--help 里有 {flag}", flag in out, out[-400:])
+
+
 def test_selftest_subprocess() -> None:
     print("--packaging-selftest / 端到端起一次")
     data = _scratch()
@@ -148,7 +173,7 @@ def test_selftest_subprocess() -> None:
 
 def main() -> int:
     for fn in (test_port_and_url, test_state_roundtrip, test_assets_summary,
-               test_selftest_subprocess):
+               test_ui_mode, test_selftest_subprocess):
         print()
         fn()
 
