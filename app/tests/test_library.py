@@ -884,6 +884,71 @@ def test_migrate_legacy_data_dir() -> None:
             setattr(config, k, v)
 
 
+def test_duplicate_extraction_guard() -> None:
+    """One demo, one extraction job -- even if two callers ask at once.
+
+    Four things queue extraction: the watcher's poll, the manual 扫描 (which
+    sweeps every row still without a ``.csz``, including the one the watcher
+    queued a second ago), the 提取 button, and 打开回放's "queue the missing
+    .csz".  ``queue_extraction`` used to submit unconditionally, so two of them
+    racing meant two full parses of the same file (58 s + 76 s in the report
+    that found this).
+    """
+    print("\nduplicate extraction guard")
+    with scratch_env() as tmp:
+        from app import ingest, jobs
+
+        demos = Path(tmp) / "demos"
+        demos.mkdir()
+        src = demos / "a.dem"
+        src.write_bytes(b"x")
+        demo_id = db.upsert_demo(str(src), filename="a.dem", status="discovered")
+
+        release = threading.Event()
+        manager = jobs.manager
+        manager.start()
+        try:
+            holder = manager.submit(
+                "extract", "提取 a.dem",
+                lambda job: release.wait(timeout=10.0),
+                subject=ingest.extraction_subject(demo_id),
+            )
+            deadline = time.time() + 5.0
+            while holder.state != "running" and time.time() < deadline:
+                time.sleep(0.01)
+            eq("the stand-in extraction is running", holder.state, "running")
+
+            skipped: list[int] = []
+            eq("a second job for the same demo is refused",
+               ingest.queue_extraction([demo_id], skipped=skipped), [])
+            eq("and the caller is told which id it was", skipped, [demo_id])
+            eq("only one job is in flight", len(manager.list(active_only=True)), 1)
+
+            skipped = []
+            eq("an unknown id is ignored, not reported as skipped",
+               ingest.queue_extraction([demo_id, 99999], skipped=skipped), [])
+            eq("only the real demo is reported", skipped, [demo_id])
+
+            release.set()
+            deadline = time.time() + 5.0
+            while holder.state in ("queued", "running") and time.time() < deadline:
+                time.sleep(0.01)
+            eq("the stand-in finished", holder.state, "done")
+
+            # Only *in-flight* work is refused: once the demo is done, a fresh
+            # request (a re-parse after changing sampling) must go through.
+            again = manager.submit_unique(
+                "extract", "提取 a.dem", lambda job: None,
+                subject=ingest.extraction_subject(demo_id),
+            )
+            check("the same demo can be queued again once it is done",
+                  again is not None)
+        finally:
+            release.set()
+            manager.stop(timeout=2.0)
+            manager.clear_finished()
+
+
 def main() -> int:
     test_source_inference()
     test_team_grouping()
@@ -900,6 +965,7 @@ def main() -> int:
     test_match_watched()
     test_watched_resync()
     test_stop_drops_queued_jobs()
+    test_duplicate_extraction_guard()
     print(f"\n{_passed} passed, {len(_failed)} failed")
     if _failed:
         for name in _failed:

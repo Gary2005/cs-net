@@ -33,14 +33,18 @@ class Job:
     """One unit of background work."""
 
     __slots__ = (
-        "id", "kind", "label", "state", "step", "error", "result",
+        "id", "kind", "label", "subject", "state", "step", "error", "result",
         "created_at", "started_at", "finished_at", "progress",
     )
 
-    def __init__(self, kind: str, label: str) -> None:
+    def __init__(self, kind: str, label: str, subject: Any = None) -> None:
         self.id = uuid.uuid4().hex[:12]
         self.kind = kind
         self.label = label
+        #: Opaque key naming *what* this job works on, e.g. ``("demo", 7, "extract")``.
+        #: Two jobs with the same subject do the same thing to the same thing, so
+        #: the queue can refuse the second one -- see :meth:`JobManager.submit_unique`.
+        self.subject = subject
         self.state = "queued"          # queued | running | done | error | cancelled
         self.step = "排队中…"
         self.error: Optional[str] = None
@@ -63,6 +67,7 @@ class Job:
             "id": self.id,
             "kind": self.kind,
             "label": self.label,
+            "subject": list(self.subject) if isinstance(self.subject, tuple) else self.subject,
             "state": self.state,
             "step": self.step,
             "progress": self.progress,
@@ -139,9 +144,34 @@ class JobManager:
             self._threads = [t for t in self._threads if t.is_alive()]
 
     # -- public API --------------------------------------------------------
-    def submit(self, kind: str, label: str, fn: Callable[[Job], Any]) -> Job:
-        job = Job(kind, label)
+    def submit(self, kind: str, label: str, fn: Callable[[Job], Any],
+               *, subject: Any = None) -> Job:
+        job = self._submit(kind, label, fn, subject=subject, unique=False)
+        assert job is not None      # unique=False never refuses
+        return job
+
+    def submit_unique(self, kind: str, label: str, fn: Callable[[Job], Any],
+                      *, subject: Any) -> Optional[Job]:
+        """Submit unless something for ``subject`` is already queued or running.
+
+        Returns ``None`` when the work is already spoken for.  This is what keeps
+        one demo from being extracted twice: a manual 扫描 recovers every row
+        that has no ``.csz`` yet, which includes the row a watcher poll queued
+        two seconds ago, and handing that id to :func:`app.ingest.queue_extraction`
+        again used to start a second full parse of the same file (58 s + 76 s for
+        one demo in the report that found this).
+
+        The check and the insert happen under one lock, so two threads racing to
+        queue the same demo cannot both win.
+        """
+        return self._submit(kind, label, fn, subject=subject, unique=True)
+
+    def _submit(self, kind: str, label: str, fn: Callable[[Job], Any],
+                *, subject: Any, unique: bool) -> Optional[Job]:
+        job = Job(kind, label, subject)
         with self._lock:
+            if unique and subject is not None and self._active_for(subject):
+                return None
             self._jobs[job.id] = job
             self._order.append(job.id)
             while len(self._order) > _HISTORY:
@@ -155,6 +185,13 @@ class JobManager:
             self._queue.append((job, fn))
         self._wake.set()
         return job
+
+    def _active_for(self, subject: Any) -> bool:
+        """Is a job for ``subject`` queued or running? (Call with ``_lock`` held.)"""
+        return any(
+            j.subject == subject and j.state in ("queued", "running")
+            for j in self._jobs.values()
+        )
 
     def get(self, job_id: str) -> Optional[Job]:
         with self._lock:

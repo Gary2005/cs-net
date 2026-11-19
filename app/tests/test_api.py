@@ -16,6 +16,7 @@ import contextlib
 import json
 import shutil
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -554,9 +555,15 @@ def test_force_reextract(c, tmp: Path) -> None:
     r = c.post("/api/library/extract", json={"ids": [plain]}).get_json()
     eq("a row with no .csz always parses",
        c.get(f"/api/library/jobs/{r['job_ids'][0]}").get_json()["kind"], "extract")
-    r = c.post("/api/library/extract", json={"ids": [plain], "force": True}).get_json()
-    eq("force on a row with no .csz is harmless",
-       c.get(f"/api/library/jobs/{r['job_ids'][0]}").get_json()["kind"], "extract")
+    # Without a .csz there is nothing to refresh *from*, so force is the same
+    # request twice -- and the queue folds them into one job instead of parsing
+    # the same demo twice.  Either way the call succeeds and exactly one job is
+    # behind it: queued just now, or already in flight.
+    r = c.post("/api/library/extract", json={"ids": [plain], "force": True})
+    body = r.get_json()
+    eq("force on a row with no .csz is accepted", r.status_code, 200)
+    check("and leaves exactly one job for it",
+          body["queued"] + body["already_queued"] == 1, body)
 
 
 def test_players_api(c, tmp: Path) -> None:
@@ -885,6 +892,83 @@ def test_storage(c, tmp: Path) -> None:
           r.get_json())
 
 
+def test_no_double_extraction(c, tmp: Path) -> None:
+    """Scanning while an extraction is in flight must not queue it twice.
+
+    ``scan_roots`` sweeps every row that has no ``.csz`` yet -- including the
+    row the watcher (or the previous scan) queued seconds ago -- and the scan
+    endpoint used to hand all of them to ``queue_extraction``, which submitted a
+    job per id unconditionally.  One demo then got parsed twice: 58 s + 76 s for
+    the same file in the report that found this.
+    """
+    print("\nsame demo is not queued twice")
+    from app import ingest, jobs
+
+    root = tmp / "scan-twice"
+    root.mkdir()
+    # Disable the watcher *before* the file exists, so only the two manual scans
+    # below can queue anything -- otherwise a poll could beat the first scan.
+    c.put("/api/library/watch", json={
+        "roots": [{"path": str(root), "depth": 1, "source": "5E", "enabled": True}],
+        "enabled": False, "interval": 60,
+    })
+    c.put("/api/library/config", json={"auto_extract": True, "make_thumbnails": False})
+    (root / "twice.dem").write_bytes(b"fake demo bytes")
+
+    # Two workers, so the second scan really does run while the extraction it
+    # is looking at is still in flight.
+    original_manager = jobs.manager
+    original_run = ingest.run_extraction
+    release = threading.Event()
+    manager = jobs.JobManager(workers=2)
+    jobs.manager = manager
+    ingest.run_extraction = lambda demo_id, job: release.wait(timeout=20.0)  # noqa: ARG005
+    manager.start()
+
+    def scan() -> dict:
+        jid = c.post("/api/library/watch/scan", json={"force": True}).get_json()["job_id"]
+        deadline = time.time() + 30.0
+        while time.time() < deadline:
+            st = c.get(f"/api/library/jobs/{jid}").get_json()
+            if st["state"] in ("done", "error"):
+                return st
+            time.sleep(0.05)
+        raise AssertionError("the scan job never finished")
+
+    try:
+        first = scan()
+        eq("the first scan queues one demo", len(first["result"]["job_ids"]), 1)
+
+        second = scan()
+        eq("the second scan queues nothing", second["result"]["job_ids"], [])
+        eq("and says the demo is already in flight",
+           second["result"]["already_queued"], 1)
+        eq("exactly one extraction job exists",
+           len([j for j in manager.list() if j["kind"] == "extract"]), 1)
+
+        # The 提取 button on that same row: no second parse, but no scary 400
+        # either -- it explains itself.
+        row = next(i for i in c.get("/api/library/list").get_json()["items"]
+                   if i["filename"] == "twice.dem")
+        r = c.post("/api/library/extract", json={"ids": [row["id"]]})
+        eq("extracting an in-flight demo is accepted", r.status_code, 200)
+        eq("but queues nothing", r.get_json()["queued"], 0)
+        eq("and reports the same thing", r.get_json()["already_queued"], 1)
+
+        # A demo nobody is working on still queues normally.
+        other = seed(c, tmp, "later.dem")
+        eq("an idle demo is still queued",
+           c.post("/api/library/extract", json={"ids": [other]}).get_json()["queued"], 1)
+    finally:
+        release.set()
+        deadline = time.time() + 10.0
+        while manager.has_active() and time.time() < deadline:
+            time.sleep(0.05)
+        jobs.manager = original_manager
+        ingest.run_extraction = original_run
+        manager.stop(timeout=2.0)
+
+
 def main() -> int:
     # Each group gets a fresh app + data dir, so a row seeded by one group
     # cannot quietly change another group's totals.
@@ -900,6 +984,7 @@ def main() -> int:
         ("batch handoff", test_batch_handoff, True),
         ("players/avatars", test_players_api, True),
         ("player search", test_player_search, True),
+        ("duplicate extraction", test_no_double_extraction, True),
         ("storage", test_storage, True),
         # Last: it puts real work on the job queue, and draining it here keeps
         # a straggler from running against the next group's scratch dir.

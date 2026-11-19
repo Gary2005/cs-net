@@ -558,7 +558,13 @@ async function extractMany(ids, force = false) {
   if (!ids.length) return;
   try {
     const r = await post('/api/library/extract', { ids, force });
-    toast(t(force ? 'lib.toast.queuedReparse' : 'lib.toast.queued', { n: r.queued }), 'ok');
+    // 后端会跳过已经有任务在跑的 demo（扫描的补漏和按钮点重复都会撞上），
+    // 这时候说「已排队 0 个」会让人以为按钮坏了。
+    if (!r.queued && r.already_queued) {
+      toast(t('lib.toast.alreadyQueued', { n: r.already_queued }), 'ok');
+    } else {
+      toast(t(force ? 'lib.toast.queuedReparse' : 'lib.toast.queued', { n: r.queued }), 'ok');
+    }
     openDrawer();
     startJobPolling();
     load();

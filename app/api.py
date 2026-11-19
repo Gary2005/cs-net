@@ -481,12 +481,23 @@ def api_extract():
             continue
     if not clean:
         return _bad("没有有效的 demo id")
-    job_ids = ingest.queue_extraction(clean, force=bool(body.get("force")))
+    already: list[int] = []
+    job_ids = ingest.queue_extraction(clean, force=bool(body.get("force")),
+                                      skipped=already)
     if not job_ids:
+        if already:
+            # Not an error: the very same click twice, or a scan that already
+            # picked this row up.  Saying "queued 0" with a reason is more
+            # useful than a 400 that reads like the demo does not exist.
+            return jsonify({
+                "queued": 0, "job_ids": [], "already_queued": len(already),
+                "note": "已经在队列里了，等它跑完",
+            })
         # Every id was unknown.  Silently returning "queued: 0" makes a scripted
         # caller think it worked, and the UI would print "已排队 0 个".
         return _bad("没有可提取的 Demo", 400)
-    return jsonify({"queued": len(job_ids), "job_ids": job_ids})
+    return jsonify({"queued": len(job_ids), "job_ids": job_ids,
+                    "already_queued": len(already)})
 
 
 @bp.post("/api/library/demo/<int:demo_id>/refresh")
@@ -542,13 +553,15 @@ def api_open():
         i for i, row in rows
         if not row.get("csz_path") or not Path(row["csz_path"]).is_file()
     ]
-    job_ids = ingest.queue_extraction(missing) if missing else []
+    already: list[int] = []
+    job_ids = ingest.queue_extraction(missing, skipped=already) if missing else []
 
     view = _batch_view(batch_id) or {"batch_id": batch_id, "items": []}
     return jsonify({
         **view,
         "queued": len(job_ids),
         "job_ids": job_ids,
+        "already_queued": len(already),
         "replay_url": f"/replay?batch={batch_id}",
     })
 
@@ -660,8 +673,19 @@ def api_watch_scan():
         summary["extracted"] = extract
         new_ids = summary.get("new_ids") or []
         if new_ids and extract:
-            job.set_step(f"排队提取 {len(new_ids)} 个 demo…", 0.95)
-            summary["job_ids"] = ingest.queue_extraction(new_ids)
+            # `new_ids` is not just "found this time": scan_roots also folds in
+            # every row still without a .csz (work orphaned by a restart), which
+            # includes the row the watcher queued a second ago.  queue_extraction
+            # skips those, so report what actually got queued rather than
+            # promising one job per id.
+            already: list[int] = []
+            job_ids = ingest.queue_extraction(new_ids, skipped=already)
+            summary["job_ids"] = job_ids
+            summary["already_queued"] = len(already)
+            if job_ids:
+                job.set_step(f"排队提取 {len(job_ids)} 个 demo…", 0.95)
+            else:
+                job.set_step("这些 Demo 已经在队列里了", 1.0)
         elif new_ids:
             job.set_step(f"已入库 {len(new_ids)} 个 demo（自动提取已关闭）", 1.0)
         return summary

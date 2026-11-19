@@ -596,8 +596,23 @@ def refresh_metadata(demo_id: int, job: Optional[jobs.Job] = None) -> dict[str, 
 # ── queue helpers ────────────────────────────────────────────────────────────
 
 
+def extraction_subject(demo_id: int, stage: str = "extract") -> tuple:
+    """The queue key that means "this demo, this kind of work".
+
+    Keyed on the demo's *path* rather than its row id: the id is only unique
+    inside one library, while the job queue is process-wide and outlives a
+    library swap (the test suite points ``DATA_DIR`` at a fresh directory per
+    group, and every one of them numbers its rows from 1 again -- an id-keyed
+    subject made a brand-new demo inherit the refusal meant for an unrelated
+    queued job).
+    """
+    row = db.get_demo(int(demo_id))
+    return ("demo", str(row["path"]) if row else str(demo_id), stage)
+
+
 def queue_extraction(demo_ids: Iterable[int], *, label: Optional[str] = None,
-                     force: bool = False) -> list[str]:
+                     force: bool = False,
+                     skipped: Optional[list[int]] = None) -> list[str]:
     """Submit extraction jobs for the given demo ids. Returns the job ids.
 
     A demo that already has a valid ``.csz`` is refreshed from it rather than
@@ -608,26 +623,37 @@ def queue_extraction(demo_ids: Iterable[int], *, label: Optional[str] = None,
     need after changing the sampling settings: the shortcut would happily
     refresh metadata from the old, coarsely-sampled ``.csz`` and report success
     while the sampling setting had no effect at all.
+
+    A demo whose extraction is **already queued or running** is skipped -- its id
+    lands in ``skipped`` instead of getting a second job.  This is not a nicety:
+    four different callers can ask for the same demo in the same few seconds
+    (the watcher's poll, the manual 扫描's orphan sweep, the 提取 button, and
+    打开回放's "queue the missing ``.csz``"), and each job is a full parse of a
+    file that takes 30-90 s.  A refresh of a ready row is a *different* subject,
+    so it is still allowed alongside an in-flight re-parse.
     """
     job_ids: list[str] = []
     for demo_id in demo_ids:
-        row = db.get_demo(int(demo_id))
+        demo = int(demo_id)
+        row = db.get_demo(demo)
         if row is None:
             continue
         has_csz = bool(row.get("csz_path")) and Path(row["csz_path"]).is_file()
         name = row.get("display_name") or row["filename"]
-        if has_csz and not force:
-            job = jobs.manager.submit(
-                "refresh",
-                f"刷新 {name}",
-                lambda j, i=int(demo_id): refresh_metadata(i, j),
-            )
-        else:
-            job = jobs.manager.submit(
-                "extract",
-                f"{'重新解析' if has_csz else '提取'} {name}",
-                lambda j, i=int(demo_id): run_extraction(i, j),
-            )
+        # A refresh only re-reads the .csz; it does not parse the demo, so it is
+        # allowed to sit next to an extraction instead of being folded into it.
+        stage = "refresh" if (has_csz and not force) else "extract"
+        job = jobs.manager.submit_unique(
+            stage,
+            f"{'刷新' if stage == 'refresh' else ('重新解析' if has_csz else '提取')} {name}",
+            (lambda j, i=demo: refresh_metadata(i, j)) if stage == "refresh"
+            else (lambda j, i=demo: run_extraction(i, j)),
+            subject=extraction_subject(demo, stage),
+        )
+        if job is None:
+            if skipped is not None:
+                skipped.append(demo)
+            continue
         job_ids.append(job.id)
     return job_ids
 
