@@ -397,9 +397,15 @@ def test_routes() -> None:
 
         service.predict_round = fake_predict
 
-        # 用临时目录做缓存根（不许写进真的 app/data）
+        # 用临时目录做缓存根（不许写进真的 app/data）。故意不用
+        # `tempfile.mkdtemp()`：Windows 上它按 0o700 建目录，而某些受限环境
+        # （比如带 ACL 沙箱的开发机）里那种目录连自己都写不进去，症状是下面
+        # 三条缓存断言报 PermissionError，看着像"缓存没写"。默认权限建目录就没这事。
         import tempfile
-        tmp = Path(tempfile.mkdtemp(prefix="aistats-"))
+        import uuid
+
+        tmp = Path(tempfile.gettempdir()) / f"aistats-{uuid.uuid4().hex[:12]}"
+        tmp.mkdir()
         saved_root = service.cache_root
         service.cache_root = lambda: tmp
         try:

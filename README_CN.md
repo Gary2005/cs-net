@@ -61,6 +61,17 @@ python -m app.server --port 5000                  # → http://127.0.0.1:5000/li
 的横幅，点一下排进后台任务（和上面的命令是同一个脚本）。和权重一样，每个检出
 只需要做一次。
 
+### 不想配环境：下 zip 就行
+
+每个 Release 带两个 Windows x64 的压缩包，不需要 Python，也不需要 conda：
+
+* `cs-net-5.0.0-win64-lite.zip` —— 不带权重，第一次开 AI 面板时点横幅下载（665 MB）；
+* `cs-net-5.0.0-win64-full.zip` —— 权重随包，离线就能用。
+
+解压后双击 `cs-net.exe` 即可。两个包里的地图几何都已经解压好，库、配置、`.csz`
+都在 exe 旁边的 `data\` 里，整个文件夹拷走就是换机器。细节见
+[packaging/README.md](packaging/README.md)。
+
 ### 下载 AI 模型
 
 两份权重合计 665 MB，**不在 git 里**，放在 Hugging Face 上。**下过一次就行**，
@@ -94,6 +105,7 @@ tools/demo_extract/               .dem -> .csz 提取器：逐 tick、zstd、烟
 training/                         PyTorch 模型与训练脚本（AI 面板加载的就是它训出来的权重）
 scripts/training_data/            .csz -> 训练用数据集
 scripts/                          辅助脚本：download_models.py、extract_maps.py、check_env.py、export_weights.py
+packaging/                        PyInstaller spec 和组包脚本（打双击即用的 Windows zip）
 maps/optimized_obj_files/         减面后的地图几何（.obj.zip，用 extract_maps.py 解压）
 models/                           两份写死的权重（不进 git，下载得到）
 ```
@@ -111,6 +123,7 @@ models/                           两份写死的权重（不进 git，下载得
 | [tools/demo_extract/README.md](tools/demo_extract/README.md) | `.csz` 字段树、采样方式、烟雾体素、火焰格子 |
 | [tools/demo_extract/API.md](tools/demo_extract/API.md) | 字段级手册、实测量级、坑 |
 | [scripts/training_data/README.md](scripts/training_data/README.md) | 怎么写任务、怎么切样本、数据集上的坑 |
+| [packaging/README.md](packaging/README.md) | 双击即用的 Windows 包：spec、体积、发版流程 |
 
 ## 许可
 

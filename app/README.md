@@ -409,6 +409,7 @@ https://steamcommunity.com/miniprofile/<account_id>/json
 
 ```
 app/
+  paths.py      程序目录 / 数据目录：开发态、绿色版、%LOCALAPPDATA% 三种形态
   config.py     路径、平台路径候选、来源推断、线程安全的 JSON 配置
   db.py         SQLite（WAL）。demo_files + zip_extract_state + player_avatars，
                 玩家聚合也在这一层（json_each 现算，不建表）
@@ -426,12 +427,15 @@ app/
                 models.py（写死的权重路径 + 加载）、service.py（5 个头 + 对枪窗口 +
                 三层缓存 + 进度 + 预热）、api.py（/api/ai/*，含 NDJSON 流）
   server.py     create_app() 和入口
+  desktop.py    打包后的入口：空闲端口 + 单实例 + 开浏览器 + 窗口 + 日志
+  selftest.py   --packaging-selftest：给打出来的 exe 做的体检
   templates/    library.html / players.html / player.html
   static/       三个页面的 CSS / JS（原生，无构建步骤）
   tests/        独立测试脚本，不需要 pytest
 tools/demo_extract/   提取器（本应用不改它，只调用）
 visualizer/           3D 回放。本应用加了 /replay 路由和批次下拉；顶栏改成
                       和库页面共用一份（static/css/topbar.css），上传页删了
+packaging/            PyInstaller spec + 组包脚本 + 打包说明
 ```
 
 ### 状态机
@@ -514,6 +518,27 @@ app/data/
 
 体积可以在设置面板底部的**存储管理**里看，也可以在那边整类清掉。`recycle/` 里的
 `.dem` 是最占地方的一块（这批 demo 的原始文件合计 1.3 GB，`.csz` 只有 44 MB）。
+
+### 打包成 exe 之后去哪了
+
+上面那张表在**双击版**里不在仓库里了。数据目录由 [`paths.py`](paths.py) 决定：
+
+| | 开发态 | exe 旁边可写 | exe 旁边不可写 |
+|---|---|---|---|
+| 资源（模板/静态） | 仓库根 | `_internal/` | `_internal/` |
+| 数据目录 | `app/data/` | `exe\data\` | `%LOCALAPPDATA%\cs-net\` |
+| 地图 | `maps/optimized_obj_files/` | `exe\maps\optimized_obj_files\` | 同左 |
+| 权重 | `models/` | `exe\models\` | `数据目录\models\` |
+
+规则很简单：**资源跟 exe 走，能写的数据放 exe 旁边（绿色版），写不了才退到
+`%LOCALAPPDATA%`**。探测方式是"在 exe 旁边建个目录写删一次"，不是找标记文件 ——
+玩家把文件夹从 D 盘挪到 `Program Files` 之后，标记文件就骗人了。
+`CSNET_DATA_DIR` 环境变量覆盖数据目录，两种模式都认（测试和"库放 NAS 上"靠它）。
+
+入口也从 `python -m app.server` 换成了 [`desktop.py`](desktop.py)：找空闲端口、
+先等 `/healthz` 再开浏览器、`server.json` 做单实例、日志写 `数据目录/logs/`、
+窗口关掉就走 `shutdown()` 把 jobs 和 watcher 停干净。打包流程见
+[`packaging/README.md`](../packaging/README.md)。
 
 ---
 

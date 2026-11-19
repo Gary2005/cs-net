@@ -7,6 +7,14 @@ __pycache__/
 # vendored three.js copy.
 .build/
 
+# PyInstaller's scratch (`build/cs-net/`) and its output (`dist/cs-net/`, ~1.5 GB).
+# `packaging/out/` holds the zips that end up on the Release, and `.selftest-data/`
+# is what `cs-net.exe --packaging-selftest` writes when CI points the data dir here.
+/build/
+/dist/
+/packaging/out/
+/.selftest-data/
+
 # Uncompressed map geometry. The tracked form is
 # maps/optimized_obj_files/*.obj.zip, unpacked by scripts/extract_maps.py
 # (~134 MB per map once unpacked).

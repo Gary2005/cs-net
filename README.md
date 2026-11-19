@@ -62,6 +62,19 @@ Step 2 can also be done in the browser: while `maps/` is still packed, the libra
 page shows an **解压地图 / Unpack maps** banner, and one click queues the same
 script. Like the weights, it is a one-time thing per checkout.
 
+### No environment? Download the zip
+
+Every release ships two Windows x64 zips that need neither Python nor conda:
+
+* `cs-net-5.0.0-win64-lite.zip` — no weights; the AI panel downloads them (665 MB)
+  the first time you click the banner;
+* `cs-net-5.0.0-win64-full.zip` — weights included, works offline.
+
+Unpack, double-click `cs-net.exe`, done. The map geometry is already unpacked in
+both, and the library/`config.json`/`.csz` live in the `data\` folder next to the
+exe, so moving the folder moves everything. Details:
+[packaging/README.md](packaging/README.md).
+
 ### Download the AI models
 
 The two checkpoints behind the AI panels are 665 MB together and do not belong in
@@ -106,6 +119,7 @@ tools/demo_extract/               .dem -> .csz extractor: per-tick, zstd, smoke/
 training/                         PyTorch models and trainers (what the AI panels load)
 scripts/training_data/            .csz -> task datasets for training
 scripts/                          Helpers: download_models.py, extract_maps.py, check_env.py, export_weights.py
+packaging/                        PyInstaller spec + zip script for the double-click Windows build
 maps/optimized_obj_files/         Decimated map geometry (.obj.zip — unpack with extract_maps.py)
 models/                           The two pinned checkpoints (git-ignored, downloaded)
 ```
@@ -124,6 +138,7 @@ reads smoke voxels and fire cells through a small Go side-channel for the fields
 | [tools/demo_extract/README.md](tools/demo_extract/README.md) | `.csz` field tree, sampling modes, smoke voxels, fire cells |
 | [tools/demo_extract/API.md](tools/demo_extract/API.md) | Field-level reference, measured magnitudes, pitfalls |
 | [scripts/training_data/README.md](scripts/training_data/README.md) | Writing a task, slicing samples, dataset pitfalls |
+| [packaging/README.md](packaging/README.md) | The double-click Windows build: spec, sizing, release workflow |
 
 ## Licensing
 

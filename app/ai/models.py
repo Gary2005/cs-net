@@ -29,13 +29,15 @@ from dataclasses import dataclass, fields as dataclass_fields
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+from .. import paths
+
+if str(paths.RESOURCES_DIR) not in sys.path:
+    sys.path.insert(0, str(paths.RESOURCES_DIR))
 
 #: 两个任务各自的产物根目录（`train.save_dir` 的两种写法都见过，这里只认这个）。
 #: 训练脚本默认是 `models/<task>/<时间戳>/`；网页用的扁平文件就摆在它旁边。
-MODELS_DIR = _REPO_ROOT / "models"
+#: 冻结态是 exe 旁边的 `models\\`（lite 版往这里下载），只读位置才退回数据目录。
+MODELS_DIR = paths.MODELS_DIR
 
 #: 网页固定使用的两个权重 —— **改这里 = 换版本**，不跟"哪个目录最新"走。
 #: 页面拿到的永远是这两个文件，没有模型选择器。配置读同名的 `.yaml`。

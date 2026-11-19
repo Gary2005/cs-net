@@ -37,7 +37,9 @@ _ENTITY_PANICS_RE = re.compile(r"entity_panics=(\d+)")
 
 HERE = Path(__file__).resolve().parent
 GO_DIR = HERE / "sidechannel_go"
-BINARY_NAME = "cs2sidechannel"
+#: `go build -o` 出来的名字。Windows 上必须带 `.exe`，否则 `is_file()` 找不到，
+#: 更糟的是找到了也执行不了（PE 加载器不认无扩展名的文件）。
+BINARY_NAME = "cs2sidechannel.exe" if os.name == "nt" else "cs2sidechannel"
 
 # 9 float32 + 1 byte per fire cell
 _CELL = struct.Struct("<9fB")

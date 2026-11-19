@@ -80,16 +80,19 @@ def _resolve_maps_dir(explicit: Optional[str]) -> Optional[Path]:
     """找地图 OBJ 目录。
 
     优先用命令行显式给的；否则依次尝试仓库内 ``maps/optimized_obj_files``、
+    exe 旁边（PyInstaller 打出来的包，地图和 exe 并排，不在 ``_internal`` 里）、
     隔壁 ``cs-net`` 仓库的同名目录。找不到时返回 None（前端会退化成
     一块空地 + 网格，不致命）。
     """
     candidates = []
     if explicit:
         candidates.append(Path(explicit).expanduser())
-    candidates += [
-        _PROJECT_ROOT / "maps" / "optimized_obj_files",
-        _PROJECT_ROOT.parent / "cs-net" / "maps" / "optimized_obj_files",
-    ]
+    candidates.append(_PROJECT_ROOT / "maps" / "optimized_obj_files")
+    if getattr(sys, "frozen", False):
+        candidates.append(
+            Path(sys.executable).resolve().parent / "maps" / "optimized_obj_files"
+        )
+    candidates.append(_PROJECT_ROOT.parent / "cs-net" / "maps" / "optimized_obj_files")
     for c in candidates:
         if c.is_dir() and any(c.glob("*.obj")):
             return c.resolve()

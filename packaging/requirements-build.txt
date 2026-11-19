@@ -1,0 +1,5 @@
+# Build-time only: PyInstaller pins.  Not shipped inside the zip.
+#
+# 6.16 (or newer) is needed for the `_internal/` onedir layout that
+# `app/paths.py` assumes (`_internal` holding templates / static / packages).
+pyinstaller==6.16.0

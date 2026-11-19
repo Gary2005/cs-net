@@ -28,6 +28,7 @@ function Step($name, $script) {
     }
 }
 
+Step 'paths (dev / frozen / %LOCALAPPDATA%)'          'app/tests/test_paths.py'
 Step 'library units (config / metadata / db / probe)' 'app/tests/test_library.py'
 Step 'radar transform + sampling'                     'app/tests/test_radar.py'
 Step 'player aggregation + steam avatars'             'app/tests/test_players.py'
@@ -48,6 +49,11 @@ Step 'model download (mirror fallback / resume / api)' 'app/tests/test_download_
 # two /api/library/maps* routes.  Every zip here is a few hundred bytes, so this
 # never unpacks the real 943 MB of map geometry.
 Step 'map unpacking (.part / progress / api)'            'app/tests/test_extract_maps.py'
+# The launcher and `--packaging-selftest`: this one really starts a server on a
+# random port and hits /healthz /library /replay /api/maps, so it is ~15 s slower
+# than the others -- but it is the only thing that catches "the entry point does
+# not come up", which otherwise only a player would ever see.
+Step 'desktop launcher + packaging selftest'             'app/tests/test_desktop.py'
 
 Write-Host ""
 if ($failed.Count -gt 0) {

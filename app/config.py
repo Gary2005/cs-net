@@ -15,6 +15,10 @@ where training data lives; the two have nothing to do with each other.  An
 install from before that split is carried over by
 :func:`app.db.migrate_legacy_data_dir`.
 
+打包成 exe 之后它们不在仓库里了：数据目录是 exe 旁边的 ``data\\``（绿色版）
+或 ``%LOCALAPPDATA%\\cs-net``，资源则在 ``_internal\\`` 里。规则全在
+:mod:`app.paths`，这里只是把算好的结果贴成模块常量 —— 下游照旧写 ``config.DATA_DIR``。
+
 The config is a plain JSON file read/written through :class:`Config`.  A
 ``threading.Lock`` guards read-modify-write so the watcher thread and an HTTP
 request cannot clobber each other.
@@ -30,12 +34,16 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from . import paths
+
 # ── paths ────────────────────────────────────────────────────────────────────
 
 APP_DIR = Path(__file__).resolve().parent
-ROOT = APP_DIR.parent
+#: 资源根：模板、静态资源、内置包。开发态是仓库根，冻结后是 exe 旁边的
+#: ``_internal\\``（见 :mod:`app.paths`）。
+ROOT = paths.RESOURCES_DIR
 
-DATA_DIR = APP_DIR / "data"
+DATA_DIR = paths.DATA_DIR
 #: What :data:`DATA_DIR` is when nothing has overridden it.  The migration in
 #: :func:`app.db.migrate_legacy_data_dir` compares against this, so a test that
 #: points ``DATA_DIR`` at a scratch directory can never be mistaken for a real
@@ -43,7 +51,8 @@ DATA_DIR = APP_DIR / "data"
 DEFAULT_DATA_DIR = DATA_DIR
 #: Where the library lived before it moved under ``app/``.  Only read by that
 #: same migration, which leaves the directory alone unless it really is a
-#: library -- a training-data ``data/`` has no ``demo_files`` table.
+#: library -- a training-data ``data/`` has no ``demo_files`` table.  冻结态下
+#: 这个路径不存在（它是 ``_internal\data``），迁移自然什么都不做。
 LEGACY_DATA_DIR = ROOT / "data"
 
 CONFIG_PATH = DATA_DIR / "config.json"
@@ -51,8 +60,8 @@ LIBRARY_DB = DATA_DIR / "library.db"
 CSZ_DIR = DATA_DIR / "csz"
 THUMB_DIR = DATA_DIR / "thumbs"
 AVATAR_DIR = DATA_DIR / "avatars"
-MAPS_DIR = ROOT / "maps" / "optimized_obj_files"
-EXAMPLES_DIR = ROOT / "examples"
+MAPS_DIR = paths.MAPS_DIR
+EXAMPLES_DIR = paths.EXAMPLES_DIR
 
 
 # ── demo sources ─────────────────────────────────────────────────────────────
