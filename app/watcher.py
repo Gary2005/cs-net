@@ -219,7 +219,16 @@ class DemoWatcher:
                 except Exception as exc:  # noqa: BLE001
                     errors.append(f"{path.name}：{type(exc).__name__}: {exc}")
 
-            self._snapshot = current
+            # `_snapshot` 记的是**已经处理过**的文件，不是"上一轮看到了什么"：
+            # 一个文件要连续两轮保持同一个 (size, mtime) 才算写完，所以还在
+            # 等确认的那些不能进 snapshot —— 以前这里直接 `= current`，于是
+            # 第二轮 poll 看不到任何"变化"，稳定门永远打不开，表现就是
+            # "demo 丢进监听目录永远不入库，只有手点扫描才会"。
+            handled = set(stable)
+            self._snapshot = {
+                p: sig for p, sig in current.items()
+                if p in handled or known.get(p) == sig
+            }
 
             auto = bool(cfg.get("auto_extract", True))
             queued: list[str] = []

@@ -528,6 +528,53 @@ def test_watcher_does_not_requeue() -> None:
         eq("a genuinely new file is still queued", w.status()["last_result"]["queued"], 1)
 
 
+def test_watcher_stability_gate() -> None:
+    """A file dropped into a watch root must be registered after two polls.
+
+    The gate exists so a half-copied ``.dem`` is not registered the instant it
+    appears (``(size, mtime)`` has to look the same on two consecutive polls).
+    It used to be impossible to pass: ``poll`` overwrote ``_snapshot`` with the
+    current listing every time, so the second poll saw "nothing changed" and the
+    file stayed pending forever -- the watcher found it (``found=1``) but never
+    registered it (``new=0``), and only a manual 扫描 did anything.
+    """
+    print("\nwatcher stability gate (no force)")
+    with scratch_env() as tmp:
+        root = Path(tmp) / "demos"
+        root.mkdir()
+        (root / "a.dem").write_bytes(b"x")
+
+        from app import watcher as watcher_mod
+
+        config.Config().update({
+            "watch_roots": [{"path": str(root), "depth": 1, "source": "本地",
+                             "enabled": True}],
+            "watch_enabled": True,
+            "auto_extract": True,
+        })
+
+        w = watcher_mod.DemoWatcher()
+        first = dict(w.poll())
+        eq("first poll sees the file", first["found"], 1)
+        eq("first poll registers nothing yet", first["new"], 0)
+        eq("the file is pending", w.status()["pending"], 1)
+
+        second = dict(w.poll())
+        eq("second poll registers it", second["new"], 1)
+        eq("nothing is pending any more", w.status()["pending"], 0)
+        eq("it was queued for extraction", second["queued"], 1)
+        eq("the row exists", db.list_demos()["total"], 1)
+
+        third = dict(w.poll())
+        eq("third poll does nothing new", third["new"], 0)
+
+        # A file that changes while pending just needs one more confirming poll.
+        (root / "b.dem").write_bytes(b"xx")
+        w.poll()
+        eq("changing file is pending", w.status()["pending"], 1)
+        eq("and registers on the next poll", w.poll()["new"], 1)
+
+
 def test_config_defaults() -> None:
     """New settings have to survive a config file written by an older build.
 
@@ -847,6 +894,7 @@ def main() -> int:
     test_scan_survives_garbage()
     test_restart_recovery()
     test_watcher_does_not_requeue()
+    test_watcher_stability_gate()
     test_config_defaults()
     test_migrate_legacy_data_dir()
     test_match_watched()
