@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="doc.players">cs-net — 玩家</title>
+<link rel="stylesheet" href="/static/css/topbar.css?v=20261117h">
+<link rel="stylesheet" href="/lib-static/css/library.css?v=20260928a">
+<link rel="stylesheet" href="/lib-static/css/players.css?v=20261117i">
+</head>
+<body>
+
+<div class="bg-glow glow-1"></div>
+<div class="bg-glow glow-2"></div>
+
+<!-- ══ 顶栏 ══════════════════════════════════════════════════════════ -->
+<header class="topbar">
+  <div class="brand">
+    <img src="/static/logo.svg" alt="cs-net" width="34" height="26">
+    <span class="brand-name">cs-<b>net</b></span>
+    <span class="brand-sub" data-i18n="common.nav.players">玩家</span>
+  </div>
+
+  <nav class="nav">
+    <a class="nav-link" href="/library" data-i18n="common.nav.library">Demo 库</a>
+    <span class="nav-link active" data-i18n="common.nav.players">玩家</span>
+    <a class="nav-link" href="/replay" data-i18n="common.nav.replay">可视化回放</a>
+  </nav>
+
+  <div class="tb-actions">
+    <span id="avatar-stat" class="avatar-stat"></span>
+    <button id="btn-sync-avatars" class="btn-glass"
+            data-i18n-title="player.index.sync.title"
+            title="从 Steam 拉取缺失或过期的头像"
+            data-i18n="player.index.sync">同步头像</button>
+  </div>
+</header>
+
+<!-- ══ 工具栏 ════════════════════════════════════════════════════════ -->
+<div class="toolbar">
+  <div class="search-wrap">
+    <input id="search" class="input search" type="search"
+           data-i18n-placeholder="player.index.search.ph"
+           placeholder="搜索游戏内名字 / Steam 昵称 / SteamID…"
+           autocomplete="off" spellcheck="false">
+    <div id="search-suggest" class="sg-box hidden"></div>
+  </div>
+
+  <select id="sort" class="input select">
+    <option value="matches" data-i18n="player.index.sort.matches">场次</option>
+    <option value="kd">K/D</option>
+    <option value="adr">ADR</option>
+    <option value="kills" data-i18n="player.index.sort.kills">总击杀</option>
+    <option value="last" data-i18n="player.index.sort.last">最近出现</option>
+    <option value="name" data-i18n="player.index.sort.name">名字</option>
+  </select>
+
+  <label class="chk" data-i18n-title="player.index.filter.title"
+         title="只显示命中「关注玩家」的人">
+    <input type="checkbox" id="filter-watched">
+    <span data-i18n="player.index.filter.watched">只看关注</span>
+  </label>
+
+  <span class="spacer"></span>
+  <span id="count" class="dim"></span>
+</div>
+
+<!-- ══ 内容 ══════════════════════════════════════════════════════════ -->
+<main id="content" class="content player-grid"></main>
+<footer id="pager" class="pager"></footer>
+
+<div id="toast" class="toast hidden"></div>
+
+<script type="module" src="/lib-static/js/players.js?v=20261117g"></script>
+</body>
+</html>

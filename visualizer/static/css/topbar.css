@@ -1,0 +1,103 @@
+/* ══════════════════════════════════════════════════════════════════════
+   cs-net — 顶栏（品牌块 + 导航 + 右侧动作区）
+
+   Demo 库 / 玩家 / 玩家档案 / 3D 回放 四个页面共用这一份。
+
+   之前顶栏在 library.css 和 style.css 里各写了一遍，回放页那份连导航都没
+   有 —— 一进回放页顶部菜单就消失，看着像跳到了另一个产品。共用一份之后
+   两边就没法再各改各的。
+
+   为什么放在 visualizer/static 下：**只有这个 static 目录两台服务器都会
+   挂**。`python -m app.server` 会把 visualizer 整个挂进来（`/static/...`），
+   而 `python visualizer/server.py` 单独跑时也只有它 —— 回放页在独立模式下
+   也必须能拿到这份样式。库页面本来就一直在用 `/static/logo.svg`，同理。
+
+   颜色变量（--cyan / --text-dim / --panel-border …）由各页自己的 CSS 声明；
+   两边的 :root 是同一套值。
+   ══════════════════════════════════════════════════════════════════════ */
+
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  /* flex: none 是给回放页写的：那一页的 body 是纵向 flex，顶栏和页面内容
+     分高度。库页面 body 不是 flex，这一行不生效，留着无妨。 */
+  flex: none;
+  display: flex; align-items: center; gap: 18px;
+  padding: 12px 22px;
+  background: rgba(7, 11, 22, 0.86);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-name { font-size: 17px; letter-spacing: 0.4px; white-space: nowrap; }
+.brand-name b { color: var(--cyan); }
+.brand-sub {
+  font-size: 12px; color: var(--text-dim); white-space: nowrap;
+  padding: 2px 8px; border-radius: 20px;
+  background: rgba(56, 189, 248, 0.10); border: 1px solid var(--panel-border);
+}
+
+.nav { display: flex; gap: 6px; margin-left: 6px; }
+.nav-link {
+  font-size: 13.5px; color: var(--text-dim); text-decoration: none;
+  padding: 6px 13px; border-radius: 8px; transition: all 0.15s;
+  white-space: nowrap;
+}
+/* 当前页那项是 <span> 不是 <a>：点了也只是重载自己，回放页还会丢掉
+   ?batch=。所以它只标状态，不参与 hover。 */
+.nav-link.active { color: var(--cyan-bright); background: rgba(56, 189, 248, 0.12); }
+a.nav-link:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+
+.tb-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+/* ── 语言开关（中文 | EN）────────────────────────────────────────────────
+   结构由 i18n/index.js 插进 `.tb-actions`，四个页面共用这一份样式 —— 放在
+   这里而不是各页的 CSS，理由和顶栏本身一样：只有 visualizer/static 是两个
+   服务器都会挂的目录。
+
+   选中态用实心 cyan + 深色字：顶栏右侧已经有一排半透明按钮（扫描 / 任务 /
+   设置），语言开关再做成同款描边就分不出"现在选的是哪个"了。 */
+.lang-switch {
+  display: flex; align-items: center; gap: 2px;
+  padding: 2px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+}
+.lang-switch button {
+  appearance: none; border: 0; cursor: pointer;
+  font-family: inherit; font-size: 12px; line-height: 1;
+  color: var(--text-dim); background: transparent;
+  padding: 5px 9px; border-radius: 999px;
+  transition: color 0.15s, background 0.15s;
+}
+.lang-switch button:hover { color: var(--text); background: rgba(255, 255, 255, 0.07); }
+.lang-switch button[aria-pressed="true"] {
+  color: #06101f; background: var(--cyan); font-weight: 600;
+}
+.lang-switch button:focus-visible { outline: 2px solid var(--cyan-bright); outline-offset: 1px; }
+
+/* ── 悬停解释（统计表头上的 `?`）───────────────────────────────────────
+   由 `visualizer/static/js/tips.js` 往 body 尾部插一个 `.stat-tip`。放在
+   topbar.css 是因为**四个页面都加载它**，而回放页和玩家页的统计表都要这一份；
+   写进各页自己的 CSS 就会有两份能漂移的样式。 */
+.stat-tip {
+  position: fixed; z-index: 1000; left: 0; top: 0;
+  max-width: min(420px, 90vw);
+  padding: 8px 11px; border-radius: 9px;
+  font-size: 12px; line-height: 1.65; font-weight: 400;
+  color: rgba(226, 238, 255, 0.94);
+  background: rgba(9, 15, 26, 0.97);
+  border: 1px solid rgba(110, 160, 255, 0.28);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.55);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 0.12s ease;
+  white-space: normal;
+}
+.stat-tip.show { opacity: 1; visibility: visible; }
+.has-tip { cursor: help; }
+.has-tip .tip-q {
+  display: inline-block; margin-left: 3px;
+  font-size: 9px; line-height: 1; vertical-align: super;
+  color: rgba(143, 163, 196, 0.75);
+}
+.has-tip:hover { color: var(--cyan-bright); }

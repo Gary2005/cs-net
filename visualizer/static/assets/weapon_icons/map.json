@@ -1,0 +1,192 @@
+{
+  "AK-47": [
+    "weapon_ak47_png.png"
+  ],
+  "AUG": [
+    "weapon_aug_png.png"
+  ],
+  "AWP": [
+    "weapon_awp_png.png"
+  ],
+  "Bayonet": [
+    "weapon_bayonet_png.png"
+  ],
+  "Bowie Knife": [
+    "weapon_knife_survival_bowie_png.png"
+  ],
+  "Butterfly Knife": [
+    "weapon_knife_butterfly_png.png"
+  ],
+  "C4 Explosive": [
+    "weapon_c4_png.png"
+  ],
+  "Classic Knife": [
+    "weapon_knife_css_png.png"
+  ],
+  "Decoy Grenade": [
+    "weapon_decoy_png.png"
+  ],
+  "Desert Eagle": [
+    "weapon_deagle_png.png"
+  ],
+  "Dual Berettas": [
+    "weapon_elite_png.png"
+  ],
+  "FAMAS": [
+    "weapon_famas_png.png"
+  ],
+  "Falchion Knife": [
+    "weapon_knife_falchion_png.png"
+  ],
+  "Five-SeveN": [
+    "weapon_fiveseven_png.png"
+  ],
+  "Flashbang": [
+    "weapon_flashbang_png.png"
+  ],
+  "Flip Knife": [
+    "weapon_knife_flip_png.png"
+  ],
+  "G3SG1": [
+    "weapon_g3sg1_png.png"
+  ],
+  "Galil AR": [
+    "weapon_galilar_png.png"
+  ],
+  "Glock-18": [
+    "weapon_glock_png.png"
+  ],
+  "Gut Knife": [
+    "weapon_knife_gut_png.png"
+  ],
+  "High Explosive Grenade": [
+    "weapon_hegrenade_png.png"
+  ],
+  "Huntsman Knife": [
+    "weapon_knife_tactical_png.png"
+  ],
+  "Incendiary Grenade": [
+    "weapon_incgrenade_png.png"
+  ],
+  "Karambit": [
+    "weapon_knife_karambit_png.png"
+  ],
+  "Knife": [
+    "weapon_knife_png.png",
+    "weapon_knife_t_png.png"
+  ],
+  "Kukri Knife": [
+    "weapon_knife_kukri_png.png"
+  ],
+  "M249": [
+    "weapon_m249_png.png"
+  ],
+  "M4A1-S": [
+    "weapon_m4a1_silencer_png.png"
+  ],
+  "M4A4": [
+    "weapon_m4a1_png.png"
+  ],
+  "M9 Bayonet": [
+    "weapon_knife_m9_bayonet_png.png"
+  ],
+  "MAC-10": [
+    "weapon_mac10_png.png"
+  ],
+  "MAG-7": [
+    "weapon_mag7_png.png"
+  ],
+  "MP5-SD": [
+    "weapon_mp5sd_png.png"
+  ],
+  "MP7": [
+    "weapon_mp7_png.png"
+  ],
+  "MP9": [
+    "weapon_mp9_png.png"
+  ],
+  "Medi-Shot": [
+    "weapon_healthshot_png.png"
+  ],
+  "Molotov": [
+    "weapon_molotov_png.png"
+  ],
+  "Navaja Knife": [
+    "weapon_knife_gypsy_jackknife_png.png"
+  ],
+  "Negev": [
+    "weapon_negev_png.png"
+  ],
+  "Nomad Knife": [
+    "weapon_knife_outdoor_png.png"
+  ],
+  "Nova": [
+    "weapon_nova_png.png"
+  ],
+  "P2000": [
+    "weapon_hkp2000_png.png"
+  ],
+  "P250": [
+    "weapon_p250_png.png"
+  ],
+  "P90": [
+    "weapon_p90_png.png"
+  ],
+  "PP-Bizon": [
+    "weapon_bizon_png.png"
+  ],
+  "Paracord Knife": [
+    "weapon_knife_cord_png.png"
+  ],
+  "R8 Revolver": [
+    "weapon_revolver_png.png"
+  ],
+  "SCAR-20": [
+    "weapon_scar20_png.png"
+  ],
+  "SG 553": [
+    "weapon_sg556_png.png"
+  ],
+  "SSG 08": [
+    "weapon_ssg08_png.png"
+  ],
+  "Sawed-Off": [
+    "weapon_sawedoff_png.png"
+  ],
+  "Shadow Daggers": [
+    "weapon_knife_push_png.png"
+  ],
+  "Skeleton Knife": [
+    "weapon_knife_skeleton_png.png"
+  ],
+  "Smoke Grenade": [
+    "weapon_smokegrenade_png.png"
+  ],
+  "Stiletto Knife": [
+    "weapon_knife_stiletto_png.png"
+  ],
+  "Survival Knife": [
+    "weapon_knife_canis_png.png"
+  ],
+  "Talon Knife": [
+    "weapon_knife_widowmaker_png.png"
+  ],
+  "Tec-9": [
+    "weapon_tec9_png.png"
+  ],
+  "UMP-45": [
+    "weapon_ump45_png.png"
+  ],
+  "USP-S": [
+    "weapon_usp_silencer_png.png"
+  ],
+  "Ursus Knife": [
+    "weapon_knife_ursus_png.png"
+  ],
+  "XM1014": [
+    "weapon_xm1014_png.png"
+  ],
+  "Zeus x27": [
+    "weapon_taser_png.png"
+  ]
+}

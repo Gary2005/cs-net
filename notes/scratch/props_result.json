@@ -1,0 +1,4469 @@
+{
+ "X": {
+  "status": "ok",
+  "returned_cols": [
+   "X",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "X": {
+    "dtype": "float32",
+    "nonnull": 1000,
+    "sample": [
+     "809.0216674804688",
+     "201.4737548828125",
+     "422.34796142578125"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "Y": {
+  "status": "ok",
+  "returned_cols": [
+   "Y",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "Y": {
+    "dtype": "float32",
+    "nonnull": 1000,
+    "sample": [
+     "2194.514404296875",
+     "1378.758544921875",
+     "1763.549072265625"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "Z": {
+  "status": "ok",
+  "returned_cols": [
+   "Z",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "Z": {
+    "dtype": "float32",
+    "nonnull": 1000,
+    "sample": [
+     "136.0312957763672",
+     "105.22945404052734",
+     "134.03123474121094"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "x": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "y": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "z": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "origin": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "vecX": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "vecY": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "vecZ": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_vecX": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_vecY": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_vecZ": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "yaw": {
+  "status": "ok",
+  "returned_cols": [
+   "yaw",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "yaw": {
+    "dtype": "float32",
+    "nonnull": 1000,
+    "sample": [
+     "-140.07876586914062",
+     "75.88497924804688",
+     "99.57183837890625"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "pitch": {
+  "status": "ok",
+  "returned_cols": [
+   "pitch",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "pitch": {
+    "dtype": "float32",
+    "nonnull": 1000,
+    "sample": [
+     "8.046798706054688",
+     "-0.192596435546875",
+     "1.351654052734375"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "roll": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_angEyeAngles": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "eye_angles": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "ang_rotation": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "health": {
+  "status": "ok",
+  "returned_cols": [
+   "health",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "health": {
+    "dtype": "int32",
+    "nonnull": 1000,
+    "sample": [
+     "0",
+     "95",
+     "60"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iHealth": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "armor": {
+  "status": "ok",
+  "returned_cols": [
+   "armor",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "armor": {
+    "dtype": "int32",
+    "nonnull": 1000,
+    "sample": [
+     "0",
+     "97",
+     "100"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_ArmorValue": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "helmet": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "has_helmet": {
+  "status": "ok",
+  "returned_cols": [
+   "has_helmet",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "has_helmet": {
+    "dtype": "bool",
+    "nonnull": 1000,
+    "sample": [
+     "False",
+     "True",
+     "True"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bHasHelmet": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "has_defuser": {
+  "status": "ok",
+  "returned_cols": [
+   "has_defuser",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "has_defuser": {
+    "dtype": "bool",
+    "nonnull": 1000,
+    "sample": [
+     "False",
+     "False",
+     "False"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bHasDefuser": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "is_alive": {
+  "status": "ok",
+  "returned_cols": [
+   "is_alive",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "is_alive": {
+    "dtype": "bool",
+    "nonnull": 1000,
+    "sample": [
+     "False",
+     "True",
+     "True"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bPawnIsAlive": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "life_state": {
+  "status": "ok",
+  "returned_cols": [
+   "life_state",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "life_state": {
+    "dtype": "uint32",
+    "nonnull": 1000,
+    "sample": [
+     "2",
+     "0",
+     "0"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_lifeState": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "is_defusing": {
+  "status": "ok",
+  "returned_cols": [
+   "is_defusing",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "is_defusing": {
+    "dtype": "bool",
+    "nonnull": 1000,
+    "sample": [
+     "False",
+     "False",
+     "False"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bIsDefusing": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "is_planting": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "is_scoped": {
+  "status": "ok",
+  "returned_cols": [
+   "is_scoped",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "is_scoped": {
+    "dtype": "bool",
+    "nonnull": 1000,
+    "sample": [
+     "False",
+     "False",
+     "False"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bIsScoped": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "is_walking": {
+  "status": "ok",
+  "returned_cols": [
+   "is_walking",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "is_walking": {
+    "dtype": "bool",
+    "nonnull": 1000,
+    "sample": [
+     "False",
+     "False",
+     "False"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bIsWalking": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "is_airborne": {
+  "status": "ok",
+  "returned_cols": [
+   "is_airborne",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "is_airborne": {
+    "dtype": "bool",
+    "nonnull": 1000,
+    "sample": [
+     "False",
+     "False",
+     "False"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bIsAirborne": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "ducking": {
+  "status": "ok",
+  "returned_cols": [
+   "ducking",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "ducking": {
+    "dtype": "bool",
+    "nonnull": 1000,
+    "sample": [
+     "False",
+     "False",
+     "False"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bDucking": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_flDuckAmount": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "balance": {
+  "status": "ok",
+  "returned_cols": [
+   "balance",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "balance": {
+    "dtype": "int32",
+    "nonnull": 1000,
+    "sample": [
+     "3300",
+     "150",
+     "1900"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iAccount": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "money": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "equipment_value": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_unCurrentEquipmentValue": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_unRoundStartEquipmentValue": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_unFreezetimeEndEquipmentValue": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "cash_spent": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iCashSpentThisRound": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "active_weapon": {
+  "status": "ok",
+  "returned_cols": [
+   "active_weapon",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "active_weapon": {
+    "dtype": "uint32",
+    "nonnull": 1000,
+    "sample": [
+     "16777215",
+     "11584260",
+     "14664453"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_hActiveWeapon": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "active_weapon_name": {
+  "status": "ok",
+  "returned_cols": [
+   "active_weapon_name",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "active_weapon_name": {
+    "dtype": "object",
+    "nonnull": 900,
+    "sample": [
+     "'MAC-10'",
+     "'AK-47'",
+     "'MAC-10'"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "weapon_name": {
+  "status": "ok",
+  "returned_cols": [
+   "weapon_name",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "weapon_name": {
+    "dtype": "object",
+    "nonnull": 900,
+    "sample": [
+     "'MAC-10'",
+     "'AK-47'",
+     "'MAC-10'"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "inventory": {
+  "status": "ok",
+  "returned_cols": [
+   "inventory",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "inventory": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "[]",
+     "['knife_t', 'Glock-18', 'MAC-10', 'Flashbang']",
+     "['Skeleton Knife', 'Glock-18', 'AK-47', 'Smoke Grenade']"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_hMyWeapons": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "inventory_as_ids": {
+  "status": "ok",
+  "returned_cols": [
+   "inventory_as_ids",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "inventory_as_ids": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "[]",
+     "[59, 4, 17, 43]",
+     "[525, 4, 7, 45]"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "weapons": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iItemDefinitionIndex": {
+  "status": "ok",
+  "returned_cols": [
+   "m_iItemDefinitionIndex",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "m_iItemDefinitionIndex": {
+    "dtype": "float64",
+    "nonnull": 900,
+    "sample": [
+     "17.0",
+     "7.0",
+     "17.0"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "current_weapon": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "ammo": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iAmmo": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "clip1": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iClip1": {
+  "status": "ok",
+  "returned_cols": [
+   "m_iClip1",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "m_iClip1": {
+    "dtype": "float64",
+    "nonnull": 900,
+    "sample": [
+     "30.0",
+     "20.0",
+     "30.0"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iClip2": {
+  "status": "ok",
+  "returned_cols": [
+   "m_iClip2",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "m_iClip2": {
+    "dtype": "float64",
+    "nonnull": 900,
+    "sample": [
+     "0.0",
+     "0.0",
+     "0.0"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "flash_duration": {
+  "status": "ok",
+  "returned_cols": [
+   "flash_duration",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "flash_duration": {
+    "dtype": "float32",
+    "nonnull": 1000,
+    "sample": [
+     "0.0",
+     "0.0",
+     "0.0"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_flFlashDuration": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_flFlashMaxAlpha": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bFlashing": {
+  "status": "ok",
+  "returned_cols": [
+   "m_bFlashing",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "m_bFlashing": {
+    "dtype": "object",
+    "nonnull": 900,
+    "sample": [
+     "False",
+     "False",
+     "False"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "velocity": {
+  "status": "ok",
+  "returned_cols": [
+   "velocity",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "velocity": {
+    "dtype": "float32",
+    "nonnull": 980,
+    "sample": [
+     "0.0",
+     "212.8228302001953",
+     "0.0"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_vecVelocity": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_vecBaseVelocity": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "speed": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_fFlags": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "flags": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bInBuyZone": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bInBombZone": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_szLastPlaceName": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "last_place_name": {
+  "status": "ok",
+  "returned_cols": [
+   "last_place_name",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "last_place_name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'Banana'",
+     "'Banana'",
+     "'Banana'"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iShotsFired": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "shots_fired": {
+  "status": "ok",
+  "returned_cols": [
+   "shots_fired",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "shots_fired": {
+    "dtype": "int32",
+    "nonnull": 1000,
+    "sample": [
+     "15",
+     "0",
+     "0"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_flVelocityModifier": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_flFallVelocity": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bSpotted": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "team_num": {
+  "status": "ok",
+  "returned_cols": [
+   "team_num",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "team_num": {
+    "dtype": "uint32",
+    "nonnull": 1000,
+    "sample": [
+     "3",
+     "2",
+     "2"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iTeamNum": {
+  "status": "ok",
+  "returned_cols": [
+   "m_iTeamNum",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "m_iTeamNum": {
+    "dtype": "float64",
+    "nonnull": 900,
+    "sample": [
+     "2.0",
+     "2.0",
+     "2.0"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "team_number": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "player_name": {
+  "status": "ok",
+  "returned_cols": [
+   "player_name",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "player_name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iszPlayerName": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iPawnHealth": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iPawnArmor": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bPawnHasDefuser": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bPawnHasHelmet": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "ping": {
+  "status": "ok",
+  "returned_cols": [
+   "ping",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "ping": {
+    "dtype": "uint32",
+    "nonnull": 1000,
+    "sample": [
+     "52",
+     "16",
+     "18"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iPing": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "score": {
+  "status": "ok",
+  "returned_cols": [
+   "score",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "score": {
+    "dtype": "int32",
+    "nonnull": 1000,
+    "sample": [
+     "7",
+     "4",
+     "13"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iScore": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "kills": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "deaths": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "assists": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_nTickBase": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "tick_base": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iCompetitiveRanking": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_szClan": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "is_bomb_planted": {
+  "status": "ok",
+  "returned_cols": [
+   "is_bomb_planted",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "is_bomb_planted": {
+    "dtype": "bool",
+    "nonnull": 1000,
+    "sample": [
+     "False",
+     "False",
+     "False"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bBombPlanted": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "is_freeze_period": {
+  "status": "ok",
+  "returned_cols": [
+   "is_freeze_period",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "is_freeze_period": {
+    "dtype": "bool",
+    "nonnull": 1000,
+    "sample": [
+     "False",
+     "False",
+     "False"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bFreezePeriod": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "game_phase": {
+  "status": "ok",
+  "returned_cols": [
+   "game_phase",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "game_phase": {
+    "dtype": "int32",
+    "nonnull": 1000,
+    "sample": [
+     "2",
+     "2",
+     "2"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_gamePhase": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iRoundTime": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "round_time": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_eRoundWinReason": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iRoundWinStatus": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_totalRoundsPlayed": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_iRoundStartRoundNumber": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_nRoundStartCount": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_fRoundStartTime": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "is_warmup": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bWarmupPeriod": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bFireIsBurning": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_fireCount": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_nFireCount": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_firePositions": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_fireParentPositions": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_nInfernoType": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_nFireLifetime": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_nFireEffectTickBegin": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_BurnNormal": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_fireXDelta": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_fireYDelta": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_fireZDelta": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bFireIsBurning_": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bDidSmokeEffect": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_nSmokeEffectTickBegin": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_vSmokeDetonationPos": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_vSmokeColor": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_flDetonateTime": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_nVoxelFrameDataSize": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_VoxelFrameData": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_nVoxelUpdate": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_bIsIncGrenade": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_flThrowStrength": {
+  "status": "ok",
+  "returned_cols": [
+   "m_flThrowStrength",
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "m_flThrowStrength": {
+    "dtype": "float32",
+    "nonnull": 113,
+    "sample": [
+     "0.0",
+     "0.0",
+     "0.0"
+    ]
+   },
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_vInitialPosition": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_vInitialVelocity": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_hThrower": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_nExplodeEffectTickBegin": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ },
+ "m_vecExplodeEffectOrigin": {
+  "status": "ok",
+  "returned_cols": [
+   "steamid",
+   "name"
+  ],
+  "details": {
+   "steamid": {
+    "dtype": "uint64",
+    "nonnull": 1000,
+    "sample": [
+     "76561199551992959",
+     "76561198865544189",
+     "76561199227535633"
+    ]
+   },
+   "name": {
+    "dtype": "object",
+    "nonnull": 1000,
+    "sample": [
+     "'音驹第一突破研磨'",
+     "'derekftq'",
+     "'xyf007'"
+    ]
+   }
+  }
+ }
+}

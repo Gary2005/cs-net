@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aim · 训练数据可视化</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">◎</span>
+    <div class="brand-text">
+      <h1>aim · 训练数据可视化</h1>
+      <p class="sub mono" id="data-dir">正在扫描 data/demos/prepared/aim …</p>
+    </div>
+  </div>
+  <div class="picker">
+    <label class="sr-only" for="sample-select">选择 npz</label>
+    <select id="sample-select" title="选择一个 npz 样本"></select>
+    <button id="prev" class="icon-btn" title="上一个样本 (Alt+←)">◀</button>
+    <button id="next" class="icon-btn" title="下一个样本 (Alt+→)">▶</button>
+    <button id="rescan" class="ghost-btn" title="重新扫描磁盘">重新扫描</button>
+  </div>
+</header>
+
+<div id="warning-bar" class="warning-bar" hidden></div>
+<div id="loading" class="loading" hidden><div class="spinner"></div><span>读取 npz …</span></div>
+
+<main>
+
+  <!-- ① 样本概览 -->
+  <section class="panel meta-panel">
+    <div class="meta-title">
+      <h2 id="sample-name">未选择样本</h2>
+      <span id="sample-path" class="mono dim"></span>
+    </div>
+    <div class="chips" id="meta-chips"></div>
+  </section>
+
+  <!-- ② 逐帧第一人称 -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>逐帧视角 <span class="dim">A / B 各自的第一人称 · 全场存活玩家都画</span></h2>
+      <div class="frame-controls">
+        <button id="to-first" class="icon-btn" title="第一帧 (Home)">⏮</button>
+        <button id="step-back" class="icon-btn" title="上一帧 (←)">−1</button>
+        <button id="play" class="icon-btn play" title="播放 / 暂停 (空格)">▶</button>
+        <button id="step-fwd" class="icon-btn" title="下一帧 (→)">+1</button>
+        <button id="to-last" class="icon-btn" title="最后一帧 (End)">⏭</button>
+        <span id="frame-readout" class="mono frame-readout">— / —</span>
+        <select id="speed" title="播放速度">
+          <option value="0.1">0.1×</option>
+          <option value="0.25">0.25×</option>
+          <option value="0.5" selected>0.5×</option>
+          <option value="1">1×</option>
+          <option value="2">2×</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="pov-grid">
+      <div class="pov">
+        <div class="pov-head">
+          <span class="tag tag-atk">A</span>
+          <span>击杀者 A 的第一人称</span>
+          <span class="dim mono" id="atk-label"></span>
+        </div>
+        <canvas id="canvas-atk" width="512" height="384"></canvas>
+        <div class="hud mono" id="hud-atk"></div>
+        <div class="raw-block">
+          <div class="raw-caption mono">raw <span id="raw-count-atk">20</span> 维 · 文件原值 [0,1]</div>
+          <div class="raw-strip mono" id="raw-strip-atk"
+               title="AIM_FEATURES 的原始 [0,1] 值；每格上方是列下标，悬停看列名，底部细条长度 = 原值"></div>
+        </div>
+      </div>
+      <div class="pov">
+        <div class="pov-head">
+          <span class="tag tag-tgt">B</span>
+          <span>受害者 B 的第一人称</span>
+          <span class="dim mono" id="tgt-label"></span>
+        </div>
+        <canvas id="canvas-tgt" width="512" height="384"></canvas>
+        <div class="hud mono" id="hud-tgt"></div>
+        <div class="raw-block">
+          <div class="raw-caption mono">raw <span id="raw-count-tgt">20</span> 维 · 文件原值 [0,1]</div>
+          <div class="raw-strip mono" id="raw-strip-tgt"
+               title="AIM_FEATURES 的原始 [0,1] 值；每格上方是列下标，悬停看列名，底部细条长度 = 原值"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline">
+      <div class="timeline-head">
+        <span class="mono" id="time-readout">t = 0.000 s</span>
+        <span class="dim small" id="timeline-hint">拖拽进度条查看每一帧；轨迹上的红点是开枪帧</span>
+      </div>
+      <div class="slider-wrap">
+        <div id="shot-ticks" class="shot-ticks" aria-hidden="true"></div>
+        <input id="frame-slider" type="range" min="0" max="0" value="0" step="1">
+      </div>
+      <div class="timeline-foot">
+        <span class="dim mono">0.000 s</span>
+        <span class="dim mono" id="time-end">0.000 s</span>
+      </div>
+    </div>
+
+    <div class="opts">
+      <label><input type="checkbox" id="opt-trail" checked> 准星轨迹</label>
+      <label><input type="checkbox" id="opt-labels" checked> 开枪时间</label>
+      <label><input type="checkbox" id="opt-boxes" checked> 包围盒</label>
+      <label><input type="checkbox" id="opt-grid" checked> 地面网格</label>
+      <span class="dim small" id="trail-note"></span>
+    </div>
+    <p class="dim small legend-line">
+      视角 = 等角距 <b>90° × 73.74°</b>；准星在画面正中，轨迹是<b>整段窗口</b>的 yaw/pitch
+      相对当前帧的偏移。橙盒 = 敌方（含 A/B 之外的其他人），暗青虚线 = 队友；
+      盒子上方的 <code>烟</code> / <code>墙</code> 标记是<b>当前帧</b>从观察者眼睛看过去的遮挡结果
+      （<code>obstruction</code>）。A / B 本人的红色 target 盒仍然用 <code>d.atk</code> /
+      <code>d.tgt</code> 的逐帧 phys。
+    </p>
+  </section>
+
+  <!-- ③ 模型预测 -->
+  <section class="panel" id="pred-panel">
+    <div class="panel-head">
+      <h2>模型预测 <span class="dim">每个点 = 看完第 t 帧时的预测</span></h2>
+      <span class="mono dim" id="pred-model">模型信息加载中 …</span>
+    </div>
+    <p class="dim small pred-note" id="pred-note"></p>
+    <div class="pred-grid">
+      <div class="pred-chart">
+        <canvas id="pred-canvas" width="1120" height="270"></canvas>
+      </div>
+      <div class="pred-side">
+        <div class="pred-stats">
+          <div class="pred-stat">
+            <span class="k">第 1 帧</span>
+            <b id="pred-first">—</b>
+            <span class="s">最早的一个点</span>
+          </div>
+          <div class="pred-stat">
+            <span class="k">当前帧</span>
+            <b id="pred-cur">—</b>
+            <span class="s" id="pred-cur-s">—</span>
+          </div>
+          <div class="pred-stat">
+            <span class="k">看完整个窗口</span>
+            <b id="pred-last">—</b>
+            <span class="s" id="pred-last-s">—</span>
+          </div>
+          <div class="pred-stat">
+            <span class="k">首次 ≥ 50%</span>
+            <b id="pred-cross">—</b>
+            <span class="s" id="pred-cross-s">—</span>
+          </div>
+        </div>
+        <div class="pred-rows mono" id="pred-rows"></div>
+      </div>
+    </div>
+    <p class="dim small legend-line">
+      序列是按帧拼的 <code>[A_t] [B_t] [PRED_t]</code>，<b>因果注意力</b>让某个预测点
+      只看得到它之前的东西，所以一条样本<b>一次前向</b>就给出 <code>T</code> 个预测点：
+      第 <code>t</code> 列看完了第 <code>0..t</code> 帧（= 拖到第 <code>t</code> 帧时的
+      "临门一脚"）。<b>没有</b>"一帧都没看到"那一列 —— 那时模型还不知道 A、B 是谁
+      （身份只存在于逐帧 token 里）。
+      主曲线是 <b>P(A 击杀 B)</b>（磁盘上 A 就是击杀者，这里不做 A/B 随机对调）；
+      虚线是反过来问 <b>P(B 击杀 A)</b> —— 这对人恰好有一个击杀了另一个，
+      所以两条线应当关于 <b>0.5 镜像</b>（<code>p + p′ ≈ 1</code>），偏得越多说明模型
+      越不自洽。
+    </p>
+  </section>
+
+  <!-- ④ 逐帧全场：俯视雷达 + 炸弹 / 道具 / 玩家表 -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>逐帧全场 <span class="dim">当前帧 10 名玩家 · 俯视雷达与逐帧表</span></h2>
+      <span class="dim small"><code>ctx_player</code> · <code>ctx_projectile</code> · <code>global_feat</code></span>
+    </div>
+    <div class="global-grid">
+      <div class="radar-card">
+        <canvas id="radar" width="640" height="640"></canvas>
+        <div class="radar-legend" id="radar-legend"></div>
+      </div>
+      <div class="global-tables">
+        <div class="global-block">
+          <h3>global_feat <span class="dim">第 <b id="bomb-frame">0</b> 帧 · 炸弹 / 回合时间</span></h3>
+          <table class="kv" id="bomb-table"></table>
+          <p class="dim small" id="bomb-note"></p>
+        </div>
+        <div class="global-block">
+          <h3>ctx_projectile <span class="dim">第 <b id="proj-frame">0</b> 帧 · 生效 / 飞行中的道具</span></h3>
+          <div class="table-scroll short">
+            <table class="grid-table" id="proj-table"></table>
+          </div>
+        </div>
+        <div class="global-block">
+          <h3>ctx_player <span class="dim">第 <b id="ctx-frame">0</b> 帧 · 全场 10 名玩家</span></h3>
+          <div class="table-scroll mid">
+            <table class="grid-table ctx-table" id="ctx-table"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑤ 遮挡矩阵 -->
+  <section class="panel" id="obstr-panel">
+    <div class="panel-head">
+      <h2>遮挡矩阵 <span class="dim">当前帧 · 行 i 的眼睛看列 j 的 8 个包围盒顶点</span></h2>
+      <span class="mono obstr-readout" id="obstr-readout">—</span>
+    </div>
+    <div class="obstr-grid">
+      <div class="obstr-matrix">
+        <table class="obstr-table" id="obstr-table"></table>
+      </div>
+      <div class="obstr-side">
+        <div class="obstr-legend">
+          <span><i class="sw o0"></i>0 通</span>
+          <span><i class="sw o1"></i>1 烟</span>
+          <span><i class="sw o2"></i>2 墙</span>
+          <span><i class="sw ofov"></i>没挡住，但 i 没朝那边看</span>
+          <span><i class="sw odead"></i>死人行列</span>
+          <span><i class="sw ocross"></i>A ↔ B</span>
+        </div>
+        <p class="dim small obstr-note" id="obstr-note">
+          有方向：<code>[i][j]</code> 是 i 看 j，和 <code>[j][i]</code> 可以不同。
+          行 / 列标题上的 <span class="hd-a">A</span> / <span class="hd-b">B</span> 是击杀者 / 受害者；
+          死人行列整行整列按 <code>mask == 0</code> 变暗。
+          ⚠ <b>这里只回答"挡不挡"，不回答"看不看得见"</b> —— 图中<b>斜线格</b>就是
+          "中间没有东西，但观察者正背对着"，<code>通</code> 不等于看得见。
+        </p>
+        <div class="obstr-timeline">
+          <div class="obstr-timeline-head">
+            <span class="dim small">A → B 随帧变化（0 通 / 1 烟 / 2 墙，点击色带跳帧）</span>
+            <span class="mono small" id="obstr-time-readout">—</span>
+          </div>
+          <canvas id="obstr-timeline" width="960" height="56"></canvas>
+          <div class="obstr-timeline-foot">
+            <span class="dim mono small">0.000 s</span>
+            <span class="dim mono small" id="obstr-time-end">0.000 s</span>
+          </div>
+        </div>
+        <div class="obstr-stats mono" id="obstr-stats"></div>
+      </div>
+    </div>
+    <p class="dim small legend-line">
+      每一格是<b>这一帧</b>从行玩家<b>眼睛</b>看向列玩家<b>包围盒 8 个顶点</b>的射线结果
+      （半宽 16 HU、高 72 站 / 54 蹲，眼高 <code>64.0938 − 18·crouch</code>），取 8 个顶点里
+      <b>最轻</b>的那个：<b>0 = 通</b>（至少露出一个角）、<b>1 = 被烟挡</b>、<b>2 = 被地图墙挡</b>。
+      这是<b>逐帧</b>的量，拖进度条整张矩阵会跟着变；对角线（自己看自己）不采样，画成暗格。
+      A / B 的行列用亮色标题 + 单格描边标出来，交叉的两格（A 看 B / B 看 A）加黄色描边。
+      <b>斜线格</b> = 没挡住，但观察者没朝那边看（视野由 <code>yaw/pitch</code> 决定，
+      <b>不进</b> <code>obstruction</code>），所以 <code>通</code> 只能是"中间是空的"，
+      "看不看得见"要看右上角那行 <code>A 视野内 / 背对</code> 的读数。
+      时间轴色带就是 <code>obstruction[t][A][B]</code>，点击可以跳到那一帧。
+    </p>
+  </section>
+
+  <!-- ⑥ 当前帧特征 -->
+  <section class="panel">
+    <div class="panel-head">
+      <h2>当前帧特征 <span class="dim">原值 = 文件里的 [0,1]；物理值 = 逆变换</span></h2>
+      <span class="mono dim" id="frame-keyinfo"></span>
+    </div>
+    <div class="table-scroll feat-scroll">
+      <table class="feat-table" id="feat-table">
+        <thead>
+          <tr>
+            <th>特征</th>
+            <th>A 原值</th>
+            <th>A 物理值</th>
+            <th>B 原值</th>
+            <th>B 物理值</th>
+          </tr>
+        </thead>
+        <tbody id="feat-body"></tbody>
+      </table>
+    </div>
+    <details class="files-details">
+      <summary>样本里存了哪些 key（共 <span id="files-count">0</span> 个）</summary>
+      <div class="table-scroll short">
+        <table class="grid-table" id="files-table"></table>
+      </div>
+    </details>
+  </section>
+
+  <footer class="foot">
+    <p>坐标与几何约定（和 <code>tasks/aim.py</code> 的写法一致）：</p>
+    <ul>
+      <li><code>x y z</code> 是<b>脚底</b>；眼位 = <code>z + 64.0938 − 18·crouch</code>，盒子半宽 16 HU、高 72（站）/ 54（蹲，这里用连续的 <code>crouch</code> 近似阶跃）。</li>
+      <li>角度约定：<code>yaw</code> 0° = +x、90° = +y；<code>pitch</code> 正 = <b>向下</b>看。还原角度用 <code>atan2(sin, cos)</code>，不会在 ±180° 处跳变。<b>画面左 = yaw 增大</b>（右手方向是 <code>f × up = (sin y, −cos y)</code>），投影用这个符号，别写反。</li>
+      <li>样本现在是<b>逐帧全场</b>布局：<code>ctx_player (T,10,20)</code> + <code>ctx_player_mask (T,10)</code> +
+        <code>obstruction (T,10,10)</code>，载荷里压成 channel-major 的 <code>players</code>。
+        取"第 t 帧第 p 个人"就是 <code>players.x[t][p]</code>；A / B 只是 <code>mask</code> 为 1 / 2 的那两行
+        （载荷另给了单人视图 <code>d.atk</code> / <code>d.tgt</code>）。</li>
+      <li>死人（<code>mask == 0</code>）没有有效坐标：雷达、玩家表、第一人称画布都按 mask 过滤，表里整行变灰。</li>
+      <li>遮挡矩阵是<b>逐帧两两</b>射线：<code>0</code> 通 / <code>1</code> 烟 / <code>2</code> 墙，有方向；死人的行 / 列恒为 0，
+        面板里按 mask 画成暗格而不是"通"。</li>
+      <li>包围盒是<b>纯几何</b>，遮挡另外用 <code>obstruction</code> 标在盒子上 —— 盒子不会因为墙后而消失，只降透明度。</li>
+      <li><code>since_shot ≥ 99.9</code> 是饱和值（本回合还没开过枪）；<code>blinded</code> 和
+        <code>defuser</code> 都是玩家<b>私有</b>状态（对手看不到你被闪 / 你有没有钳子），
+        做单视角模型时别把对方那两维当可观测输入。</li>
+      <li>HUD 第一项是<b>手里那把枪</b>：图标来自 3D 回放器共享的 CS2 HUD 素材
+        （<code>visualizer/static/assets/weapon_icons</code>），逐帧跟着 <code>atk_series</code> /
+        <code>tgt_series</code> 变；玩家表里每个人的武器用 <code>players.weapon[t][p]</code> 的全局下标查
+        <code>weapons.names</code>。图标素材缺失时只显示武器名。</li>
+      <li>回合时间 = <code>global_feat[t][4] × 200</code>（逐帧），0 点 = 本回合 <code>round_freeze_end</code>（和游戏里右上角倒计时一致），不是窗口起点；它和 <code>seconds</code> 严格同步：<code>global_feat[t][4] × 200 − global_feat[0][4] × 200 = seconds[t]</code>。</li>
+    </ul>
+  </footer>
+
+</main>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{
+ "parse_ticks_all": {
+  "seconds": 7.32,
+  "rows": 1668280,
+  "n_props": 31,
+  "peak_rss_mb": 2640.7,
+  "tick_min": 1,
+  "tick_max": 167846,
+  "n_players": 10,
+  "n_ticks": 167846
+ },
+ "tick_gaps": {
+  "n_unique_ticks": 167846,
+  "max_gap": 1,
+  "span": 167846,
+  "distinct_gaps": [
+   1
+  ]
+ },
+ "parse_ticks_xyz_all": {
+  "seconds": 0.682,
+  "rows": 1668280,
+  "peak_rss_mb": 2640.7
+ },
+ "parse_grenades": {
+  "seconds": 0.954,
+  "rows": 2287704,
+  "peak_rss_mb": 2640.7
+ },
+ "parse_grenades_extra": {
+  "seconds": 2.639,
+  "rows": 2287704,
+  "cols": [
+   "m_vSmokeDetonationPos",
+   "m_vSmokeColor",
+   "m_vecExplodeEffectOrigin",
+   "m_vInitialVelocity",
+   "m_vInitialPosition",
+   "m_flDetonateTime",
+   "m_hThrower",
+   "m_nBounces",
+   "m_nExplodeEffectTickBegin",
+   "m_flThrowStrength",
+   "m_nSmokeEffectTickBegin",
+   "m_bDidSmokeEffect",
+   "m_nVoxelFrameDataSize",
+   "grenade_type",
+   "grenade_entity_id",
+   "x",
+   "y",
+   "z",
+   "tick",
+   "steamid",
+   "name"
+  ],
+  "peak_rss_mb": 3103.6
+ },
+ "parse_header_s": 0.0,
+ "parse_player_info_s": 0.0798
+}

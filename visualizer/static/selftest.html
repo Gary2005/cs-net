@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<!--
+  Browser asset self-test.
+
+  Node can verify that a GLB parses and that a texture URL returns 200, but it
+  cannot verify the last step: that the browser actually decodes the pixels and
+  that three.js can put them on a mesh. Node has no createImageBitmap, so this
+  page is the only place that gap can be closed.
+
+  It is served by the visualizer itself (/static/selftest.html), so every fetch
+  goes through the same routes and MIME types the real app uses.
+
+  Driven by: visualizer/tests/run_browser_selftest.ps1, which runs headless
+  Chrome with --virtual-time-budget and reads back #result.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CS2 asset browser self-test</title>
+<style>
+  body { font: 13px/1.5 "SF Mono", Consolas, monospace; background:#101418; color:#cfe; margin:0; padding:16px; }
+  #result { white-space: pre-wrap; }
+  .ok   { color:#6ee7a8; }
+  .bad  { color:#ff7b72; }
+  .warn { color:#ffd479; }
+  canvas { border:1px solid #345; display:block; margin:8px 0; }
+</style>
+</head>
+<body>
+<div id="result">running…</div>
+<canvas id="gl" width="320" height="200"></canvas>
+
+<script>
+// Registered before any module runs: a module-load failure (bad import, 404)
+// is exactly the error worth catching, and it fires before the module body.
+window.__errs = [];
+window.addEventListener('error', (e) => window.__errs.push(String(e.message || e)));
+window.addEventListener('unhandledrejection', (e) => window.__errs.push('unhandled: ' + String(e.reason)));
+</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "/static/three/build/three.module.js",
+    "three/addons/": "/static/three/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+const lines = [];
+let failures = 0;
+function log(ok, msg) {
+  if (ok === false) failures++;
+  const tag = ok === true ? 'PASS' : ok === false ? 'FAIL' : 'INFO';
+  lines.push(`[${tag}] ${msg}`);
+  document.getElementById('result').textContent = lines.join('\n');
+}
+function flush() { document.getElementById('result').textContent = lines.join('\n'); }
+
+try {
+  const THREE = await import('three');
+  log(true, `three loaded: r${THREE.REVISION}`);
+
+  // ── 1. WebGL context ───────────────────────────────────────────────────
+  const canvas = document.getElementById('gl');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(320, 200, false);
+  const gl = renderer.getContext();
+  log(!!gl, `WebGL context: ${gl ? gl.getParameter(gl.VERSION) : 'NONE'}`);
+  log(null, `renderer: ${gl ? gl.getParameter(gl.RENDERER) : 'n/a'}`);
+
+  // ── 2. manifest ────────────────────────────────────────────────────────
+  const manifest = await (await fetch('/static/assets/manifest.json')).json();
+  log(!!manifest.sprites, `manifest: ${Object.keys(manifest.sprites).length} sprite sequences, `
+      + `${manifest.weapons.length} weapon models, icon map ${manifest.weapon_icons.map}`);
+
+  // ── 3. texture decode through three (the step Node cannot do) ──────────
+  const texLoader = new THREE.TextureLoader();
+  const loadTex = (url) => new Promise((res, rej) => texLoader.load(url, res, undefined, rej));
+  const iconFile = manifest.weapon_icons
+    ? Object.values(await (await fetch('/static/assets/' + manifest.weapon_icons.map)).json())[0][0]
+    : null;
+  try {
+    const t = await loadTex('/static/assets/weapon_icons/' + iconFile);
+    const img = t.image;
+    log(!!img && img.width > 0,
+        `weapon icon decoded: ${iconFile} -> ${img ? img.width + 'x' + img.height : 'FAILED'}`);
+  } catch (e) { log(false, `weapon icon decode threw: ${e.message}`); }
+
+  // ── 4. sprite sequence frames ──────────────────────────────────────────
+  for (const name of ['smokeloop_i_0_sc_hardedge', 'flames', 'flame_omni', 'flame_wisp']) {
+    const info = manifest.sprites[name];
+    if (!info) { log(false, `sprite ${name}: absent from manifest`); continue; }
+    const frames = info.sequences.flatMap(s => s.frames.map(f => f.file));
+    // decode first, middle and last: catches a truncated or corrupt tail
+    const probes = [0, frames.length >> 1, frames.length - 1];
+    let okAll = true, dims = '';
+    for (const i of probes) {
+      try {
+        const t = await loadTex(`/static/assets/sprites/${name}/${frames[i]}`);
+        if (!t.image || !t.image.width) okAll = false;
+        else dims = `${t.image.width}x${t.image.height}`;
+      } catch { okAll = false; }
+    }
+    log(okAll, `sprite ${name}: ${frames.length} frames, decoded probes ${probes.join(',')} (${dims})`);
+  }
+
+  // ── 5. weapon GLB through the real GLTFLoader ──────────────────────────
+  // NOTE: no setTimeout-based watchdog here on purpose. Chrome's
+  // --virtual-time-budget makes the clock jump forward the instant the page
+  // looks idle, so a 60s timer fires almost immediately in real time and every
+  // load "times out" while actually still in flight. The outer budget is the
+  // only timeout; a genuinely stuck load simply truncates the report.
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const loader = new GLTFLoader();
+  // One representative long gun is enough to prove GLB + WebP texture + skin
+  // handling end to end; the full set is exercised by measure_weapons.mjs.
+  const toTest = manifest.weapons.filter((w) => w.name.includes('ak47'));
+  for (const w of toTest) {
+    const url = `/static/assets/${w.dir.replace(/\\/g, '/')}/${w.glb}`;
+    log(null, `loading ${w.name} …`); flush();
+    try {
+      const gltf = await new Promise((res, rej) => loader.load(url, res, undefined, rej));
+      let meshes = 0, tris = 0, textured = 0, untextured = [];
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const size = new THREE.Vector3(); box.getSize(size);
+      gltf.scene.traverse((o) => {
+        if (!o.isMesh) return;
+        meshes++;
+        const g = o.geometry;
+        tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        // a mesh counts as textured only if its map actually has decoded pixels
+        if (mats.some(m => m && m.map && m.map.image && m.map.image.width > 0)) textured++;
+        else untextured.push(o.name || '(unnamed)');
+      });
+      const dims = `${size.x.toFixed(2)}x${size.y.toFixed(2)}x${size.z.toFixed(2)}`;
+      log(textured === meshes && meshes > 0,
+          `${w.name}: ${meshes} meshes, ${Math.round(tris).toLocaleString()} tris, `
+          + `${textured}/${meshes} textured, bbox ${dims} m`);
+      if (untextured.length) log(null, `    untextured meshes: ${untextured.join(', ')}`);
+    } catch (e) {
+      log(false, `${w.name}: GLTFLoader threw ${e.message}`);
+    }
+    flush();
+  }
+
+  // ── 5b. 飞行中的投掷物：类名 -> 模型，以及"缩放 + 归零 + 长轴对齐"三步 ────
+  //
+  // 这段刻意走**和 app 完全一样的路径**：`weapon-index.js` 的 `nadeModelKey()`
+  // 给出模型 key（浏览器真的把这个模块加载进来了），manifest 给出 GLB 路径，
+  // GLTFLoader 加载，再按 `visuals.js` 里那三步摆姿态：
+  //     1. scale 2.5
+  //     2. position = -centre × scale（把包围盒中心挪到原点）
+  //     3. quaternion = setFromUnitVectors(+Y, 速度方向)
+  // 第 2、3 步都是"算错了也不会报错、只是看着不对"的那种，所以这里量出来。
+  const { nadeModelKey, NADE_MODEL_KEYS, modelShortKey } =
+    await import('/static/js/weapon-index.js');
+
+  const NADE_SCALE = 2.5;
+  const NADE_LONG = new THREE.Vector3(0, 1, 0);
+
+  log(nadeModelKey('CSmokeGrenadeProjectile', 'T') === 'smokegrenade'
+      && nadeModelKey('CMolotovProjectile', 'CT') === 'incendiarygrenade'
+      && nadeModelKey('CMolotovProjectile', 'T') === 'molotov'
+      && nadeModelKey('CNope', 'T') === null,
+      'nadeModelKey: 5 个类名 + 队伍区分燃烧弹（浏览器里跑的同一份纯模块）');
+
+  const byShort = new Map(manifest.weapons.map(w => [modelShortKey(w.name), w]));
+
+  // 朝向数学：把 +Y 对齐到一个已知方向，检查变换后的 +Y 真的指过去了
+  {
+    const want = new THREE.Vector3(0.31, 0.52, 0.79).normalize();
+    const spin = new THREE.Group();
+    spin.quaternion.setFromUnitVectors(NADE_LONG, want);
+    const got = NADE_LONG.clone().applyQuaternion(spin.quaternion);
+    const err = got.distanceTo(want);
+    log(err < 1e-6, `长轴对齐速度方向：最大偏差 ${err.toExponential(2)}`);
+  }
+
+  let nadeOk = 0;
+  const nadeRendered = [];
+  for (const key of NADE_MODEL_KEYS) {
+    const w = byShort.get(key);
+    if (!w) { log(false, `投掷物 ${key}: manifest 里没有`); continue; }
+    const url = `/static/assets/${w.dir.replace(/\\/g, '/')}/${w.glb}`;
+    try {
+      const gltf = await new Promise((res, rej) => loader.load(url, res, undefined, rej));
+
+      // 和 _loadModel() 一样量一遍包围盒
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const size = new THREE.Vector3(); box.getSize(size);
+      const centre = new THREE.Vector3(); box.getCenter(centre);
+      const longest = size.x >= size.y && size.x >= size.z ? 'x'
+        : size.y >= size.z ? 'y' : 'z';
+
+      let meshes = 0, textured = 0;
+      gltf.scene.traverse((o) => {
+        if (!o.isMesh) return;
+        meshes++;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        if (mats.some(m => m && m.map && m.map.image && m.map.image.width > 0)) textured++;
+      });
+
+      // 摆一次姿态，量"包围盒中心是不是真的落在原点"
+      const inst = gltf.scene.clone(true);
+      inst.scale.setScalar(NADE_SCALE);
+      inst.position.set(-centre.x * NADE_SCALE, -centre.y * NADE_SCALE, -centre.z * NADE_SCALE);
+      const spin = new THREE.Group(); spin.add(inst);
+      spin.updateMatrixWorld(true);
+      const pivotErr = new THREE.Box3().setFromObject(spin).getCenter(new THREE.Vector3()).length();
+
+      const good = longest === 'y' && meshes > 0 && textured === meshes && pivotErr < 1e-4;
+      if (good) nadeOk++;
+      log(good, `${key}: ${meshes} mesh, ${textured}/${meshes} 贴图已解码, `
+        + `长轴=${longest}, bbox ${size.x.toFixed(3)}×${size.y.toFixed(3)}×${size.z.toFixed(3)} m, `
+        + `放大 ${NADE_SCALE}× 后中心偏差 ${pivotErr.toExponential(1)} m`);
+      nadeRendered.push({ key, gltf, centre, size });
+    } catch (e) {
+      log(false, `投掷物 ${key}: GLTFLoader 抛了 ${e.message}`);
+    }
+    flush();
+  }
+  log(nadeOk === NADE_MODEL_KEYS.length,
+      `${nadeOk}/${NADE_MODEL_KEYS.length} 个投掷物模型可直接用于飞行中的那一颗`);
+
+  // 真的画一颗，并检查像素不是空的（Node 做不到这一步）
+  try {
+    const pick = nadeRendered.find(n => n.key === 'smokegrenade') || nadeRendered[0];
+    if (pick) {
+      const sc = new THREE.Scene();
+      sc.background = new THREE.Color(0x101418);
+      sc.add(new THREE.AmbientLight(0xffffff, 2.4));
+      const dl = new THREE.DirectionalLight(0xffffff, 2.6); dl.position.set(2, 3, 2); sc.add(dl);
+      const inst = pick.gltf.scene.clone(true);
+      inst.scale.setScalar(NADE_SCALE);
+      inst.position.set(-pick.centre.x * NADE_SCALE, -pick.centre.y * NADE_SCALE,
+                        -pick.centre.z * NADE_SCALE);
+      const spin = new THREE.Group();
+      spin.quaternion.setFromUnitVectors(NADE_LONG, new THREE.Vector3(1, 0.6, 0).normalize());
+      spin.add(inst);
+      sc.add(spin);
+      const d = Math.max(...pick.size.toArray()) * NADE_SCALE * 2.4;
+      const cam = new THREE.PerspectiveCamera(35, 320 / 200, d * 0.02, d * 20);
+      cam.position.set(d * 0.5, d * 0.4, d * 0.75);
+      cam.lookAt(0, 0, 0);
+      renderer.render(sc, cam);
+      const px = new Uint8Array(320 * 200 * 4);
+      gl.readPixels(0, 0, 320, 200, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      let nonBg = 0;
+      for (let i = 0; i < px.length; i += 4) {
+        if (Math.abs(px[i] - 0x10) > 6 || Math.abs(px[i + 1] - 0x14) > 6
+            || Math.abs(px[i + 2] - 0x18) > 6) nonBg++;
+      }
+      log(nonBg > 300, `渲染 ${pick.key}（${NADE_SCALE}× ，长轴对齐 (1,0.6,0)）：`
+        + `${nonBg.toLocaleString()} 个非背景像素 (${(nonBg / 640).toFixed(1)}%)`);
+    }
+  } catch (e) {
+    log(false, `投掷物渲染测试抛了: ${e.message}`);
+  }
+
+  // ── 6. actually render one weapon and check pixels are not blank ───────
+  try {
+    const w = manifest.weapons.find(x => x.name.includes('ak47')) || manifest.weapons[0];
+    const gltf = await new Promise((res, rej) => loader.load(
+      `/static/assets/${w.dir.replace(/\\/g, '/')}/${w.glb}`, res, undefined, rej));
+    const sc = new THREE.Scene();
+    sc.background = new THREE.Color(0x101418);
+    sc.add(new THREE.AmbientLight(0xffffff, 2.2));
+    const dl = new THREE.DirectionalLight(0xffffff, 2.5); dl.position.set(2, 3, 2); sc.add(dl);
+    sc.add(gltf.scene);
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const c = new THREE.Vector3(); box.getCenter(c);
+    const s = new THREE.Vector3(); box.getSize(s);
+    const d = Math.max(s.x, s.y, s.z) * 2.0;
+    const cam = new THREE.PerspectiveCamera(35, 320 / 200, d * 0.02, d * 20);
+    cam.position.set(c.x + d * 0.6, c.y + d * 0.45, c.z + d * 0.8);
+    cam.lookAt(c);
+    renderer.render(sc, cam);
+
+    // read the framebuffer back and count non-background pixels
+    const px = new Uint8Array(320 * 200 * 4);
+    gl.readPixels(0, 0, 320, 200, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    let nonBg = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      if (Math.abs(px[i] - 0x10) > 6 || Math.abs(px[i + 1] - 0x14) > 6 || Math.abs(px[i + 2] - 0x18) > 6) nonBg++;
+    }
+    const pct = (nonBg / (320 * 200) * 100).toFixed(1);
+    log(nonBg > 500, `rendered ${w.name}: ${nonBg.toLocaleString()} non-background px (${pct}%)`);
+
+    // sample a centre pixel to confirm it is not uniformly grey (i.e. shaded)
+    const mid = (100 * 320 + 160) * 4;
+    log(null, `centre pixel rgba = ${px[mid]},${px[mid + 1]},${px[mid + 2]},${px[mid + 3]}`);
+    canvas.style.display = 'block';
+  } catch (e) {
+    log(false, `render test threw: ${e.message}`);
+  }
+
+  // ── 7. console errors captured ─────────────────────────────────────────
+  const errs = window.__errs || [];
+  log(errs.length === 0, `uncaught errors / rejections: ${errs.length}`);
+  for (const e of errs.slice(0, 8)) log(null, `    ${e}`);
+
+  lines.push('');
+  lines.push(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`);
+  document.title = failures === 0 ? 'SELFTEST-OK' : 'SELFTEST-FAIL';
+} catch (e) {
+  log(false, `top-level threw: ${e.message}\n${e.stack || ''}`);
+  document.title = 'SELFTEST-FAIL';
+}
+flush();
+// 自己回传最终结果 —— 不能等 `load`，见文件末尾那段注释
+await window.__selftestPost(true);
+</script>
+
+<script>
+// Post the result back to the server so a real-time harness can poll for it.
+// See the /api/_selftest comment in server.py for why --dump-dom's virtual
+// clock cannot drive the genuinely-async GLB + texture work above.
+//
+// ⚠️ **不能在 `load` 里回传最终结果。** 这个页面是带 top-level await 的 module，
+// 而实测 `load` 在 TLA settle 之前就触发了 —— 回传的永远是初始的 "running…"。
+// 之前几次跑出来的结果文件就是 15 字节的 `running…`，看起来像"页面没加载"，
+// 其实是回传时机错了。
+//
+// 所以分工：module 体跑完自己调 `__selftestPost(true)`；`load` 只发一个
+// `done:false` 的心跳，给"module 压根没加载起来"（404 / 语法错）留个现场，
+// 并且用 `__selftestDone` 保证不会把已经回传的最终结果覆盖掉。
+window.__selftestDone = false;
+window.__selftestPost = (done) => {
+  const el = document.getElementById('result');
+  const text = el ? el.textContent : '(no #result)';
+  const ok = /ALL CHECKS PASSED/.test(text);
+  if (done) {
+    window.__selftestDone = true;
+    document.title = ok ? 'SELFTEST-OK' : 'SELFTEST-FAIL';
+  }
+  return fetch('/api/_selftest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ done, ok, title: document.title, text }),
+  }).catch((e) => console.error('selftest POST failed', e));
+};
+window.addEventListener('load', () => {
+  if (window.__selftestDone) return;
+  window.__selftestPost(false);
+});
+</script>
+</body>
+</html>

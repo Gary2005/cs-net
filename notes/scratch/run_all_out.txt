@@ -1,0 +1,128 @@
+﻿
+=== ESM syntax (needs --experimental-vm-modules) 
+==============
+  OK   cs2-assets.js
+  OK   loading.js
+  OK   main.js
+  OK   map-loader.js
+  OK   map-raycast.js
+  OK   replay-core.js
+  OK   scene.js
+  OK   smoke-voxels.js
+  OK   visuals.js
+  OK   weapon-index.js
+  OK   weapon-models.js
+
+  11 ok, 0 failed
+
+=== cross-module imports/exports 
+==============================
+
+  11 modules scanned, 0 problem(s)
+
+=== demo weapon -> model coverage 
+=============================
+manifest : 65 个武器模型
+icon map : 63 个显示名
+index    : 126 个 key 可解析
+
+  PASS  63 个模型文件全部存在
+  PASS  刀 / 投掷物类别判定正确
+
+  类别分布：c4×1  grenade×6  knife×21  mg×2  pistol×11  rifle×7  shotgun×4  smg×7  sniper×4
+  PASS  9 个类别全部有挂载姿态
+
+demo 用到 30 个显示名：
+  PASS  AK-47                    -> weapon_rif_ak47                [rifle]
+  PASS  AWP                      -> weapon_snip_awp                [sniper]
+  PASS  Butterfly Knife          -> weapon_knife_butterfly         [knife]
+  PASS  C4 Explosive             -> weapon_c4                      [c4]
+  PASS  Decoy Grenade            -> weapon_decoy                   [grenade]
+  PASS  Desert Eagle             -> weapon_pist_deagle             [pistol]
+  PASS  Dual Berettas            -> weapon_pist_elite              [pistol]
+  PASS  Five-SeveN               -> weapon_pist_fiveseven          [pistol]
+  PASS  Flashbang                -> weapon_flashbang               [grenade]
+  PASS  Galil AR                 -> weapon_rif_galilar             [rifle]
+  PASS  Glock-18                 -> weapon_pist_glock18            [pistol]
+  PASS  High Explosive Grenade   -> weapon_hegrenade               [grenade]
+  PASS  Incendiary Grenade       -> weapon_incendiarygrenade       [grenade]
+  PASS  Karambit                 -> weapon_knife_karambit          [knife]
+  PASS  Knife                    -> weapon_knife_default_ct        [knife]
+  PASS  M4A1-S                   -> weapon_rif_m4a1_silencer       [rifle]
+  PASS  M4A4                     -> weapon_rif_m4a4                [rifle]
+  PASS  M9 Bayonet               -> weapon_knife_m9                [knife]
+  PASS  MAC-10                   -> weapon_smg_mac10               [smg]
+  PASS  MAG-7                    -> weapon_shot_mag7               [shotgun]
+  PASS  MP9                      -> weapon_smg_mp9                 [smg]
+  PASS  Molotov                  -> weapon_molotov                 [grenade]
+  PASS  P2000                    -> weapon_pist_hkp2000            [pistol]
+  PASS  P250                     -> weapon_pist_p250               [pistol]
+  PASS  SSG 08                   -> weapon_snip_ssg08              [sniper]
+  PASS  Skeleton Knife           -> weapon_knife_skeleton          [knife]
+  PASS  Smoke Grenade            -> weapon_smokegrenade            [grenade]
+  PASS  Tec-9                    -> weapon_pist_tec9               [pistol]
+  PASS  USP-S                    -> weapon_pist_usp_silencer       [pistol]
+  PASS  knife_skeleton           -> weapon_knife_skeleton          [knife]
+  PASS  demo 的 30 个武器全部有模型
+
+
+全部通过
+
+=== grenade projectile -> model (mapping + long axis) 
+=========
+manifest : 65 个武器模型
+投掷物   : 5 个类名 -> 6 个模型
+
+  PASS  demo 里实测的 5 个类名全部有映射
+  PASS  映射表的键都是 *Projectile 类名
+  PASS  CT 的 CMolotovProjectile -> incendiarygrenade（燃烧弹）
+  PASS  T 的 CMolotovProjectile -> molotov（莫洛托夫）
+  PASS  队伍未知时退回 molotov
+  PASS  烟雾弹不受队伍影响
+  PASS  认不出来的类名返回 null（宁可退回球，也不挂错模型）
+  PASS  undefined 返回 null
+
+  PASS  6 个模型 key 都在 manifest 里
+  PASS  6 个 GLB 文件都存在
+
+  模型包围盒（米）与长轴 —— 所有 primitive 的并集，和 three 的 Box3 一致：
+    smokegrenade         0.0527 × 0.1181 × 0.0594  长轴=y  primitive=1  三角形=11,121
+    hegrenade            0.0925 × 0.1270 × 0.0987  长轴=y  primitive=1  三角形=10,398
+    flashbang            0.0657 × 0.1518 × 0.0835  长轴=y  primitive=1  三角形=11,469
+    decoy                0.0657 × 0.1518 × 0.0835  长轴=y  primitive=1  三角形=11,469
+    molotov              0.1193 × 0.3506 × 0.2319  长轴=y  primitive=3  三角形=8,913
+    incendiarygrenade    0.0527 × 0.1181 × 0.0594  长轴=y  primitive=1  三角形=11,121
+  PASS  6 个投掷物模型长轴全部是 y（NADE_LONG_AXIS 的前提）
+  PASS  尺寸都在 0.02–0.5 m（是手里拿的东西，不是枪）
+
+全部通过
+
+=== index.html <-> main.js element ids 
+========================
+index.html : 72 个 id
+main.js    : 58 个 id 被引用
+
+  PASS  main.js 引用的 58 个 id 在 index.html 里都存在
+
+  开关：HTML 15 个，main.js 绑了 15 个
+  PASS  没有"绑了事件但 HTML 里不存在"的开关
+  （HTML 里有、main.js 没直接引用的 id：camera-hint, left-panel, loading-canvas, main-container, maps-note, minimap-canvas, minimap-container, minimap-overlay, right-panel, round-overlay, round-overlay-text, timeline, topbar, viewport）
+
+全部通过
+
+=== server serves the staged assets 
+===========================
+probing http://127.0.0.1:5099
+
+  PASS  manifest.json 可访问 (200 application/json)
+  PASS  manifest 列出 65 把武器（之前只有 6）
+  PASS  manifest 有 5 组 sprite 序列
+  PASS  65 个 GLB 全部可取
+  PASS  Five-SeveN       200 model/gltf-binary 2.9MB
+  PASS  Knife(默认刀)       200 model/gltf-binary 0.4MB
+  PASS  Karambit         200 model/gltf-binary 1.1MB
+  PASS  武器贴图 200 image/webp 0KB
+
+全部通过
+
+all checks passed

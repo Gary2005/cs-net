@@ -1,0 +1,53 @@
+{
+ "smoke_tick_offset": {
+  "794": 127
+ },
+ "he_tick_offset": {
+  "794": 107
+ },
+ "other_demo_offsets": {
+  "g161-20260808230153352180441_de_nuke.dem": {
+   "830": 105
+  },
+  "g161-20260813224129450898659_de_mirage.dem": {
+   "691": 88
+  }
+ },
+ "smoke_lifetime": {
+  "paired": 127,
+  "n_detonate": 137,
+  "n_expired": 127,
+  "median_ticks": 1412.0,
+  "median_seconds": 22.0625,
+  "unpaired_round_ended": 10
+ },
+ "inferno_lifetime": {
+  "paired": 85,
+  "n_startburn": 85,
+  "n_expire": 85,
+  "counts": {
+   "352": 42,
+   "449": 32,
+   "450": 7,
+   "249": 1,
+   "193": 1,
+   "142": 1,
+   "279": 1
+  },
+  "seconds": [
+   2.219,
+   3.016,
+   3.891,
+   4.359,
+   5.5,
+   7.016,
+   7.031
+  ]
+ },
+ "smoke_voxel_size_growth": {
+  "monotonic": true,
+  "start": 722.0,
+  "end": 2521.0,
+  "n_ticks": 1412
+ }
+}

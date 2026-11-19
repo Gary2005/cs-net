@@ -1,0 +1,4 @@
+# Go helper binary — rebuild with ./build_sidechannel.sh
+sidechannel_go/cs2sidechannel
+__pycache__/
+*.pyc

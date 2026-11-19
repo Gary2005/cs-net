@@ -1,0 +1,129 @@
+# aim 训练配置：`P(A 击杀 B)`。
+#
+#     python -m training.aim.train -c training/aim/config.yaml
+#     python -m training.aim.train -c training/aim/config.yaml --set train.lr=1e-4
+#
+# 结构见 `training/aim/model.py`：帧内一帧只算 A、B 两个人，各自
+#
+#     x = norm( proj(自己) + Σ MLP(自己, map) + Σ MLP(自己, 其他活人, 双向遮挡)
+#              + MLP(自己, global) + Σ MLP(自己, 道具) )
+#
+# 拼成帧向量 → 时间 transformer（因果，每帧一个 logit）。**帧内没有注意力**：谁是 A、
+# 谁是 B 由查询的下标和 `cat(x_A, x_B)` 的拼接顺序表达，不写进任何 token。
+#
+# 这份是给 **单卡 24 G + 40 万条样本** 的：`d_model: 1024` 时约 **67 M** 参数（`train.py`
+# 启动时会打印真实值），**对称版**（`model.antisym: true` + `data.swap_ab: false`）：每
+# epoch 12,500 步（400,000 ÷ 32），20 个 epoch 共 250,000 步 —— 和上一版**同样的步数**：
+# 删 swap 不省算力也不减步数，它省掉的是"同一个二选一被重复喂一遍"，换来的是两个方向的
+# 答案由结构保证一致。
+#
+# 成本这么算：`d_model` 定了以后一层时间 ≈ `12 d²`（注意力 4d² + MLP 8d²），
+# 而帧内一项关系（`rel_layers=3`）的一次求值 ≈ `4 d²`（输入 2d → d，再两层 d → d）：
+#   帧内：`131 真实帧 × 2 个查询 × (3 小项 + 9 活人 + P 道具) × (1 + rel_layers) d²`
+#   时间：`254 位置 × 1 × 12 d²`，乘 `temporal_layers`
+# 帧内整块大约等于 `5~8 层时间`（P 均值 3.7 / batch 内最大 10）—— 旧版 2 层空间
+# transformer 是它的 **3 倍**（每帧 `S ≈ 15~22` 个 token × `12 d²`）。所以帧内现在比时间
+# 还大一块，想加容量动 `temporal_layers` / `rel_layers` / `d_model` 都行：前两个是"更深"，
+# 最后一个是"更宽"。`rel_layers` 2→3 是帧内 +33%、总算力 +17%（帧内占全模型约 57%）。
+#
+# 按上面的算式：一帧 131 个真实帧、`P` 取 3.7~10 时，前向约 **12~14 G MAC/样本**
+# （≈ 24~28 GFLOP），上一版是 32 G MAC（≈ 64 GFLOP）—— 约 1/2。训练是前向的 3 倍左右。
+#
+# **实测**（RTX 3090 24 G，bf16，`d_model: 1024` / `rel_layers=2` / `antisym: true`，
+# T=257，假 batch 不含 I/O —— ⚠ 表是 `rel_layers=2` 时测的，本文件现在用 3）：
+#
+#     B=8    3.8 GiB   119 ms/微步      B=32  12.0 GiB   414 ms/微步
+#     B=16   6.5 GiB   216 ms/微步      B=64  22.5 GiB   —— 5.3 s/微步，已经在换页
+#
+# 显存随 batch **线性**涨（帧内那一头是 `B×T_real` 行一起算的），所以 24 G 的上限就在
+# B=32 附近：B=64 的峰值 22.5 GiB 已经挤到边，Windows 上不会报 OOM，而是掉进共享内存，
+# 单步从 0.4 s 变成 **5.3 s**，看着像卡死。每 epoch ≈ **1.5 小时**，和 batch 几乎无关
+# （B=16/32 都是 12,500~25,000 步 × 0.2~0.4 s），所以**别靠加 batch 换速度**；想要更大的
+# 有效 batch 就抬 `grad_accum`，wall time 不变。20 个 epoch ≈ **30 小时**。
+# 实测以 `train.py` 每个 epoch 打的那行为准（它会含 I/O）。
+#
+# `rel_layers=3` 的换算（**算出来的，没有重测**）：帧内那一路 ×4/3、总算力 +17% →
+# 每 epoch ≈ **1.75 小时**、20 个 epoch ≈ **35 小时**；峰值显存同比例抬一点，
+# 下面 `batch_size: 64` 本来就贴着 24 G 的边（见上），再加上去要当心掉进共享内存。
+#
+# （想回到 24 G 上"20 小时以内"的口径，`d_model: 640` 是调过的那个点：26 M 参数、
+# 25 min/epoch；1024 是 67 M、约 2.5 倍算力。）
+
+data:
+  root: /data/aim
+  
+  #: 32 是 `d_model: 1024` 在 24 G 上的实测上限（12.0 GiB / 414 ms）。**别设 64**：
+  #: 峰值 22.5 GiB 会掉进共享内存，单步 0.4 s → 5.3 s（见文件头的实测表）。
+  batch_size: 48
+  grad_accum: 1
+  #: **false**：`model.antisym: true` 之后两个方向的 logit 精确互为相反数，A/B 对调喂的
+  #: 是同一条信息的镜像（`BCE(z,1)` 与 `BCE(−z,0)` 的梯度完全相同），摇它不带来新信息。
+  #: ⚠ 只有 `antisym: true` 时才能关：单方向读出配恒为 True 的标签是退化解（一个常数
+  #: logit 就能把 loss 压到 0），`train.py` 里直接拦掉。
+  swap_ab: false
+  
+  num_workers: 4
+  pin_memory: true
+
+model:
+  d_model: 1024
+  #: 1024 / 8 = 128 维一个头。只影响时间那一头（帧内池化的打分是单头的）。
+  n_heads: 8
+  #: 帧内每个关系项 MLP 的线性层数：第 1 层 `in_dim → d_model`，之后每层宽度不变、各带
+  #: 一条残差。`1` = 只有 1 个 GELU（合取只能靠 GELU 的二次项硬凑）；`2` = 第二个 GELU
+  #: 作用在学到的特征上，阈值与门成立，合取变便宜；`3` = "合取的合取"，每层给帧内
+  #: +`d²`/求值（2→3 是帧内 +33%、总算力 +17%）。见 model.py 的 `rel_layers` 一段。
+  #: **这份配置用 3**（四项一起加深）。只想加深 `mlp_pair` 的话把那行的 `n_rel` 写成 3，
+  #: 帧内只要 +14~19%。`AimConfig` 的默认值仍是 2。
+  rel_layers: 3
+  #: 两条可变长关系轴（9 个活人 / P 个道具）的聚合：`sum` = 纯求和（旧行为）；
+  #: `attn` = 带掩码的注意力池化（打分头 `w·LN(u) + b`，零初始化 → 起点与 `sum` 逐位
+  #: 相同，可以从 `sum` 的 ckpt 续训）。`attn` 把这两轴的分配变成**集合级的竞争**，
+  #: 代价 +6d+2 个参数（d=1024 时 6,146）、算力 +0.07%。见 model.py 的"聚合"一段。
+  pool: attn
+  #: 时间 transformer 的层数。序列长度是 `T`，和帧内项数互不影响。
+  temporal_layers: 4
+  #: **开**：两个方向的 logit 相减（见 model.py 的 `antisym` 一段），交换 A/B 时精确取反，
+  #: 所以 `p(B→A) ≡ 1 − p(A→B)`、两个方向的 acc 必然相同。代价 +40~45% 算力（时间侧翻倍，
+  #: 而时间侧现在占约 43%，见文件头），必须配 `data.swap_ab: false`。
+  antisym: true
+  ffn_mult: 4.0
+  dropout: 0.05
+  player_freq: 8
+  proj_freq: 8
+  global_freq: 8
+  fourier_f_min: 1.0
+  fourier_f_max: 128.0
+  tick_hz: 64.0
+  time_bins: 257
+
+train:
+  #: 名字为空时用时间戳，不会覆盖上一次的 checkpoint / 日志。
+  name: null
+  save_dir: /data/runs/aim-4
+  epochs: 20
+  #: 断点续训：填 `runs/aim/<name>/last.pt`（也可以用 `--resume`）。
+  resume: null
+  #: 调试用：跑到第 N 个优化步就停（null = 不限）。
+  max_steps: null
+  #: 3e-4 是 30~50 M 级参数 + 有效 batch 32~64 的经验值（再大容易在 warmup 后炸）。
+  lr: 3.0e-4
+  weight_decay: 0.05
+  betas: [0.9, 0.95]
+  #: 线性 warmup 占总步数的比例（250,000 步 → 5,000 步），之后余弦退火到 `lr * min_lr_frac`。
+  warmup_frac: 0.02
+  min_lr_frac: 0.1
+  grad_clip: 1.0
+  #: bf16（4090 原生支持，不用 GradScaler）/ fp16 / off。
+  amp: bf16
+  #: 每多少个优化步打一次 wandb / tqdm 更新一次 loss 曲线（每 epoch 25,000 步）。
+  #: `train/acc` 是被最多 257 个 tick 摊平的平均、天生贴着 0.5，看 `train/acc_last`。
+  log_every: 4
+  #: 每多少个 epoch 验一次 valid。
+  eval_every: 1
+  wandb:
+    enabled: true
+    project: cs-net-aim
+    #: online / offline。服务器出不了网就改 offline（或 `--no-wandb`），
+    #: 否则 `wandb.init` 会卡在重连上，跑起来看像是卡住了。
+    mode: online

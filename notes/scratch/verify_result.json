@@ -1,0 +1,22 @@
+{
+ "inferno_item_duration": {
+  "incgrenade|3.891": 1,
+  "incgrenade|4.359": 1,
+  "incgrenade|5.5": 42,
+  "molotov|2.219": 1,
+  "molotov|3.016": 1,
+  "molotov|7.016": 32,
+  "molotov|7.031": 7
+ },
+ "molotov_pos_match": {
+  "n_runs": 87,
+  "n_matched": 0,
+  "delta_counts": {}
+ },
+ "freeze_ticks": [
+  128,
+  960,
+  1376,
+  5599
+ ]
+}

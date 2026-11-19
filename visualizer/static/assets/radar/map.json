@@ -1,0 +1,88 @@
+{
+  "de_ancient": {
+    "height": 1024,
+    "image": "de_ancient.png",
+    "pos_x": -2953.0,
+    "pos_y": 2164.0,
+    "scale": 5.0,
+    "width": 1024
+  },
+  "de_anubis": {
+    "height": 1024,
+    "image": "de_anubis.png",
+    "pos_x": -2796.0,
+    "pos_y": 3328.0,
+    "scale": 5.22,
+    "width": 1024
+  },
+  "de_cache": {
+    "height": 1024,
+    "image": "de_cache.png",
+    "pos_x": -2000.0,
+    "pos_y": 3250.0,
+    "scale": 5.5,
+    "width": 1024
+  },
+  "de_dust2": {
+    "height": 1024,
+    "image": "de_dust2.png",
+    "pos_x": -2476.0,
+    "pos_y": 3239.0,
+    "scale": 4.4,
+    "width": 1024
+  },
+  "de_inferno": {
+    "height": 1024,
+    "image": "de_inferno.png",
+    "pos_x": -2087.0,
+    "pos_y": 3870.0,
+    "scale": 4.9,
+    "width": 1024
+  },
+  "de_mirage": {
+    "height": 1024,
+    "image": "de_mirage.png",
+    "pos_x": -3230.0,
+    "pos_y": 1713.0,
+    "scale": 5.0,
+    "width": 1024
+  },
+  "de_nuke": {
+    "height": 1024,
+    "image": "de_nuke.png",
+    "lower": "de_nuke_lower.png",
+    "lower_below_z": -495.0,
+    "pos_x": -3453.0,
+    "pos_y": 2887.0,
+    "scale": 7.0,
+    "width": 1024
+  },
+  "de_overpass": {
+    "height": 1024,
+    "image": "de_overpass.png",
+    "pos_x": -4831.0,
+    "pos_y": 1781.0,
+    "scale": 5.2,
+    "width": 1024
+  },
+  "de_train": {
+    "height": 1024,
+    "image": "de_train.png",
+    "lower": "de_train_lower.png",
+    "lower_below_z": -50.0,
+    "pos_x": -2308.0,
+    "pos_y": 2078.0,
+    "scale": 4.082077,
+    "width": 1024
+  },
+  "de_vertigo": {
+    "height": 1024,
+    "image": "de_vertigo.png",
+    "lower": "de_vertigo_lower.png",
+    "lower_below_z": 11700.0,
+    "pos_x": -3168.0,
+    "pos_y": 1762.0,
+    "scale": 4.0,
+    "width": 1024
+  }
+}

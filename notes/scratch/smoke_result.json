@@ -1,0 +1,121 @@
+{
+ "voxel": {
+  "m_VoxelFrameData": {
+   "dtype": "float64",
+   "nonzero": 187833,
+   "eg": [
+    "0.0",
+    "0.0"
+   ]
+  },
+  "m_nVoxelFrameDataSize": {
+   "dtype": "float64",
+   "nonzero": 187833,
+   "eg": [
+    "0.0",
+    "0.0"
+   ]
+  },
+  "m_nVoxelUpdate": {
+   "dtype": "float64",
+   "nonzero": 187833,
+   "eg": [
+    "0.0",
+    "0.0"
+   ]
+  },
+  "m_vSmokeColor": {
+   "dtype": "object",
+   "nonzero": 215284,
+   "eg": [
+    "[180.0, 129.0, 50.0]",
+    "[180.0, 129.0, 50.0]"
+   ]
+  },
+  "m_bInPostEffectTime": "DROPPED",
+  "m_bParticlesSpawned": "DROPPED",
+  "m_nSmokeEffectTickBegin": {
+   "dtype": "float64",
+   "nonzero": 187862,
+   "eg": [
+    "0.0",
+    "0.0"
+   ]
+  },
+  "m_bDidSmokeEffect": {
+   "dtype": "object",
+   "nonzero": 187862,
+   "eg": [
+    "False",
+    "False"
+   ]
+  },
+  "m_vSmokeDetonationPos": {
+   "dtype": "object",
+   "nonzero": 215284,
+   "eg": [
+    "[0.0, 0.0, 0.0]",
+    "[0.0, 0.0, 0.0]"
+   ]
+  }
+ },
+ "n_proj_runs": 484,
+ "smoke_delta_ticks_chrono": {
+  "median": 7587.0,
+  "min": 1412,
+  "max": 19343,
+  "position_match": false,
+  "median_seconds": 118.546875
+ },
+ "inferno_delta_ticks_chrono": {
+  "n": 85,
+  "position_match": false,
+  "values": {
+   "142": 1,
+   "193": 1,
+   "249": 1,
+   "279": 1,
+   "352": 36,
+   "357": 1,
+   "361": 1,
+   "377": 1,
+   "391": 1,
+   "395": 1,
+   "406": 1,
+   "408": 1,
+   "410": 1,
+   "415": 1,
+   "424": 1,
+   "427": 1,
+   "441": 1,
+   "445": 1,
+   "449": 27,
+   "450": 5
+  },
+  "seconds": [
+   2.219,
+   3.016,
+   3.891,
+   4.359,
+   5.5,
+   5.578,
+   5.641,
+   5.891,
+   6.109,
+   6.172,
+   6.344,
+   6.375,
+   6.406,
+   6.484,
+   6.625,
+   6.672,
+   6.891,
+   6.953,
+   7.016,
+   7.031
+  ]
+ },
+ "prop_states": {
+  "rows": 0
+ }
+}
