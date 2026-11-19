@@ -1,35 +1,82 @@
-# macOS
+.build/
 .DS_Store
-
-# IDE
-.vscode/
-.idea/
-.claude/
-
-# Python
 __pycache__/
 *.pyc
-*.pyo
+*.obj
+# 地图的烘焙材质色旁车（bake_map_colors.py）。一张图 7-21 MB，而且这个功能默认
+# 关着（map-loader.js 的 BAKED_COLORS），没有理由跟着仓库走。
+maps/optimized_obj_files/*.colors.bin
+.vscode/
+visualizer/outputs/
+# The web app's own data: config, the SQLite library, .csz files, thumbnails,
+# avatars. Anchored on purpose -- it lives under app/ now, and the repo root's
+# data/ is a different thing entirely (training data).
+/app/data/
+# Training data / scratch datasets at the repo root.
+/data/
+# Smoke-test output from scripts/training_data/tasks/*.py (`python -m
+# scripts.training_data.tasks.example`). Regenerated from scratch on every run.
+/tmp/
+# Training runs (`training/aim/train.py` 的 `train.save_dir`): checkpoint 里存了
+# 参数 + AdamW 两个动量，25.9 M 的配置一份 `last.pt` 就 ~320 MB，再有一份
+# `best.pt`。别进 git。
+/runs/
+# Anchored to the repo root on purpose: an unanchored "examples/" also matches
+# visualizer/static/three/examples/, which silently blocks vendored three.js
+# addons (GLTFLoader, BufferGeometryUtils) from ever being committed. Already
+# tracked files ignore gitignore rules, so that breakage only appears on a
+# fresh clone -- where the importmap would then 404.
+/examples/
+# Raw extracted CS2 assets and the Source2Viewer-CLI binary. These are Valve's
+# copyrighted content (personal, non-commercial use only) plus a ~108 MB
+# third-party executable -- the raw tree is GB-scale and stays out. Rebuild
+# locally with tools/cs2_assets/extract_cs2_assets.py; see
+# notes/research-gameassets.md.
+# Anchored: an unanchored "assets/" also swallows visualizer/static/assets/,
+# which IS tracked here -- it is the trimmed set the browser actually fetches,
+# see the note at the bottom of this file.
+/assets/
+tools/Source2Viewer-CLI/
 
-# Checkpoints & model weights
-*.pt
-*.pth
-checkpoints/
-outputs/
+# Large binary output from the CS2 asset probes (game assets, not source).
+# The scripts and the text/JSON listings next to them stay tracked.
+#
+# This block used to end with a blanket "*.glb" ("no GLB belongs in the repo").
+# That premise died when the staged weapon models were committed -- and the
+# blanket pattern was the silent kind of wrong in both directions: upstream of
+# the change it would have skipped the 65 weapon GLBs without a word, and
+# downstream it would skip any GLB that SHOULD be tracked (a test fixture, say).
+# Same trap as the unanchored "examples/" in notes/research-gameassets.md §9.7
+# bug 3. GLBs are now handled per location instead: ignored under here and under
+# /assets/ (both whole directories are already excluded), visible everywhere
+# else so a new one shows up in `git status` instead of vanishing.
+notes/scratch/asset_probe/
 
-# Large/generated data
-maps/obj_files/
-examples/demo/
-examples/json/*
-!examples/json/test.json.gz
-examples/dataset/
-data/
-dataset/
-matches.json
-tmp/
-out
-wandb/
+# The full 137k-entry VPK listing is regenerable in ~2s with
+#   Source2Viewer-CLI -i pak01_dir.vpk --vpk_list
+# and the derived list_*.txt files come from inventory.py. Keep SUMMARY.md,
+# which is the part actually cited by the report.
+notes/scratch/asset_inventory/vpk_full_list.txt
+notes/scratch/asset_inventory/list_*.txt
 
-# Logs / artifacts
-*.log
-attn_weights.html
+# Assets staged for the browser by tools/cs2_assets/install_web_assets.py.
+#
+# **Tracked on purpose** -- the one deliberate exception to the /assets/ rule
+# above. These are Valve's copyrighted assets, and they are committed anyway
+# because a clean checkout cannot rebuild them: staging needs a local CS2
+# install plus the 108 MB Source2Viewer-CLI, and the extractor's --out does not
+# produce the layout install_web_assets.py reads (it takes three runs with three
+# different --outs). The reasoning and the damage are written up in
+# notes/research-gameassets.md §9.0.1.
+#
+# Cost: ~300 MB, ~903 files, and binary churn on every re-extraction.
+# Constraint: Steam licences this content for "personal, non-commercial use"
+# only (SSA §2.A), so **this repository has to stay private** -- publishing it,
+# forking it publicly, or attaching these files to a release redistributes
+# Valve's assets. See notes/research-assets.md §6.
+#
+# Only the trimmed set the browser actually fetches lives here: 358 sprite
+# frames, 68 HUD icons, 65 weapon directories. Everything raw stays ignored:
+# /assets/, notes/scratch/asset_probe/, tools/Source2Viewer-CLI/.
+
+models/
