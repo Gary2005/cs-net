@@ -59,14 +59,11 @@ notes/scratch/asset_probe/
 notes/scratch/asset_inventory/vpk_full_list.txt
 notes/scratch/asset_inventory/list_*.txt
 
-# Compiled Go probe binaries under notes/scratch/<probe>/ -- eight ~14 MB
-# executables, one per research probe. Build them with `go build -o <name> .`
-# from the .go source that sits next to each one; the sources stay tracked.
+# Compiled Go probe binaries under notes/scratch/<probe>/ -- ~14 MB each, one
+# per research probe. Build them with `go build -o <name> .` from the .go source
+# that sits next to each one; the sources stay tracked.
 notes/scratch/coverprobe/coverprobe
-notes/scratch/firecheck/firecheck
 notes/scratch/fireprobe/fireprobe
-notes/scratch/footprobe/footprobe
-notes/scratch/formatprobe/formatprobe
 notes/scratch/goprobe/probe
 notes/scratch/nadeprobe/nadeprobe
 notes/scratch/voxprobe/voxprobe

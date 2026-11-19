@@ -138,7 +138,11 @@ for (const g of glbs) {
   console.log(`  max    ${rec.max.join(', ')}`);
   console.log(`  ${rec.meshes} meshes, ${rec.triangles.toLocaleString()} tris`);
 }
-writeFileSync('notes/scratch/asset_probe/weapon_measure.json',
-              JSON.stringify(out, null, 2));
-console.log('\nwrote notes/scratch/asset_probe/weapon_measure.json');
+// notes/scratch is not part of the shipped repo (it holds one-off probe output),
+// so the directory may not exist -- create it rather than failing on ENOENT.
+const outPath = process.env.WEAPON_MEASURE_OUT
+              || 'notes/scratch/asset_probe/weapon_measure.json';
+mkdirSync(dirname(outPath), { recursive: true });
+writeFileSync(outPath, JSON.stringify(out, null, 2));
+console.log(`\nwrote ${outPath}`);
 process.exit(0);
