@@ -105,6 +105,44 @@ jobs:
           $lines | ForEach-Object { Write-Host $_ }
           if ($code -ne 0) { throw "packaging selftest 失败（exit $code）" }
 
+      # 上面那条自检是在**进程内**跑的，`main()` 里"起服务 + 打横幅"那段根本没走过
+      # —— 而那正是玩家双击之后第一眼看到的东西。这里真起一次 exe：等它写出
+      # server.json，请求 /healthz，再检查控制台里有没有横幅和地址，然后杀掉。
+      - name: 双击冒烟（控制台模式）
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\Windows\system32;C:\Windows"
+          $data = "$PWD\.smoke-data"
+          New-Item -ItemType Directory -Force $data | Out-Null
+          $env:CSNET_DATA_DIR = $data
+          $out = "$data\stdout.txt"
+          $err = "$data\stderr.txt"
+          $p = Start-Process -FilePath "dist\cs-net\cs-net.exe" -PassThru -WindowStyle Hidden `
+                             -RedirectStandardOutput $out -RedirectStandardError $err
+          try {
+            $url = $null
+            foreach ($i in 1..90) {                 # 冷启动 + 首次建库，最多等 90 s
+              Start-Sleep -Seconds 1
+              if (Test-Path "$data\server.json") {
+                $url = (Get-Content "$data\server.json" -Raw | ConvertFrom-Json).url
+                if ($url) { break }
+              }
+              if ($p.HasExited) { break }           # 崩了就别再等
+            }
+            if (-not $url) {
+              throw "exe 没起来（exit $($p.ExitCode)）：$(Get-Content $err -Raw -ErrorAction SilentlyContinue)"
+            }
+            $health = Invoke-RestMethod -Uri ($url -replace '/library$', '/healthz') -TimeoutSec 20
+            if (-not $health.ok) { throw "/healthz 不 ok：$($health | ConvertTo-Json -Compress)" }
+            $banner = Get-Content $out -Raw
+            if ($banner -notmatch 'cs-net v5') { throw "控制台里没有横幅：$banner" }
+            if ($banner -notmatch [regex]::Escape($url)) { throw "横幅里没有 $url：$banner" }
+            Write-Host "控制台模式 ok：$url"
+          }
+          finally {
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          }
+
       - name: 组包（lite / full）
         shell: pwsh
         run: |

@@ -8,12 +8,14 @@ __pycache__/
 .build/
 
 # PyInstaller's scratch (`build/cs-net/`) and its output (`dist/cs-net/`, ~1.5 GB).
-# `packaging/out/` holds the zips that end up on the Release, and `.selftest-data/`
-# is what `cs-net.exe --packaging-selftest` writes when CI points the data dir here.
+# `packaging/out/` holds the zips that end up on the Release, `.selftest-data/` is
+# what `cs-net.exe --packaging-selftest` writes when CI points the data dir here,
+# and `.smoke-data/` is the scratch data dir of CI's "double-click" smoke test.
 /build/
 /dist/
 /packaging/out/
 /.selftest-data/
+/.smoke-data/
 
 # Uncompressed map geometry. The tracked form is
 # maps/optimized_obj_files/*.obj.zip, unpacked by scripts/extract_maps.py
