@@ -3,10 +3,12 @@
 
 窗口本身没法在无头环境里测，所以这里量的是"窗口之前"和"窗口之后"的东西：
 
-* 找空闲端口：拿到的端口必须真的能 bind（不能是 5000 那种被占的）
+* 找空闲端口：拿到的端口必须真的能 bind；想用的 5000 被占用时要换一个
 * 单实例记录：写进 `server.json` 的地址能被读回来；指向死端口的记录要能识别成
   "上次没退干净"并清掉 —— 否则玩家第二次双击会以为程序卡住
 * `assets_summary()` 不能抛（窗口打开时就要用它，抛了窗口就打不开）
+* **默认的控制台模式真的能跑**：子进程起服务、打出 `python -m app.server` 那块
+  横幅、`server.json` 里的地址能访问 —— 双击时看到的就是这个
 * **`--packaging-selftest` 真的能跑完**：子进程里起服务、打路由、import 重依赖，
   退出码 0。这一条是每次改动 `app/server.py` 之后最划算的回归测试。
 
@@ -20,6 +22,8 @@ import os
 import socket
 import subprocess
 import sys
+import time
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -89,6 +93,18 @@ def test_port_and_url() -> None:
        desktop._health_url("http://127.0.0.1:5/library"),
        "http://127.0.0.1:5/healthz")
 
+    # 默认端口 5000；被占用时不能抛 OSError（双击的人看不到栈，只会看到窗口关掉），
+    # 要换一个空闲的。这里占住一个端口来模拟"5000 被占"。
+    eq("空闲端口原样返回", desktop.pick_port("127.0.0.1", port), port)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as busy:
+        busy.bind(("127.0.0.1", 0))
+        busy.listen(1)
+        taken = busy.getsockname()[1]
+        got = desktop.pick_port("127.0.0.1", taken)
+        check("被占用的端口会换一个", got != taken and 1024 < got < 65536,
+              f"{taken} -> {got}")
+    check("--port 0 也照旧随便给一个", 1024 < desktop.pick_port("127.0.0.1", 0) < 65536)
+
 
 def test_state_roundtrip() -> None:
     print("server.json / 单实例记录")
@@ -129,7 +145,7 @@ def test_ui_mode() -> None:
     check("show_tray 可调用", callable(desktop.show_tray))
     check("show_window 可调用", callable(desktop.show_window))
 
-    # 三个界面开关要真的注册了：--help 的输出里能看到。
+    # 界面开关要真的注册了：--help 的输出里能看到。
     env = dict(os.environ)
     env["CSNET_DATA_DIR"] = str(_scratch())
     proc = subprocess.run(
@@ -139,8 +155,66 @@ def test_ui_mode() -> None:
     )
     out = (proc.stdout or "") + (proc.stderr or "")
     eq("--help 退出码 0", proc.returncode, 0)
-    for flag in ("--window", "--no-tray", "--no-window"):
+    for flag in ("--tray", "--window", "--open"):
         check(f"--help 里有 {flag}", flag in out, out[-400:])
+    check("--help 说默认 5000", "5000" in out, out[-400:])
+    # 旧的开关还得能被解析，不然从旧快捷方式启动会直接 argparse 报错退出。
+    for flag in ("--no-window", "--no-tray", "--no-browser"):
+        check(f"旧开关 {flag} 还是认的", flag in out, out[-400:])
+
+
+def test_console_mode() -> None:
+    print("控制台模式 / 双击看到的就是 python -m app.server 那样")
+    data = _scratch()
+    env = dict(os.environ)
+    env["CSNET_DATA_DIR"] = str(data)
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(_ROOT), str(_ROOT / "tools"), env.get("PYTHONPATH", "")]
+    ).rstrip(os.pathsep)
+    env["CSNET_NO_PAUSE"] = "1"        # 万一被当成双击，别等回车把测试卡住
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "app.desktop", "--port", "0", "--no-watch"],
+        cwd=str(_ROOT), env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    state = data / "server.json"
+    url = None
+    try:
+        deadline = time.time() + 120
+        while time.time() < deadline and url is None:
+            time.sleep(0.3)
+            try:
+                url = str(json.loads(state.read_text(encoding="utf-8"))["url"])
+            except (OSError, ValueError, KeyError):
+                url = None
+        check("真的起来了（server.json 里写着地址）", url is not None, str(state))
+        if url:
+            check("地址是本机的库页面",
+                  url.startswith("http://127.0.0.1:") and url.endswith("/library"), url)
+            try:
+                with urllib.request.urlopen(url[: -len("/library")] + "/healthz",
+                                            timeout=10) as r:
+                    status: object = r.status
+            except Exception as exc:  # noqa: BLE001 - 起不来就记成失败，不炸测试
+                status = f"{type(exc).__name__}: {exc}"
+            eq("/healthz 200", status, 200)
+            time.sleep(1.0)            # 让横幅来得及打出来
+    finally:
+        proc.terminate()
+        try:
+            out, err = proc.communicate(timeout=60)
+        except subprocess.TimeoutExpired:      # pragma: no cover - 卡住就硬杀
+            proc.kill()
+            out, err = proc.communicate()
+
+    text = (out or b"").decode("utf-8", "replace")
+    check("打了横幅（和 app.server 是同一份）",
+          "cs-net v5" in text and "Demo 库" in text, text[:400])
+    if url:
+        check("横幅里有那个地址", url in text, text[:800])
+    check("提示了怎么停", "Ctrl+C" in text, text[-300:])
 
 
 def test_selftest_subprocess() -> None:
@@ -173,7 +247,7 @@ def test_selftest_subprocess() -> None:
 
 def main() -> int:
     for fn in (test_port_and_url, test_state_roundtrip, test_assets_summary,
-               test_ui_mode, test_selftest_subprocess):
+               test_ui_mode, test_console_mode, test_selftest_subprocess):
         print()
         fn()
 

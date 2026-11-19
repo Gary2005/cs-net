@@ -535,11 +535,11 @@ app/data/
 玩家把文件夹从 D 盘挪到 `Program Files` 之后，标记文件就骗人了。
 `CSNET_DATA_DIR` 环境变量覆盖数据目录，两种模式都认（测试和"库放 NAS 上"靠它）。
 
-入口也从 `python -m app.server` 换成了 [`desktop.py`](desktop.py)：找空闲端口、
-先等 `/healthz` 再开浏览器、`server.json` 做单实例、日志写 `数据目录/logs/`，
-**双击默认不弹窗口**（只在托盘里留一个 logo 图标，右键能打开界面 / 数据目录 / 退出），
-`--window` 是带窗口的老样式，`--no-window` 是纯后台。退出时走 `shutdown()` 把
-jobs 和 watcher 停干净。打包流程见
+入口也从 `python -m app.server` 换成了 [`desktop.py`](desktop.py)：默认端口 5000
+（被占就换一个空闲的）、`server.json` 做单实例、日志写 `数据目录/logs/`。
+默认**就是一块控制台** —— 打和 `app.server` 同一份横幅、滚请求日志、`Ctrl+C` 停止，
+默认不开浏览器也不弹窗口；`--open` 顺便开浏览器，`--tray` 换托盘图标，`--window`
+弹那个带按钮的小窗口。退出时走 `shutdown()` 把 jobs 和 watcher 停干净。打包流程见
 [`packaging/README.md`](../packaging/README.md)。
 
 ---

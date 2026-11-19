@@ -1,34 +1,43 @@
-"""双击启动器：起服务、打开浏览器、在托盘里留一个能退出的图标。
+"""双击启动器：起服务，然后像 ``python -m app.server`` 那样在控制台里跑着。
 
-打包成 exe 之后的入口就是它（``cs-net.exe`` → ``app.desktop.main``）。开发态也能
-用，和原来的 ``python -m app.server`` 等价，只是多了"自动找端口 + 开浏览器"：
+打包成 exe 之后的入口就是它（``cs-net.exe`` → ``app.desktop.main``）。默认是**一块
+控制台**：打横幅、列出地址、滚日志，Ctrl+C 停止 —— 和 ``python -m app.server`` 一个
+感觉，只是端口不用记、数据目录自己找：
 
-    python -m app.desktop              # 托盘图标 + 开浏览器（双击时的样子）
-    python -m app.desktop --window     # 弹那个小窗口（没有托盘时的退路）
-    python -m app.desktop --no-window  # 完全没有界面（调试 / CI）
+    python -m app.desktop              # 控制台模式（默认，双击就是这个）
+    python -m app.desktop --open       # 同上，另外顺手开一下浏览器
+    python -m app.desktop --tray       # 托盘图标 + 菜单，不用控制台
+    python -m app.desktop --window     # 弹那个小窗口（打开界面 / 复制地址 / 退出）
     python -m app.desktop --packaging-selftest   # 打包后的自检，见 app/selftest.py
+
+为什么默认是控制台
+------------------
+"双击 → 自动开浏览器 → 只留托盘" 试过，但冻结后的 exe 里浏览器会**静默不开**
+（PyInstaller 里 ShellExecute 假成功，见 :func:`open_in_browser`），玩家看到的是
+"双击了，然后什么都没发生"。工作台本来就该像 ``python -m app.server``：地址摆在
+眼前、日志能看见、出问题能读到栈。所以默认不猜、不藏窗口，需要浏览器时自己开。
 
 为什么不用 ``app.run()``
 ------------------------
-``flask.Flask.run`` 没有"停"的接口，打包后的窗口关掉就只剩任务管理器能杀。
+``flask.Flask.run`` 没有"停"的接口，托盘 / 窗口里点退出就只能靠任务管理器。
 这里用 ``werkzeug.serving.make_server``，``shutdown()`` 之后线程会自己退出来，
 退出时还能顺手把 jobs 队列和目录监听停干净。
 
 几个刻意的选择
 --------------
-* **不死磕 5000 端口**：默认 ``--port 0``，让系统分配。5000 在 Windows 上被
-  占用是常事（别的东西、另一个实例、上一次没退干净的僵尸）。
-* **先确认服务活了再开浏览器**：``/healthz`` 返回 200 才 ``webbrowser.open``，
-  否则玩家看到的是"无法连接"，然后以为程序坏了。
-* **第二个实例不开服务**：``server.json`` 里记着第一个实例的地址，第二个直接
-  把浏览器指过去然后退出。双击两下不会出现两个进程抢同一个库。
-* **日志落在数据目录**：``<data>/logs/desktop.log``。``--noconsole`` 之后崩溃是
-  静默的，第一次启动失败必须留下能看的东西，外加一个弹窗指过去。
+* **默认 5000，但被占用就换**：地址好记、能收藏；真撞上了不像 ``app.server``
+  那样抛 OSError，而是换一个空闲端口并说一声。
+* **单实例**：``server.json`` 里记着第一个实例的地址，第二个双击只把地址打出来
+  （``--open`` 时顺手开浏览器），不会起第二个进程抢同一个库。
+* **日志落在数据目录**：``<data>/logs/desktop.log``。控制台被关掉之后还能回看。
+* **出错要停住**：双击时控制台是本进程独占的，异常打印完等一次回车再关，
+  否则又是一次"闪退"。
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -55,8 +64,7 @@ log = logging.getLogger("cs-net.desktop")
 #: 服务端在 `before_request` 里看到 token 就置位（见 :func:`serve`）。
 _OPENED: dict[str, threading.Event] = {}
 
-#: 单实例用的命名互斥体（Windows）。没释放就说明已经有一个在跑了。
-_MUTEX_NAME = "Local\\cs-net-v5-single-instance"
+#: 单实例用的命名互斥体（Windows）。名字带数据目录的摘要，见 :func:`_mutex_name`。
 _mutex = None
 
 #: 等 /healthz 的上限。冷启动要初始化数据库、起 watcher，实测 1~3 s。
@@ -104,6 +112,27 @@ def _healthy(url: str, timeout: float = 1.5) -> bool:
         return False
 
 
+def _wait_healthy(url: str) -> bool:
+    """等 ``/healthz`` 就绪；探得到返回 True。
+
+    探测本身是几次真的 HTTP 请求，会往控制台打两三条 ``GET /healthz 200`` ——
+    看起来像有人在偷偷访问。所以探测期间把 werkzeug 的日志压到 WARNING，探完就
+    还原（真实的浏览器请求照常打）。
+    """
+    wlog = logging.getLogger("werkzeug")
+    previous = wlog.level
+    wlog.setLevel(logging.WARNING)
+    try:
+        deadline = time.time() + _STARTUP_TIMEOUT
+        while time.time() < deadline:
+            if _healthy(url):
+                return True
+            time.sleep(0.2)
+        return _healthy(url)
+    finally:
+        wlog.setLevel(previous)
+
+
 def _running_instance() -> Optional[str]:
     """已经在跑的那个实例的库页面地址；没有就 None。"""
     try:
@@ -139,15 +168,29 @@ def _clear_state() -> None:
         pass
 
 
+def _mutex_name() -> str:
+    """单实例互斥体的名字，按数据目录区分。
+
+    互斥体是整台机器共享的，但**锁的是谁**：两个实例只有共用同一个数据目录
+    （同一个 SQLite 库）时才会互相踩。按目录生成后缀之后，"玩家的库"和"测试
+    的临时目录"就不会互相拦住了（以前跑测试时如果恰好开着一个真实例，测到
+    一半会拿到退出码 2）。
+    """
+    digest = hashlib.sha1(
+        str(Path(config.DATA_DIR).resolve()).encode("utf-8")
+    ).hexdigest()[:10]
+    return f"Local\\cs-net-v5-{digest}"
+
+
 def _acquire_single_instance() -> bool:
-    """拿到锁返回 True；已经有一个实例在跑返回 False。"""
+    """拿到锁返回 True；同一个数据目录上已经有一个实例在跑返回 False。"""
     global _mutex
     if os.name != "nt":
         return True
     import ctypes
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    _mutex = kernel32.CreateMutexW(None, False, _MUTEX_NAME)
+    _mutex = kernel32.CreateMutexW(None, False, _mutex_name())
     return ctypes.get_last_error() != 183  # ERROR_ALREADY_EXISTS
 
 
@@ -192,9 +235,88 @@ def setup_logging(verbose: bool = False) -> Path:
     return path
 
 
+def _say(text: str = "") -> None:
+    """往控制台打一行，立刻刷出来（日志是一行行滚的，被缓冲住就看不见了）。"""
+    stream = sys.stdout or sys.stderr
+    if stream is None:
+        return
+    try:
+        print(text, flush=True, file=stream)
+    except (OSError, ValueError):
+        pass
+
+
+#: 我们自己把控制台藏起来了（托盘 / 窗口模式）。出错时这时才需要弹窗。
+_CONSOLE_HIDDEN = False
+
+
+def _owns_console() -> bool:
+    """控制台是不是本进程独占的：双击启动 True，从终端 / CI 里跑 False。
+
+    ``GetConsoleProcessList`` 返回连在这块控制台上的进程数，从终端里跑时至少是
+    2（终端 + 我们）。这个判断决定了"能不能藏窗口"和"出错时该不该等回车"——
+    两件事在 CI 里都不能做，不然流水线会卡住。
+    """
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        pids = (ctypes.c_uint * 8)()
+        return kernel32.GetConsoleProcessList(pids, 8) == 1
+    except Exception:  # noqa: BLE001 - 判断不了就当"不是独占"，更保守
+        return False
+
+
+def _hide_own_console() -> None:
+    """托盘 / 窗口模式：把那块附带的控制台藏起来。
+
+    包是 console 子系统的（不然 `--packaging-selftest` 没有输出、崩溃也看不到栈），
+    但 `--tray` 的时候多一块黑窗口很怪。只在**控制台属于本进程独占**时才藏 ——
+    从终端里跑时藏掉就把用户自己的输出弄没了，CI 里也是这条路径。
+    """
+    global _CONSOLE_HIDDEN
+    if not _owns_console():
+        return
+    try:
+        import ctypes
+
+        hwnd = ctypes.WinDLL("kernel32").GetConsoleWindow()
+        if hwnd:
+            ctypes.WinDLL("user32").ShowWindow(hwnd, 0)  # SW_HIDE
+            _CONSOLE_HIDDEN = True
+    except Exception:  # noqa: BLE001 - 藏不掉控制台不是错误
+        pass
+
+
+def _pause_console(prompt: str = "按回车键退出…") -> None:
+    """双击启动时别让控制台一闪就没 —— 让人看清发生了什么再关。
+
+    只在"控制台是本进程独占的"（= 双击）时才停：从终端里跑、从 CI 里跑都直接
+    返回，不然会把人卡住，也会把流水线卡死。``CSNET_NO_PAUSE=1`` 可以显式关掉。
+    """
+    if _CONSOLE_HIDDEN or os.environ.get("CSNET_NO_PAUSE"):
+        return
+    if not _owns_console():
+        return
+    try:
+        if sys.stdin is None or not sys.stdin.isatty():
+            return
+    except (ValueError, OSError):
+        return
+    try:
+        input(prompt)
+    except (EOFError, KeyboardInterrupt, OSError, RuntimeError):
+        pass
+
+
 def _notify_error(text: str, log_path: Optional[Path]) -> None:
-    """没有控制台时，错误得让人看见 —— 一个弹窗 + 日志路径。"""
+    """出错了得让人看见：控制台还看得见就只打印，藏起来了才弹窗。"""
     body = text + (f"\n\n日志：{log_path}" if log_path else "")
+    print(body, file=sys.stderr or sys.stdout, flush=True)
+    if not _CONSOLE_HIDDEN:
+        return
     try:
         import tkinter as tk
         from tkinter import messagebox
@@ -204,30 +326,6 @@ def _notify_error(text: str, log_path: Optional[Path]) -> None:
         messagebox.showerror("cs-net v5 启动失败", body)
         root.destroy()
     except Exception:  # noqa: BLE001 - 弹窗失败也不能再抛
-        print(body, file=sys.stderr or sys.stdout)
-
-
-def _hide_own_console() -> None:
-    """双击启动时把附带的那块控制台藏起来。
-
-    包是 console 子系统的（不然 `--packaging-selftest` 没有输出、崩溃也看不到栈），
-    但玩家双击时多一块黑窗口很怪。只在**控制台属于本进程独占**时才藏 —— 从终端
-    里跑时 ``GetConsoleProcessList`` 会返回 ≥2（终端 + 我们），那时藏掉就把用户
-    自己的输出弄没了。CI 里也是这条路径，所以不会影响日志。
-    """
-    if os.name != "nt":
-        return
-    try:
-        import ctypes
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        pids = (ctypes.c_uint * 8)()
-        if kernel32.GetConsoleProcessList(pids, 8) != 1:
-            return
-        hwnd = kernel32.GetConsoleWindow()
-        if hwnd:
-            ctypes.WinDLL("user32").ShowWindow(hwnd, 0)  # SW_HIDE
-    except Exception:  # noqa: BLE001 - 藏不掉控制台不是错误
         pass
 
 
@@ -613,14 +711,54 @@ def show_window(url: str, summary: str, on_quit) -> None:
 # ── 主流程 ──────────────────────────────────────────────────────────────────
 
 
-def serve(host: str, port: int):
+def _bindable(host: str, port: int) -> bool:
+    """这个端口现在能不能绑（不能就是被别人占了）。"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, port))
+            return True
+        except OSError:
+            return False
+
+
+def pick_port(host: str, want: int) -> int:
+    """想要 5000 就给 5000；被占了就换一个空闲的并说一声。
+
+    不像 ``app.server`` 那样直接抛 OSError —— 双击的人看不到栈，只会看到窗口关掉。
+    """
+    if not want:
+        return free_port(host)
+    if _bindable(host, want):
+        return want
+    fallback = free_port(host)
+    log.warning("端口 %s 被占用，改用 %s", want, fallback)
+    _say(f"[cs-net] 端口 {want} 被占用了，改用 {fallback}")
+    return fallback
+
+
+def console_banner(host: str, port: int, maps_dir: Optional[str] = None) -> str:
+    """和 ``python -m app.server`` 打的那块横幅一模一样（同一份代码，不另写）。"""
+    from visualizer.server import _resolve_maps_dir
+
+    from .server import banner
+
+    return banner(
+        host,
+        port,
+        maps=_resolve_maps_dir(maps_dir),
+        data_dir=Path(config.DATA_DIR),
+        sampling=config.Config().sampling_label(),
+    )
+
+
+def serve(host: str, port: int, maps_dir: Optional[Path] = None):
     """起 HTTP 服务，返回 ``(server, thread, app)``。"""
     from flask import request
     from werkzeug.serving import make_server
 
     from .server import create_app
 
-    app = create_app(start_background=True)
+    app = create_app(maps_dir=maps_dir, start_background=True)
 
     @app.before_request
     def _mark_opened() -> None:
@@ -640,21 +778,27 @@ def serve(host: str, port: int):
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(
         prog="cs-net",
-        description="cs-net v5 · Demo 库 + 3D 回放（双击启动器）",
+        description="cs-net v5 · Demo 库 + 3D 回放（默认控制台模式，和 python -m app.server 一样）",
     )
     from . import __version__
 
     ap.add_argument("--version", action="version", version=f"cs-net {__version__}")
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=0, help="0 = 让系统挑空闲端口")
+    ap.add_argument("--port", type=int, default=5000,
+                    help="默认 5000（被占用时自动换一个空闲端口；0 = 完全让系统挑）")
     ap.add_argument("--maps-dir", default=None)
+    ap.add_argument("--open", action="store_true",
+                    help="启动后顺手用浏览器打开库页面（默认不打开）")
+    ap.add_argument("--tray", action="store_true",
+                    help="用托盘图标代替控制台（不弹窗口；右键菜单能开界面 / 退出）")
     ap.add_argument("--window", action="store_true",
-                    help="弹那个小窗口（默认不弹，只在托盘里留一个图标）")
-    ap.add_argument("--no-tray", action="store_true",
-                    help="不建托盘图标（没给 --window 时会退回窗口，不然就没法退出了）")
+                    help="弹那个小窗口（打开界面 / 复制地址 / 打开数据目录 / 退出）")
     ap.add_argument("--no-window", action="store_true",
-                    help="完全没有界面（调试 / CI；Ctrl+C 退出）")
-    ap.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
+                    help="已废弃：现在默认就是控制台（保留只为兼容旧快捷方式）")
+    ap.add_argument("--no-tray", action="store_true",
+                    help="已废弃：默认不建托盘图标（保留只为兼容旧快捷方式）")
+    ap.add_argument("--no-browser", action="store_true",
+                    help="已废弃：默认就不开浏览器（保留只为兼容旧快捷方式）")
     ap.add_argument("--no-watch", action="store_true", help="不启动目录监听")
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--packaging-selftest", action="store_true",
@@ -663,6 +807,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     log_path: Optional[Path] = None
     _force_utf8_console()
+
+    # 界面形态：控制台（默认）> 托盘（--tray）> 窗口（--window）。
+    ui = "tray" if args.tray else ("window" if args.window else "console")
     try:
         try:
             log_path = setup_logging(args.verbose)
@@ -676,43 +823,53 @@ def main(argv: Optional[list[str]] = None) -> int:
 
             return selftest.run(verbose=args.verbose)
 
-        # 单实例：不管有没有界面，第二个都该直接打开浏览器然后退出 —— 两个进程
-        # 抢同一个 SQLite 库不会有好事。
+        # 单实例：第二个双击只把地址亮出来（给了 --open 才顺手开浏览器）——
+        # 两个进程抢同一个 SQLite 库不会有好事。
         running = _running_instance()
         if running:
+            _say(f"cs-net 已经在运行：{running}")
             log.info("已经有一个实例在跑：%s", running)
-            if not args.no_browser and not open_in_browser(running, verify=False):
-                _tell_url(running)
+            if args.open and not open_in_browser(running, verify=False):
+                _say("浏览器没打开，把上面的地址手动粘到浏览器里就行。")
+            _pause_console()
             return 0
 
         if not _acquire_single_instance():
             running = _running_instance()
             if running:
+                _say(f"cs-net 已经在运行：{running}")
                 log.info("已经有一个实例在跑：%s", running)
-                if not args.no_browser and not open_in_browser(running, verify=False):
-                    _tell_url(running)
+                if args.open and not open_in_browser(running, verify=False):
+                    _say("浏览器没打开，把上面的地址手动粘到浏览器里就行。")
+                _pause_console()
                 return 0
             # 端口记录丢了但锁还在：让用户自己判断，总比悄悄起第二个好。
             log.warning("检测到另一个 cs-net 正在运行，但没有可用的地址记录")
+            _say(f"检测到另一个 cs-net 正在运行，但 {_state_path()} 里没有它的地址。")
+            _pause_console()
             return 2
 
         if args.no_watch:
             config.Config().update({"watch_enabled": False})
 
-        host, port = args.host, args.port or free_port(args.host)
-        srv, thread, _app = serve(host, port)
+        host = args.host
+        port = pick_port(host, args.port)
+        maps = Path(args.maps_dir) if args.maps_dir else None
+        srv, thread, _app = serve(host, port, maps)
         url = local_url(host, srv.server_port)
         _write_state(url)
-        log.info("服务已启动：%s（数据目录 %s）", url, config.DATA_DIR)
+        if ui == "console":
+            # 横幅里已经列了地址和数据目录，这里再 log 一遍就是重复的一行（它走
+            # stderr，会正好插在横幅下面）。
+            log.debug("服务已启动：%s（数据目录 %s）", url, config.DATA_DIR)
+        else:
+            log.info("服务已启动：%s（数据目录 %s）", url, config.DATA_DIR)
 
-        deadline = time.time() + _STARTUP_TIMEOUT
-        while time.time() < deadline and not _healthy(url):
-            time.sleep(0.2)
-        if not _healthy(url):
+        if not _wait_healthy(url):
             raise RuntimeError(f"服务起来了但 /healthz 一直没响应：{url}")
 
-        opened = True
-        if not args.no_browser:
+        opened = False
+        if args.open:
             opened = open_in_browser(url)
 
         def shutdown() -> None:
@@ -733,19 +890,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.info("已退出")
 
         summary = assets_summary()
-
-        # 三种界面形态：托盘（默认）> 窗口（--window）> 纯后台（--no-window）。
-        # 托盘里没有"窗口"，正是双击一个本地工具时最舒服的样子；但它必须有，
-        # 否则进程就没有退出的入口了。
-        ui = "none" if args.no_window else ("window" if args.window else "tray")
-        if ui == "tray" and not args.no_tray and not opened:
-            # 浏览器没打开还只留一个托盘图标，玩家会以为程序闪退了 —— 弹窗口，
-            # 地址和两个按钮都在窗口里。
-            log.warning("浏览器没打开，改成显示窗口（地址在窗口里）")
-            ui = "window"
-        elif ui == "tray" and args.no_tray:
-            ui = "window"
-        log.info("界面形态：%s", ui)
+        if ui != "console":
+            # 控制台模式下面这几行诊断会插在横幅前后，看着像报错；托盘 / 窗口
+            # 模式没有控制台可看，才需要它们进日志。
+            log.info("界面形态：%s", ui)
 
         if ui == "tray":
             if show_tray(url, summary, shutdown):
@@ -759,18 +907,29 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return 0
             except Exception as exc:  # noqa: BLE001 - 没有 tkinter 就退化成控制台
                 log.warning("窗口打不开（%s），退化成控制台模式；Ctrl+C 退出", exc)
+                ui = "console"
 
+        # 控制台模式：和 `python -m app.server` 一个样子 —— 横幅、地址、日志。
+        _say()
+        _say(console_banner(host, srv.server_port, args.maps_dir))
+        if opened:
+            _say("已在浏览器里打开上面的地址。")
+        _say(f"服务已就绪（数据目录 {config.DATA_DIR}）。")
+        _say("按 Ctrl+C 停止服务；直接关掉这个窗口也会停。")
         try:
             while True:
                 time.sleep(1.0)
         except KeyboardInterrupt:
-            pass
+            _say()
+            _say("正在停止…")
         finally:
             shutdown()
         return 0
     except Exception as exc:  # noqa: BLE001 - 这里是最后一道防线
         log.exception("启动失败")
         _notify_error(f"{type(exc).__name__}: {exc}", log_path)
+        # 双击启动时控制台是本进程独占的：不等一下就又是一次"闪退"。
+        _pause_console()
         return 1
 
 

@@ -20,7 +20,7 @@ zstandard==0.25.0
 huggingface_hub==2.4.0
 numba==0.68.0
 
-# 托盘图标（双击启动后不弹窗口，只留一个托盘里的小图标 + 菜单）。
+# 托盘图标（只有 --tray 用得上：默认是控制台模式，不建托盘图标）。
 # 纯 Python + ctypes，依赖只有已经装好的 Pillow。
 pystray==0.19.5
 
