@@ -386,6 +386,13 @@ https://steamcommunity.com/miniprofile/<account_id>/json
 `account_id` = SteamID64 − `76561197960265728`。返回 `persona_name` 和 `avatar_url`，
 图片下载到 `app/data/avatars/<steamid>.<ext>` 本地存着，页面从自己的服务器取图。
 
+**头像的主机名不是固定的。** Steam 按它看到的来源位置挑 CDN 边节点：国内线路拿到的是
+`avatars.st.dl.eccdnx.com`（Steam 中国 CDN），直连多半是 `avatars.fastly.steamstatic.com`
+或 `avatars.akamai.steamstatic.com`。图地址来自第三方响应，下载前要确认它没被指到别的机器上，
+所以白名单按后缀认：`*.steamstatic.com`、`*.eccdnx.com`，外加两个老主机名
+`steamcdn-a.akamaihd.net` / `steamcommunity-a.akamaihd.net`。被拒时错误里会写出那个主机名，
+不是笼统的"没有返回头像地址"。
+
 三条刻意的取舍：
 
 - **在后台任务里取，不在请求里取。** 十个人每人约 0.4 s，放在页面渲染里就是四秒白屏。

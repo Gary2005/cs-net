@@ -56,8 +56,21 @@ DEFAULT_DELAY_MS = 350
 #: Only Steam's own CDNs.  The URL comes from a third party, so it is checked
 #: before it is fetched -- otherwise a spoofed response could point the server
 #: at anything on the network.
-_ALLOWED_HOSTS = ("steamcdn-a.akamaihd.net",)
-_ALLOWED_SUFFIXES = (".steamstatic.com",)
+#:
+#: The host is not one fixed name: Steam answers with whichever edge it thinks
+#: is closest to the caller.  A machine behind a Chinese accelerator is handed
+#: ``avatars.st.dl.eccdnx.com`` (Steam's China CDN), a direct connection gets
+#: ``avatars.fastly.steamstatic.com``, and neither is wrong.  A suffix rule is
+#: still narrow enough -- ``notsteamstatic.com`` does not end in
+#: ``.steamstatic.com`` and stays out.
+_ALLOWED_HOSTS = (
+    "steamcdn-a.akamaihd.net",        # the avatar host before the CDN move
+    "steamcommunity-a.akamaihd.net",  # community images, same era
+)
+_ALLOWED_SUFFIXES = (
+    ".steamstatic.com",               # global: akamai / fastly / cloudflare edges
+    ".eccdnx.com",                    # Steam China CDN
+)
 
 _USER_AGENT = "cs-net/1.0 (+demo library; steam avatar fetch)"
 
@@ -178,9 +191,16 @@ def fetch_summary(steamid: Any, *, timeout: float = DEFAULT_TIMEOUT) -> dict[str
     if not isinstance(payload, dict):
         raise AvatarError("Steam 返回的结构不认识")
 
-    avatar = allowed_avatar_url(payload.get("avatar_url") or payload.get("avatarfull"))
+    raw_avatar = str(payload.get("avatar_url") or payload.get("avatarfull") or "").strip()
+    avatar = allowed_avatar_url(raw_avatar)
     if not avatar:
-        raise AvatarError("Steam 没有返回可用的头像地址")
+        # Two different failures, and saying which saves a round trip: Steam
+        # named a host we do not trust, or it named nothing at all (a profile
+        # set to private comes back without a picture).
+        if raw_avatar:
+            host = urlparse(raw_avatar).hostname or raw_avatar[:60]
+            raise AvatarError(f"Steam 给的头像地址不在白名单（{host}）")
+        raise AvatarError("Steam 没返回头像地址（资料可能是私密的）")
     return {
         "steamid": str(steamid).strip(),
         "persona_name": str(payload.get("persona_name") or "").strip(),

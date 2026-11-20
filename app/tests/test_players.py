@@ -417,7 +417,10 @@ def test_steam_id_helpers() -> None:
         "https://avatars.akamai.steamstatic.com/abc_full.jpg",
         "https://avatars.cloudflare.steamstatic.com/abc_full.jpg",
         "https://steamcdn-a.akamaihd.net/steamcommunity/public/images/avatars/ab/abc_full.jpg",
+        "https://steamcommunity-a.akamaihd.net/abc_full.jpg",
         "//avatars.fastly.steamstatic.com/abc_full.jpg",
+        # Steam hands this one to clients it sees in China (measured, not guessed).
+        "https://avatars.st.dl.eccdnx.com/16501ab958d99937bd521ae79e03bd34a07e605e_full.jpg",
     ):
         check(f"allowed: {url[:52]}", avatars.allowed_avatar_url(url) != "")
 
@@ -427,6 +430,8 @@ def test_steam_id_helpers() -> None:
         "https://steamstatic.com.evil.example/abc.jpg",
         "https://notsteamstatic.com/abc.jpg",
         "https://avatars.fastly.steamstatic.com.evil.example/abc.jpg",
+        "https://not-eccdnx.com/abc.jpg",
+        "https://eccdnx.com.evil.example/abc.jpg",
         "",
     ):
         check(f"rejected: {url[:52] or '(empty)'}", avatars.allowed_avatar_url(url) == "")
@@ -506,6 +511,25 @@ def test_fetch_and_store() -> None:
         eq("only one file left", len(list(config.AVATAR_DIR.glob(f"{ZYWOO}.*"))), 1)
         eq("attempts accumulate", db.get_avatar(ZYWOO)["attempts"], 2)
 
+        # The real response, as Steam served it to a machine behind a Chinese
+        # accelerator: the picture is on the China CDN, not on *.steamstatic.com.
+        print("\nthe payload a China-side client actually gets")
+        live = {
+            "level": 10,
+            "level_class": "friendPlayerLevel lvl_10",
+            "persona_name": "gary",
+            "avatar_url": ("https://avatars.st.dl.eccdnx.com/"
+                           "16501ab958d99937bd521ae79e03bd34a07e605e_full.jpg"),
+            "favorite_badge": {"name": "Years of Service", "level": 8},
+            "avatar_frame": "https://shared.st.dl.eccdnx.com/community_assets/x.png",
+            "animated_avatar": "https://shared.st.dl.eccdnx.com/community_assets/y.gif",
+        }
+        with stub_http(_profile(live)) as calls:
+            result = avatars.fetch_and_store(DONK)
+        check("the lookup succeeded", result["ok"], result.get("error", ""))
+        eq("the persona came through", result["persona_name"], "gary")
+        eq("the picture was fetched from the China CDN", calls[1], live["avatar_url"])
+
 
 def test_fetch_failures() -> None:
     """Every failure has to land as a row the UI can explain."""
@@ -528,6 +552,13 @@ def test_fetch_failures() -> None:
         check("an off-Steam avatar url fails", not r["ok"])
         eq("and is never fetched", len(calls), 1)
         check("reason names the url problem", "头像地址" in r["error"], r["error"])
+        check("and names the host it refused", "evil.example.com" in r["error"], r["error"])
+
+        # No picture at all -- what a profile set to private comes back as.
+        with stub_http(_profile({"persona_name": "x"})):
+            r = avatars.fetch_and_store(DONK)
+        check("a profile without a picture fails", not r["ok"])
+        check("reason says the field was missing", "没返回" in r["error"], r["error"])
 
         # Right host, wrong bytes.
         with stub_http(_profile(
@@ -546,7 +577,8 @@ def test_fetch_failures() -> None:
             r = avatars.fetch_and_store(DONK)
         check("still a recorded failure", not r["ok"])
         check("no newline in the message", "\n" not in r["error"], repr(r["error"]))
-        eq("two errors counted", db.avatar_stats()["error"], 2)
+        # One row per steamid: the repeated failures on DONK replaced each other.
+        eq("two steamids in error", db.avatar_stats()["error"], 2)
 
 
 def test_staleness() -> None:
