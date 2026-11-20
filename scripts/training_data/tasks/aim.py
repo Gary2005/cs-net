@@ -132,9 +132,10 @@
 449 条共 28.7 MB）；旧版单样本 320 KB（视角图压不动）。
 
 造数成本上遮挡是唯一的增量：一帧 `n_alive²×8` 条射线，实测 **0.5 ms/帧**（10 人全活，
-mirage），一条 `T=257` 的样本纯遮挡约 0.13 s；`Occluder` 按**回合**缓存帧结果，所以同一
-回合里互相重叠的几条击杀窗口只算一遍。四份 csz 全量重造 **159 秒 / 449 条**
-（≈0.35 s 一条，含解码；旧版随机窗口是 132 秒）。
+mirage）。但这一笔现在**不在造数时付**：整回合的逐帧遮挡在解析 csz / 第一次用到时
+就算完，落在 `<csz>.obs/r<回合>.npz`（见 `obstruction_cache.py` 与
+`obstruction.build_round`），造数只读数组，一条 `T=257` 的样本从 0.13 s 降到一次切片。
+四份 csz 全量重造 **159 秒 / 449 条**（≈0.35 s 一条，含解码）是进缓存之前的数。
 """
 
 from __future__ import annotations
@@ -147,6 +148,7 @@ import numpy as np
 from ..constants import MAP_TO_IDX, N_PLAYERS, TEAM_TO_IDX, TEAM_UNKNOWN
 from ..features import normalize_xyz
 from ..obstruction import Occluder
+from ..obstruction_cache import ensure as ensure_obstruction
 from ._util import alive_track, kills, last_alive, late_kills, track, window_before
 from .base import Task
 
@@ -377,16 +379,21 @@ class _Round:
     """一个回合的"全场 × 时间"原料，**整回合算一次**，每条击杀切片取走自己要的窗口。
 
     这样做的原因很直接：一个回合里 10 个玩家 × 每帧 20 个特征，逐条击杀各算一遍会把
-    同一个人重复算 2~5 次（一个回合平均产出 5 条样本）。而每帧的遮挡矩阵由 `Occluder`
-    自己做**逐帧**缓存，重叠窗口也只算一遍。
+    同一个人重复算 2~5 次（一个回合平均产出 5 条样本）。遮挡同理，而且更进一步：
+    整回合的遮挡由 `obstruction_cache.ensure()` 一次性建好（`obstruction` 参数），
+    这里只切片；只有没给的时候才退回 `Occluder` 逐帧现算。
     """
 
     def __init__(self, store, fi: int, rnd: dict, map_name: str, *,
-                 on_player=None, on_stage=None) -> None:
+                 on_player=None, on_stage=None,
+                 obstruction: np.ndarray | None = None) -> None:
         # `on_player(p)` / `on_stage(name)` 是给网页进度条用的（默认 None：造训练
         # 数据时没有任何额外开销，也不影响产出 —— 它们只在某一步算完之后被调，
-        # 什么时候调不改变任何数值）。这一版最慢的一步是下面 `Occluder` 的逐帧
-        # 几何 + 地图 BVH，光靠"玩家 1/10"是看不出它在干什么的。
+        # 什么时候调不改变任何数值）。
+        #
+        # `obstruction`：整回合的逐帧遮挡 `(T,10,10)`（`obstruction_cache.ensure()`
+        # 的结果）。**给了就不碰地图几何**：不建 `Occluder`、不加载 BVH，app 侧
+        # 推理就是纯 numpy 切片。没给才退回 `Occluder` 现算（见 `occluder` 属性）。
         self.rnd = rnd
         self.map_name = map_name
         self.secs = np.asarray(rnd["round_seconds"], dtype=np.float64)
@@ -394,6 +401,9 @@ class _Round:
         self.n_frames = len(self.ticks)
         self.n_pl = min(N_PLAYERS, len(rnd["players"]))
         self.lut = store.weapon_lut(fi)
+        self._obstruction = obstruction
+        self._occluder = None
+        self._on_stage = on_stage
         teams = rnd.get("teams") or []
         #: `(N_PLAYERS,)` int8：CT=0 / T=1 / -1 未知。整回合不变。
         self.team = np.full(N_PLAYERS, TEAM_UNKNOWN, np.int8)
@@ -416,11 +426,6 @@ class _Round:
         # 死人不可能拿着枪：位置列可以是残留值，但武器别留下假信号。
         self.weapon[~self.alive] = -1
 
-        if on_stage is not None:
-            on_stage("准备地图 / 逐帧遮挡几何")
-        self.occluder = Occluder(rnd, map_name, N_PLAYERS)
-
-        # ── 道具的原料（整回合只取一次）────────────────────────────────────
         if on_stage is not None:
             on_stage("整理道具 / 手雷原料")
         ev = rnd.get("events") or {}
@@ -470,6 +475,34 @@ class _Round:
         self.bomb_planted_s = float(self.secs[planted[0]]) if planted.size else None
 
     # ------------------------------------------------------------------ 切片
+
+    @property
+    def occluder(self) -> Occluder:
+        """精确的逐帧遮挡引擎。**只在没有缓存时才会被建**（建一次 = 地图 BVH 2 秒）。"""
+        if self._occluder is None:
+            if self._on_stage is not None:
+                self._on_stage("准备地图 / 逐帧遮挡几何")
+            self._occluder = Occluder(self.rnd, self.map_name, N_PLAYERS)
+            self._on_stage = None
+        return self._occluder
+
+    def obstruction_window(self, start: int, stop: int) -> np.ndarray:
+        """`[start, stop)` 的逐帧遮挡 `(T,10,10) int8`，和 `occluder.window()` 同形。
+
+        有缓存就是一次切片（微秒级）；没有就退回精确现算。造数和推理都走这里，
+        所以"缓存命中"和"缓存缺失"产出的张量形状、dtype、语义完全一致。
+        """
+        arr = self._obstruction
+        if arr is not None:
+            return arr[start:stop]
+        return self.occluder.window(start, stop)
+
+    def obstruction_at(self, idx) -> np.ndarray:
+        """任意帧下标集合 → `(K,10,10)`。有缓存是一次花式索引，没有就逐帧现算。"""
+        arr = self._obstruction
+        if arr is not None:
+            return arr[idx]
+        return np.stack([self.occluder.matrix(int(i)) for i in idx])
 
     def mask(self, sl: slice, atk: int, tgt: int) -> np.ndarray:
         """`(T, 10)` int8：0 死 / 1 A / 2 B / 3 其他存活。"""
@@ -587,7 +620,13 @@ class Aim(Task):
             return      # 不在这 8 张图里：normalize_xyz 会静默失真，整个回合一条都不产出
 
         rnd = store.round(fi, rid)
-        rr = _Round(store, fi, rnd, map_name)
+        # 整回合遮挡先问缓存（csz 落盘时算过就有），没有才整回合重算并写回；
+        # 命中之后 `_Round` 不会碰地图几何。
+        csz = getattr(store, "paths", None)
+        obstruction = ensure_obstruction(
+            csz[fi] if csz else None, rnd, map_name, N_PLAYERS
+        )
+        rr = _Round(store, fi, rnd, map_name, obstruction=obstruction)
         secs = rr.secs
 
         count = 0
@@ -629,7 +668,7 @@ class Aim(Task):
             ctx_player = np.ascontiguousarray(rr.feat[:, win].transpose(1, 0, 2))  # (T,10,20)
             ctx_mask = rr.mask(win, a, v)                                        # (T,10)
             ctx_weapon = np.ascontiguousarray(rr.weapon[:, win].T)               # (T,10)
-            obstruction = rr.occluder.window(win.start, win.stop)                # (T,10,10)
+            obstruction = rr.obstruction_window(win.start, win.stop)             # (T,10,10)
             ctx_proj, ctx_proj_id = rr.projectiles(win)                          # (T,32,4)/(T,32)
 
             count += 1

@@ -162,11 +162,10 @@ Python 的 `hash()`**（`PYTHONHASHSEED` 一换就变），也不吃 `--seed`（
 正比（见上）。单进程一个 epoch 7135 个样本约 **16 s**，4 个 worker 约 4 s。数据量再
 大一个量级（百万样本）就该换成 `.npy` + 每回合一个目录，让 `mmap` 只碰一行。
 
-造数成本 = aim 的「整回合特征 + 遮挡」按**被抽到的帧**付：遮挡是唯一的大头，一帧
-`n_alive²×8` 条射线（10 人全活 720 条，aim 的 docstring 里实测 0.5 ms/帧；`obstruction.py`
-的说明是 3–6 ms/帧，两个数取决于机型和 numba 线程数），所以 **density 直接决定造数
-时间**：density=1 s 时一局约 1800 帧，也就是几秒到十几秒的遮挡，和一次
-`codec.load()`（11–15 s）同一量级。`Occluder` 按回合缓存，被抽到的帧互不重复。
+造数成本 = aim 的「整回合特征 + 遮挡」里的特征那一半：遮挡进缓存之后不再逐帧付
+（`obstruction_cache.ensure()` 一次建好整回合，这里只按抽到的帧花式索引）。所以
+**density 直接决定造数时间**：density=1 s 时一局约 1800 帧，开销和一次
+`codec.load()`（11–15 s）相比可以忽略。
 
 ## 几条容易踩的
 
@@ -511,6 +510,7 @@ class SpatialPrediction(Task):
         if map_id is None:
             return          # 不在这 8 张图里：normalize_xyz 会静默失真，整回合不产出
 
+        from ..obstruction_cache import ensure as ensure_obstruction
         rnd = store.round(fi, rid)
         winner = str(rnd.get("winner") or "")
         if winner not in ("CT", "T"):
@@ -520,7 +520,11 @@ class SpatialPrediction(Task):
         if idx is None or idx.size == 0:
             return          # 这个回合一个帧都没抽到（短回合 / 其他回合占了名额）
 
-        rr = _Round(store, fi, rnd, map_name)
+        csz = getattr(store, "paths", None)
+        obstruction = ensure_obstruction(
+            csz[fi] if csz else None, rnd, map_name, N_PLAYERS
+        )
+        rr = _Round(store, fi, rnd, map_name, obstruction=obstruction)
         idx = np.asarray(idx, dtype=np.int64)
         idx = idx[(idx >= 0) & (idx < rr.n_frames)]
         if idx.size == 0:
@@ -553,7 +557,7 @@ class SpatialPrediction(Task):
             ctx_player_mask=alive_here.astype(bool),                             # (K,10) True=活
             ctx_player_team=np.tile(team, (k, 1)),                               # (K,10) 0/1/-1
             ctx_player_weapon=np.ascontiguousarray(rr.weapon[:, idx].T),         # (K,10) -1=无
-            obstruction=np.stack([rr.occluder.matrix(int(i)) for i in idx]),     # (K,10,10)
+            obstruction=rr.obstruction_at(idx),                                  # (K,10,10)
             ctx_projectile=proj,                                                 # (K,32,4) [0,1]
             ctx_projectile_id=proj_id,                                           # (K,32)
             global_feat=rr.global_feat(slice(0, rr.n_frames))[idx],              # (K,5)

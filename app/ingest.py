@@ -424,6 +424,27 @@ def run_extraction(demo_id: int, job: jobs.Job) -> dict[str, Any]:
     csz = csz_path_for(src, md5)
     codec.save(data, csz)
 
+    # 逐帧遮挡缓存：跟着 csz 一起落盘。放在这里而不是"第一次点 AI 的时候"，
+    # 是因为它只依赖 csz 里的几何 + 地图 mesh，和模型、采样窗口都无关 —— 算一次
+    # 就够，之后推理 / 造数都只是读数组（推理从 3~4 s 降到 0.1 s，且不再建 BVH）。
+    job.set_step("缓存逐帧遮挡…", 0.72)
+    try:
+        from . import obstruction as _obstruction
+
+        cache_info = _obstruction.build_demo(
+            csz,
+            data,
+            progress=lambda frac, msg: job.set_step(msg, 0.72 + 0.11 * float(frac)),
+        )
+        if cache_info.get("failed"):
+            # 单个回合失败不算提取失败：那一回合下次用到时会重算。
+            print(
+                f"[obstruction] demo {demo_id} 有 {len(cache_info['failed'])} "
+                f"个回合的遮挡缓存没建成"
+            )
+    except Exception as exc:  # noqa: BLE001 - 缓存失败绝不能让提取失败
+        print(f"[obstruction] demo {demo_id} 遮挡缓存失败：{type(exc).__name__}: {exc}")
+
     job.set_step("统计比分与选手数据…", 0.85)
     md = metadata.build_metadata(
         data,
@@ -675,6 +696,9 @@ def delete_csz_if_unreferenced(csz_path: Optional[str],
         return False
     try:
         Path(csz_path).unlink(missing_ok=True)
-        return True
     except OSError:
         return False
+    from . import obstruction as _obstruction
+
+    _obstruction.discard(csz_path)
+    return True

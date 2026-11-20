@@ -1,8 +1,13 @@
 """把**已经读进内存的 demo dict** 变成两个模型要的输入张量。
 
-这里刻意不复刻一份特征公式：`ctx_player` 的 20 列、遮挡矩阵、道具快照、全局列
-全部由 `scripts/training_data/tasks/aim.py` 的 `_Round` 算，和造训练数据用的是
+这里刻意不复刻一份特征公式：`ctx_player` 的 20 列、道具快照、全局列全部由
+`scripts/training_data/tasks/aim.py` 的 `_Round` 算，和造训练数据用的是
 **同一段代码**。抄一份到这里，两边迟早会漂：特征是训练和推理之间唯一的契约。
+
+**遮挡不在这个契约的现算路径上**：逐帧两两遮挡是训练和推理共用的、只依赖 csz
+几何 + 地图 mesh 的量，提取消耗完就落在 `<csz>.obs/r<回合>.npz`（见
+`training_data/obstruction_cache.py`），这里只读数组。命中缓存时**完全不碰地图
+几何**：不建 `Occluder`、不加载 BVH。缓存缺失才整回合重算再写回。
 
 输入从哪来
 ----------
@@ -51,11 +56,6 @@ AIM_WINDOW = 257
 
 #: 每个采样点的列数：`ctx_projectile` 的行数（`_Round.projectiles` 的上限）。
 N_PROJ = 32
-
-
-#: 遮挡分块的帧数：`Occluder` 逐帧缓存，所以分块算和整段算的数值完全一样，
-#: 分块只是为了每 ~0.25 s 能报一次进度（网页的进度条靠它）。
-OCC_CHUNK = 512
 
 
 class AiFeaturesError(RuntimeError):
@@ -198,17 +198,20 @@ def build_round_tensors(
     data: dict,
     round_idx: int,
     *,
+    csz_path: Optional[str | Path] = None,
     progress: Optional[Callable[[float, str], None]] = None,
 ) -> RoundTensors:
     """一个回合的整份模型输入（特征 + 遮挡 + 道具 + 全局列）。
 
-    `data` 是 `codec.load()` 的结果。耗时（RTX 3090 那台机器上实测，一个
-    ~6800 采样 / 106 s 的回合）≈ **3~4 s**，其中 90% 是两两遮挡的射线；同一
-    回合重复调用应当走 `service` 的内存缓存，不要重新调这个函数。
+    `data` 是 `codec.load()` 的结果。遮挡走磁盘缓存（`<csz>.obs/r<回合>.npz`，
+    由 `obstruction_cache.ensure()` 在提取 / 第一次用到时建好）：**命中就只是一次
+    读盘，不建地图 BVH、不发射线**，所以这个函数从原来的 3~4 秒降到约 0.1 秒
+    （实测：`_Round` 30 ms + 道具 61 ms + 读缓存 10 ms）。缓存缺失时会整回合重算
+    （约 0.5 秒）再写回，而不是只算需要的窗口。
 
-    `progress(分数, 说明)` 报的是**本函数内部**的进度（0..1），调用方自己映射到
-    整体进度上：遮挡按 `OCC_CHUNK` 帧分块算，玩家特征按人报（各 1/10），所以
-    一次 7 秒的构建能报出二十来次，进度条不会僵在那儿。
+    同一回合重复调用应当走 `service` 的内存缓存，不要重新调这个函数。
+
+    `progress(分数, 说明)` 报的是**本函数内部**的进度（0..1）。
     """
     say = progress or (lambda _frac, _msg: None)
     rounds = data.get("rounds") or []
@@ -237,25 +240,33 @@ def build_round_tensors(
             "AI 预测需要每 tick 都采的提取结果"
         )
 
-    say(0.0, "构建玩家特征 / 遮挡几何…")
+    say(0.0, "读取逐帧遮挡缓存…")
+    from ..obstruction import ensure_round
+
+    frames = int(ticks.size)
+    obstruction = ensure_round(
+        csz_path,
+        rnd,
+        map_name,
+        progress=lambda frac, msg: say(0.85 * max(0.0, min(1.0, frac)), msg),
+    )
+    if obstruction.shape != (frames, N_PLAYERS, N_PLAYERS):
+        raise AiFeaturesError(
+            f"遮挡缓存形状不对：{obstruction.shape}，回合是 {frames} 帧 × "
+            f"{N_PLAYERS} 人（清掉 <csz>.obs 会重算）"
+        )
+
+    say(0.86, "构建玩家特征…")
     n_pl = max(1, min(N_PLAYERS, len(rnd.get("players") or [])))
     rr = _Round(
         _WeaponLut(data), 0, rnd, map_name,
-        # 逐人报一次（一个人约 5 ms，主要是让进度条早点动起来）；真正花时间的是
-        # `_Round.__init__` 里的 `Occluder`（逐帧几何 + 地图 BVH），所以这一小段
-        # 只占 10%，剩下的留给遮挡。
-        on_player=lambda p: say(0.02 + 0.10 * (p + 1) / n_pl, f"玩家特征 {p + 1}/{n_pl}…"),
-        on_stage=lambda name: say(0.13, f"{name}…"),
+        obstruction=obstruction,
+        on_player=lambda p: say(0.86 + 0.08 * (p + 1) / n_pl, f"玩家特征 {p + 1}/{n_pl}…"),
+        on_stage=lambda name: say(0.95, f"{name}…"),
     )
     n = rr.n_frames
 
-    obstruction = np.empty((n, N_PLAYERS, N_PLAYERS), np.int8)
-    for start in range(0, n, OCC_CHUNK):
-        stop = min(n, start + OCC_CHUNK)
-        obstruction[start:stop] = rr.occluder.window(start, stop)
-        say(0.14 + 0.84 * stop / n, f"两两遮挡 {stop}/{n} 帧…")
-
-    say(0.99, "整理道具 / 全局列…")
+    say(0.97, "整理道具 / 全局列…")
     projectiles, proj_id = rr.projectiles(slice(0, n))
     global_feat = rr.global_feat(slice(0, n))
     seconds = np.asarray(rnd["round_seconds"], dtype=np.float64)[:n]

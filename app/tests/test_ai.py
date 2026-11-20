@@ -712,6 +712,172 @@ def test_stream_work_shares_one_job() -> None:
     eq("结果挂在任务上（下一次点开是缓存）", jobs[0]["result"]["value"], 7)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 整回合遮挡：稀疏构建 + 磁盘缓存
+# ═══════════════════════════════════════════════════════════════════════════
+
+#: `view_render` 把 three 空间的 OBJ 换成 game 空间用的比例（`(gx,gy,gz)=(tz,tx,ty)/S`）。
+_OBJ_SCALE = 0.0254
+
+
+def _wall_obj(path: Path) -> Path:
+    """一面 ``x = 0`` 的墙（game 空间），写成 OBJ。
+
+    OBJ 是 three 空间：``(tx,ty,tz) = (gy,gz,gx)·S``，和 `scripts/extract_maps.py`
+    拆出来的地图同轴 —— 这样稀疏构建和精确算法看的是同一面墙，比较才有意义。
+    """
+    s = _OBJ_SCALE
+    game = [
+        (0.0, -200.0, -16.0),
+        (0.0, 200.0, -16.0),
+        (0.0, 200.0, 96.0),
+        (0.0, -200.0, 96.0),
+    ]
+    lines = [f"v {gy * s:.6f} {gz * s:.6f} {gx * s:.6f}" for gx, gy, gz in game]
+    lines += ["f 1 2 3", "f 1 3 4"]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _wall_round(frames: int = 120) -> dict:
+    """2 个玩家：0 号一直站在墙左边，1 号从左穿到右（穿墙，只为制造一次单调翻转）。"""
+    xs = np.linspace(60.0, -60.0, frames)
+    z = [0.0] * frames
+
+    def player(x) -> dict:
+        return {
+            "x": list(x),
+            "y": z,
+            "z": z,
+            "crouch": z,
+            "crouching": [False] * frames,
+            "alive": [True] * frames,
+        }
+
+    return {
+        "id": 0,
+        "ticks": list(range(1000, 1000 + frames)),
+        "round_seconds": [i / 64.0 for i in range(frames)],
+        "players": [player([-60.0] * frames), player(xs)],
+        "smoke": [],
+        "fire": [],
+        "events": {},
+    }
+
+
+def test_build_round_sparse() -> None:
+    """`build_round` 和精确逐帧算法在"单调变化"的回合上必须逐位相同。"""
+    from scripts.training_data import obstruction as obst
+
+    d = scratch()
+    obj = _wall_obj(d / "wall.obj")
+    saved = obst.load_map
+    obst.load_map = lambda _name: saved("tt_wall", obj_path=str(obj))
+    try:
+        rnd = _wall_round()
+        exact = obst.Occluder(rnd, "tt_wall", 2).window(0, len(rnd["ticks"]))
+        sparse = obst.build_round(rnd, "tt_wall", 2)
+
+        eq("形状和精确一致", sparse.shape, exact.shape)
+        check("确实有被墙挡死的帧", int((exact[:, 0, 1] == 2).sum()) > 0)
+        check("也确实有通的帧", int((exact[:, 0, 1] == 0).sum()) > 0)
+        eq("单调穿越：稀疏 == 精确", int((sparse != exact).sum()), 0)
+
+        # 锚点稀疏到 16 帧，二分仍能定位到那一帧（变化只有一次，不会"翻了又翻回来"）
+        eq("stride=16 也精确", int((obst.build_round(rnd, "tt_wall", 2, stride=16) != exact).sum()), 0)
+        # 对角线永远是 0
+        eq("对角线是 0", int(np.abs(np.einsum("tii->ti", sparse)).sum()), 0)
+
+        # 死亡：死人的行 / 列必须是 0，且和精确值一致
+        rnd2 = _wall_round()
+        rnd2["players"][1]["alive"][60:] = [False] * 60
+        exact2 = obst.Occluder(rnd2, "tt_wall", 2).window(0, 120)
+        sparse2 = obst.build_round(rnd2, "tt_wall", 2)
+        eq("有死亡的回合：稀疏 == 精确", int((sparse2 != exact2).sum()), 0)
+        eq(
+            "死人的行 / 列全是 0",
+            int(np.abs(sparse2[60:, 1, :]).sum() + np.abs(sparse2[60:, :, 1]).sum()),
+            0,
+        )
+    finally:
+        obst.load_map = saved
+
+
+def test_obstruction_cache() -> None:
+    """缓存：写完能读、对不上就重建、命中不碰几何、删 csz 一起清。"""
+    from scripts.training_data import obstruction as obst
+    from scripts.training_data import obstruction_cache as oc
+    from app import obstruction as app_obst
+
+    d = scratch()
+    csz = d / "demo__ab12cd34.csz"
+    csz.write_bytes(b"not a real csz")
+    rnd = {"id": 3, "ticks": list(range(40))}
+    arr = (np.arange(40 * 10 * 10, dtype=np.int8) % 3).reshape(40, 10, 10)
+
+    calls = {"n": 0}
+    # `ensure()` 是**调用时**才从 obstruction 里取 build_round 的（为了不把 numba
+    # 拖进"只想摸文件"的调用方），所以补丁打在 obstruction 上，不是打在这里。
+    saved_build = obst.build_round
+
+    def fake_build(_rnd, _map, _n, **_kw):
+        calls["n"] += 1
+        return arr
+
+    obst.build_round = fake_build
+    saved_map = obst.load_map
+    try:
+        got = oc.ensure(csz, rnd, "de_mirage", 10)
+        eq("没有缓存 → 建一次", calls["n"], 1)
+        check("返回的数组和算出来的一致", np.array_equal(got, arr))
+        check("缓存文件落盘了", oc.round_path(csz, 3).is_file())
+
+        # 命中缓存时**不许碰几何**：把 load_map 换成"一调就炸"
+        obst.load_map = lambda _n, **_kw: (_ for _ in ()).throw(RuntimeError("不许碰几何"))
+        got2 = app_obst.ensure_round(csz, rnd, "de_mirage")
+        eq("第二次 → 不再算", calls["n"], 1)
+        check("读回来的数组一致", np.array_equal(got2, arr))
+        obst.load_map = saved_map
+
+        check("has() 认这个缓存", oc.has(csz, 3, 40, map_name="de_mirage"))
+        check("帧数对不上 → 不认", not oc.has(csz, 3, 41, map_name="de_mirage"))
+        check("帧数对不上 → load 返回 None", oc.load(csz, 3, 41, map_name="de_mirage") is None)
+        check("地图名换了 → 不认（basis 变了）",
+              not oc.has(csz, 3, 40, map_name="de_anubis"))
+
+        # 算法版本一变，老缓存自动作废
+        oc.CACHE_VERSION += 1
+        check("CACHE_VERSION +1 → 不认", not oc.has(csz, 3, 40, map_name="de_mirage"))
+        oc.CACHE_VERSION -= 1
+
+        # 坏文件 = 没命中，不是异常
+        oc.round_path(csz, 3).write_bytes(b"garbage")
+        check("坏缓存 → 当没命中", oc.load(csz, 3, 40, map_name="de_mirage") is None)
+        oc.save(csz, 3, arr, map_name="de_mirage")
+        check("覆盖之后又能读", np.array_equal(oc.load(csz, 3, 40, map_name="de_mirage"), arr))
+
+        # 整个 demo 一轮：两个回合，一个命中一个新建
+        data = {
+            "meta": {"map": "de_mirage"},
+            "rounds": [rnd, {"id": 4, "ticks": list(range(40))}],
+        }
+        info = app_obst.build_demo(csz, data)
+        eq("build_demo 覆盖两个回合", info["rounds"], 2)
+        eq("其中一个命中缓存", info["cached"], 1)
+        eq("另一个新建", info["built"], 1)
+        eq("没有失败", info["failed"], [])
+        check("第二个回合也有缓存文件", oc.round_path(csz, 4).is_file())
+
+        # 删 csz 时缓存目录一起没
+        app_obst.discard(csz)
+        csz.unlink()
+        check("discard 之后目录没了", not oc.cache_dir(csz).exists())
+        check("discard 之后再 load → None", oc.load(csz, 3, 40, map_name="de_mirage") is None)
+    finally:
+        obst.build_round = saved_build
+        obst.load_map = saved_map
+
+
 def main() -> int:
     print("app/ai 单元测试")
     for name, fn in [
@@ -726,6 +892,8 @@ def main() -> int:
         ("models pinned", test_pinned_models),
         ("routes", test_routes),
         ("stream_work jobs", test_stream_work_shares_one_job),
+        ("build_round sparse", test_build_round_sparse),
+        ("obstruction cache", test_obstruction_cache),
     ]:
         print(f"\n[{name}]")
         try:

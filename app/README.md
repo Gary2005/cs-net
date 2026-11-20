@@ -218,20 +218,44 @@ aim 只在死前 3 秒的窗口里有值。
 
 输入不是另造一份：`app/ai/features.py` 直接调 `scripts/training_data/tasks/aim.py`
 的 `_Round`（造训练数据用的那一份），从**已经加载在内存里的** demo dict 现算
-`ctx_player` / 遮挡矩阵 / 道具 / 全局列，不重新 load `.csz`、也不落 npz。
+`ctx_player` / 道具 / 全局列，不重新 load `.csz`、也不落 npz。
+
+**逐帧两两遮挡不在现算路径上**。它只依赖 `.csz` 里的几何 + 地图 mesh，和模型、
+采样窗口都无关，所以在提取完成时就整回合算好，落在 `<csz>.obs/r<回合>.npz`
+（一个 5666 帧的回合压完只有 4 KB）。命中缓存时推理**完全不碰地图几何**：不建
+`Occluder`、不加载 BVH、不发射线。实测一个 5666 帧的回合：
+
+```
+命中缓存时 build_round_tensors 的构成        实测
+  读遮挡缓存（npz）                            7 ms
+  _Round：20 列特征 + 生死 + 武器              30 ms
+  projectiles                                 61 ms
+  global_feat + feat 连续化                     1 ms
+  合计                                       ~100 ms      （原来是 3~4 秒）
+```
+
+缓存对不上（`.csz` 重新抽过、地图几何变了、`obstruction_cache.CACHE_VERSION`
+加一）就**整回合重算**再写回，而不是只算需要的窗口 —— 这样同一个回合的任意窗口、
+任意帧都直接能取，不会出现"某些帧没缓存"的分支。哪些东西算进缓存键见
+`scripts/training_data/obstruction_cache.py::basis`；整回合怎么少算（锚点 + 逐对
+二分，约 0.5 秒/回合、和精确值差 0.01% 的对格）见 `obstruction.py::build_round`。
+
+缓存是提取那一步建的（0.56 秒/回合，17 个回合约 9.5 秒；服务进程第一次提取还要
+多付一次性的 7 s numba 编译 + 2 s 地图 BVH）。建失败不会让提取失败 —— 那一回合
+下次用到时重算。丢弃 `.csz` 时 `.obs` 目录一起删。
 
 **进度条**：冷分析一次十几秒，同步请求在这段时间里一个字节都不发，用户只能盯着
 不动的画面猜。所以 `/api/ai/round/<idx>?progress=1` 是一条 **NDJSON 流**（一行一个
 事件：`progress` / `result` / `error`），真正的计算跑在后台线程里，生成器每 80 ms
 读一次加锁的进度快照。页面上的进度条显示**阶段 + 百分比 + 已用时**，阶段来自
-`build_round_tensors` 的分块（玩家特征 1/10、两两遮挡 2048/6828 帧…）和两次前向的
+`build_round_tensors` 的分段（读遮挡缓存 / 玩家特征 1/10 / 整理道具…）和两次前向的
 分块。不带这个参数时行为和以前完全一样（纯 JSON）。
 
 **代价**（RTX 3090 实测，一个 6800 采样 / 106 s 的回合）：首次 **15~25 秒**
-（其中 4 s 是特征、3.4 s 是遮挡、1.4 s 读权重，另外 **7 s numba 编译 + 2~4 s 地图
-BVH** 每个进程只付一次）；同一个回合再点是**读缓存 3~70 ms**。所以页面刚打开
-（`/api/ai/status`）时会在后台线程把这 10 秒的固定开销先做掉，用户点的时候不用
-再等。三层缓存：
+（特征 + 遮挡 + 读权重；其中 **7 s numba 编译 + 2~4 s 地图 BVH** 每个进程只付一次）。
+遮挡进了缓存之后，这一条里最大的一块（3.4 s 射线）在**提取时**就付掉了，推理侧
+只剩 ~0.1 秒；同一个回合再点是**读缓存 3~70 ms**。页面刚打开（`/api/ai/status`）
+时仍会在后台线程把权重那 10 秒的固定开销先做掉，用户点的时候不用再等。三层缓存：
 
 ```
 进程内 · 输入张量   挂在会话 data["_ai_tensors"] 上，一个回合约 10 MB，留最近 3 个
@@ -482,6 +506,7 @@ app/
   ai/           模型预测：features.py（复用训练侧特征 + 分块报进度）、
                 models.py（写死的权重路径 + 加载）、service.py（5 个头 + 对枪窗口 +
                 三层缓存 + 进度 + 预热）、api.py（/api/ai/*，含 NDJSON 流）
+  obstruction.py 逐帧两两遮挡缓存（整回合，落在 <csz>.obs/；几何实现在 scripts/）
   server.py     create_app() 和入口
   desktop.py    打包后的入口：空闲端口 + 单实例 + 开浏览器 + 窗口 + 日志
   selftest.py   --packaging-selftest：给打出来的 exe 做的体检
@@ -557,6 +582,7 @@ app/data/
   config.json          设置
   library.db           库（SQLite，WAL）
   csz/                 <文件名>__<md5前8位>.csz
+  csz/<csz>.obs/       那个 .csz 的逐帧遮挡缓存，每回合一个 r<回合>.npz（约 4 KB）
   imports/             上传进来的 .dem / .zip，同样带 md5 后缀
   thumbs/              每场一张 demo_<id>.png
   thumbs/_maps/        按地图缓存的雷达底图（带 .extent 边车文件）
@@ -678,7 +704,7 @@ models     用了哪两份权重、哪个设备
 流式的每一行长这样（`\n` 分隔，`mimetype: application/x-ndjson`）：
 
 ```
-{"type":"progress","pct":0.42,"stage":"两两遮挡 2048/6828 帧…","elapsed":6.1}
+{"type":"progress","pct":0.42,"stage":"玩家特征 5/10…","elapsed":0.1}
 {"type":"result","payload":{…},"elapsed":23.9}
 {"type":"error","error":"…","kind":"models","elapsed":1.2}
 ```

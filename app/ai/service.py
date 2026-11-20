@@ -660,7 +660,9 @@ def _write_cache(path: Path, payload: dict[str, Any]) -> None:
 _COMPUTE_LOCK = threading.Lock()
 
 
-def _tensors_of(data: dict, round_idx: int, *, progress=None) -> RoundTensors:
+def _tensors_of(
+    data: dict, round_idx: int, *, csz_path: Optional[str | Path] = None, progress=None
+) -> RoundTensors:
     store: Optional[dict[int, RoundTensors]] = data.get("_ai_tensors")
     if store is None:
         store = {}
@@ -668,7 +670,7 @@ def _tensors_of(data: dict, round_idx: int, *, progress=None) -> RoundTensors:
     cached = store.get(round_idx)
     if cached is not None:
         return cached
-    tensors = build_round_tensors(data, round_idx, progress=progress)
+    tensors = build_round_tensors(data, round_idx, csz_path=csz_path, progress=progress)
     store[round_idx] = tensors
     # 只留最近几个回合：一个约 10 MB，回合多的比赛不该被这一层吃掉内存
     while len(store) > _TENSORS_KEEP:
@@ -753,6 +755,7 @@ def predict_round(
         )
         tensors = _tensors_of(
             data, round_idx,
+            csz_path=csz_path,
             progress=lambda frac, msg: say(_sub(_STAGE_FEAT, frac), msg),
         )
         samples = np.arange(0, tensors.frames, stride, dtype=np.int64)
