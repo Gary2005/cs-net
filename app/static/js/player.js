@@ -13,6 +13,10 @@ import { t } from '/static/js/i18n/index.js';
 import { mountTips, tipTh } from '/static/js/tips.js';
 // NDJSON 流（统计端点边走边报进度）
 import { streamJson } from '/static/js/ndjson.js';
+// 分享图（canvas 画一张 PNG）。和回放页共用同一份实现：它放在 visualizer
+// 的 static 下面，因为 `/static` 是四个页面都挂着的那个目录（玩家页自己的
+// `/lib-static` 只有 app 的资源）。
+import { downloadCard } from '/static/js/share-card.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
@@ -269,6 +273,7 @@ async function loadPlayer() {
     S.nameHistory = r.name_history || [];
     S.avatar = r.avatar;
     S.watched = !!r.player.watched;
+    $('btn-share').disabled = false;
     renderHead();
     renderStats();
     renderNames();
@@ -281,6 +286,7 @@ async function loadPlayer() {
     $('name-table').innerHTML = '';
     $('map-table').innerHTML = '';
     $('btn-watch').disabled = true;
+    $('btn-share').disabled = true;
     $('btn-refresh-avatar').disabled = true;
   }
 }
@@ -370,6 +376,75 @@ async function refreshAvatar() {
   } catch (err) {
     toast(t('player.common.toast.submitFail', { msg: err.message }), 'error');
   } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── 分享图 ────────────────────────────────────────────────────────────────
+//
+// 一张卡片带三块数据：档案头（头像 / Steam 昵称 / 用过的名字）、跨场传统统计、
+// 跨场 AI 统计（点了 AI 页签、跑过模型才有）、最近几场的明细。
+//
+// 传统统计还没算完时退回**库里那份聚合**（`S.detail`，SQL 算的），所以点了按钮
+// 立刻就有图，不用等统计跑完。两份口径本来就一致（见 db.py 的 _PLAYER_VIEW）。
+
+/** 库里的一行 → 卡片上的一行（ADR 同样是 伤害 / 回合数）。 */
+function shareMatchRow(d) {
+  const st = statFor(d);
+  const rounds = d.total_rounds || 0;
+  return {
+    map: d.map_name || '',
+    rounds,
+    kills: st ? st.kills : null,
+    deaths: st ? st.deaths : null,
+    assists: st ? st.assists : null,
+    kd: st ? st.kd : null,
+    adr: st && rounds ? (st.adr_damage / rounds).toFixed(1) : null,
+  };
+}
+
+function shareSpec() {
+  const p = S.detail || {};
+  const trad = PS.trad && PS.trad.ok ? PS.trad : null;
+  // 胜率只有库里的聚合有（`sum_trad` 不算胜负，它只汇总选手自己的数），所以
+  // 无论哪条路都用 `p.win_pct`：两份数据的比赛范围本来就是同一个。
+  const totals = {
+    matches: trad ? trad.totals.matches : p.matches,
+    win_pct: p.win_pct,
+    kd: trad ? trad.totals.kd : p.kd,
+    kpr: trad ? trad.totals.kpr : p.kpr,
+    adr: trad ? trad.totals.adr : p.adr,
+    hs_pct: trad ? trad.totals.hs_pct : p.hs_pct,
+  };
+  const ai = PS.ai && PS.ai.ok && PS.ai.totals ? PS.ai.totals : null;
+  // 页头标题已经是 Steam 昵称或最新游戏内名字，名字那一行不要重复它
+  const shown = new Set([String(p.persona || ''), String(p.name || '')].filter(Boolean));
+  return {
+    kind: 'player',
+    name: displayName(p),
+    names: (p.names || []).filter((n) => n && !shown.has(n)),
+    steamid: SID,
+    avatarUrl: (S.avatar && S.avatar.url) || '',
+    lastSeen: (p.last_seen || '').slice(0, 10),
+    totals,
+    aiTotals: ai,
+    recent: S.items.slice(0, 8).map(shareMatchRow),
+    filename: displayName(p),
+  };
+}
+
+async function shareImage() {
+  const btn = $('btn-share');
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t('common.share.saving');
+  try {
+    const out = await downloadCard(shareSpec(), t);
+    toast(t('common.share.done', { name: out.filename }), 'ok');
+  } catch (err) {
+    toast(t('common.share.fail', { msg: err.message }), 'error');
+  } finally {
+    btn.textContent = label;
     btn.disabled = false;
   }
 }
@@ -473,6 +548,12 @@ function tradHTML(d) {
     </tr>`;
   }).join('');
 
+  // 平台把热身录进 demo 时，服务端已经把热身击杀剔掉了；这里说一声，
+  // 免得用户拿这里的 K/D 去和对战平台对、对不上还以为算错了。
+  const warm = d.warmup_kills
+    ? `<div class="pstats-note">${t('replay.stats.warmupNote', { n: d.warmup_kills })}</div>`
+    : '';
+
   return `
     <div class="stat-grid pstats-tiles">${tiles.join('')}</div>
     <div class="pstats-scroll">
@@ -481,6 +562,7 @@ function tradHTML(d) {
         <tbody>${rows}</tbody>
       </table>
     </div>
+    ${warm}
     <div class="pstats-note">${t('player.stats.tradNote', {
       n: (d.matches || []).length, s: (d.elapsed || 0).toFixed(1),
     })}</div>`;
@@ -691,6 +773,7 @@ function bindEvents() {
   });
 
   $('btn-load-all').onclick = loadAll;
+  $('btn-share').onclick = shareImage;
   $('btn-watch').onclick = toggleWatch;
   $('btn-refresh-avatar').onclick = refreshAvatar;
 }

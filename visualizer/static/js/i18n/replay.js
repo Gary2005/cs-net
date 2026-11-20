@@ -241,6 +241,7 @@ export default {
     'replay.stats.damage': "伤害",
     'replay.stats.damageTaken': "承伤",
     'replay.stats.note': "伤害按实际扣血计算；ADR = 伤害 / 回合数，KPR = 击杀 / 回合数。",
+    'replay.stats.warmupNote': "已排除赛前热身的 {n} 次击杀（对战平台会把热身也录进 demo）。",
     'replay.stats.rounds': "每回合",
     'replay.stats.roundsHint': "点回合号跳到那一回合",
 
@@ -558,6 +559,7 @@ export default {
     'replay.stats.damage': "Damage",
     'replay.stats.damageTaken': "Damage taken",
     'replay.stats.note': "Damage counts the HP actually removed; ADR = damage / rounds, KPR = kills / rounds.",
+    'replay.stats.warmupNote': "Excluded {n} pre-match warmup kills (some platforms record the warmup in the demo).",
     'replay.stats.rounds': "Per round",
     'replay.stats.roundsHint': "Click a round number to jump to that round",
 

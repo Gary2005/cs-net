@@ -57,8 +57,10 @@ python -m app.server --port 5000
 3. **保存设置**。
 4. 把 `.dem` / `.zip` 丢进那个目录（或者点顶栏 **扫描** 立即入库）。
 
-设置里还有 **关注玩家** —— 填进去的名字会在列表里高亮。
-改完名单，已经入库的记录会**当场重新匹配**，不用逐场刷新。
+设置里还有 **关注玩家** —— 填 SteamID 或游戏内名字，命中的人在列表里高亮。
+**关注跟的是 Steam 账号**：同一个账号在两个平台用的是两个游戏内名字，按名字关注
+只跟得住一半，按 SteamID 关注才是"这一个人"。改完名单，已经入库的记录会**当场
+重新匹配**，不用逐场刷新。
 
 ---
 
@@ -320,8 +322,7 @@ BVH** 每个进程只付一次）；同一个回合再点是**读缓存 3~70 ms*
   样本数放在 `data-tip` 里悬停才显示 —— 和 AI 那一栏的读法一致，页面上不铺 `n=…`。
   服务端要把这位选手打过的每一场 `.csz` 各解一遍（第一次每场
   5~10 s），结果按 `.csz` 的 `size+mtime` 缓存在 `app/data/stats/<key>.json`；之后整页
-  几十毫秒。页面加载后自动拉（它就是这位选手的主页数据）。
-* **AI 数据** —— `GET /api/library/players/<steamid>/ai`。跨场平均（平均击杀影响力 /
+  几十毫秒。页面加载后自动拉（它就是这位选手的主页数据）。* **AI 数据** —— `GET /api/library/players/<steamid>/ai`。跨场平均（平均击杀影响力 /
   平均回合影响力 / 平均站位死亡风险 / 平均站位击杀率 / 对枪评分）加一张每场一行的表。
   **第一次要真的跑模型**（每场每回合一次），之后读 `app/data/ai/` 下那场比赛的汇总。
   所以这一栏是**点了页签才请求**的。
@@ -329,6 +330,35 @@ BVH** 每个进程只付一次）；同一个回合再点是**读缓存 3~70 ms*
 两个端点都支持 `?progress=1`（NDJSON），页面拿它画进度条 —— 第一次那几十秒 / 几分钟
 不能只让用户看一个转圈。跨场平均的口径是「**先把每场的累计量相加、再除一次**」，
 不是各场平均值的平均（否则 5 回合的一场会和 24 回合的一场一样重）。
+
+**赛前热身不算进任何一份统计。** 对战平台（5E）会把热身整段录进 demo，而热身和
+第一回合都报 `total_rounds_played == 0`，热身击杀因此全被算进第一回合：真实例子
+（`g161-…_de_inferno.dem`）热身 71 杀、正赛 115 杀，不裁的话 K/D 直接翻倍，而且
+不报错。判据是「tick 早于本回合第一个采样点」（回合自己的 `round_freeze_end`），
+被丢掉的条数报在 `warmup_kills` 里，页面上写一行「已排除赛前热身 N 杀」——
+用户拿这里的数字去和对战平台对不上时，得有个说法。
+
+#### 分享图片
+
+两个页面各有一个「分享图片」按钮，导出一张 PNG：**logo + 项目地址**（地址就写在
+logo 旁边，图会被转走，一眼能看到出处）、以及当时的那份数据 —— 单场（回放页
+「统计」弹窗右上角：两队比分 + 每个人的传统 / AI 指标）
+或单个选手（档案页：头像 / Steam 昵称 / 用过的名字 + 跨场传统 / AI 合计 + 最近
+8 场明细）。AI 那一栏只有在跑过模型（点过 AI 页签）之后才会出现在图里。
+
+图是**浏览器里用 canvas 画的**（`visualizer/static/js/share-card.js`），不在服务端：
+要画的东西已经在页面里了，服务端另画一遍既要重查又要塞一套中文字体进 exe（Pillow
+没字体就是豆腐块，打包体积再涨十几 MB）。`t()` 由调用方传进去，所以卡片文案跟着
+界面语言走（`common.share.*`）。固定 1600 宽、高度按内容算 —— 这是要发出去的图，
+不是自适应界面。
+
+logo 就是站点那个 `visualizer/static/logo.svg`，但它的 `net` 是深蓝 `#28397f`，
+**在深色卡片上等于看不见**（顶栏只有 34px 宽，看不出这个问题）。所以画之前先
+逐像素把暗笔画换成浅色、橙 / 绿留着，**直接画在卡片背景上**：不垫白底 —— 白底
+像贴纸，不是 logo。logo 本身就是"cs·net"的字标，旁边不再重复写品牌名。
+
+卡片上**只放数据**：口径解释（热身提示、ADR 怎么算、样本数）留在网页里，图上
+多一行说明就多一处要跟着改、也多一处会过期的东西。
 
 两张表的版式只有一个规矩：**表头跟着数值走**。「比赛 / 地图 / 回合」三列左对齐，
 其余数值列（表头一起）右对齐 —— `.mtable th` 本身是左对齐的，只把数值改成右对齐的
@@ -441,6 +471,7 @@ app/
   probe.py      廉价的 demo 读取：parse_header() 拿地图和服务器名，
                 parse_ticks(4 个 tick) 拿真实队名
   metadata.py   从提取结果算记分板 / 名单 / 关注玩家命中
+  watched.py    关注名单的规则：SteamID 精确匹配，其余按名字子串（四处共用一份）
   radar.py      OBJ → 雷达底图 → 缩略图
   avatars.py    Steam 头像：公开 mini-profile 接口、CDN 白名单、本地缓存、合并同步任务
   storage.py    app/data 下各类缓存的体积统计与整类清理
@@ -455,7 +486,8 @@ app/
   desktop.py    打包后的入口：空闲端口 + 单实例 + 开浏览器 + 窗口 + 日志
   selftest.py   --packaging-selftest：给打出来的 exe 做的体检
   templates/    library.html / players.html / player.html
-  static/       三个页面的 CSS / JS（原生，无构建步骤）
+  static/       三个页面的 CSS / JS（原生，无构建步骤）；分享图在
+                visualizer/static/js/share-card.js（两个页面共用一份）
   tests/        独立测试脚本，不需要 pytest
 tools/demo_extract/   提取器（本应用不改它，只调用）
 visualizer/           3D 回放。本应用加了 /replay 路由和批次下拉；顶栏改成
@@ -592,7 +624,7 @@ app/data/
 | GET | `/players/<steamid>` | 单个玩家：总计 + 地图分布 + 用过的名字（`name_history`）+ 头像状态 + Demo 数 |
 | GET | `/players/<steamid>/stats` | 这位玩家的**传统统计**：每场明细 + 跨场合计（首杀率 / 首死率 / 先手开枪 / 侧背身 / 穿烟，页面上一律百分比、悬停给样本数）。`?progress=1` 走 NDJSON 流 |
 | GET | `/players/<steamid>/ai` | 这位玩家的 **AI 统计**：每场明细 + 跨场平均（影响力 / 站位 / 对枪评分）。**会跑模型**，`?progress=1` 走 NDJSON 流 |
-| PATCH | `/players/<steamid>` | `{watched: bool}` 加/取消关注。回**实际生效后**的状态和 `watched_resynced` |
+| PATCH | `/players/<steamid>` | `{watched: bool}` 加/取消关注。写入的是 **SteamID**（跨平台跟账号，见 `app/watched.py`）；取消时连早先按名字关注的那条一起清掉。回**实际生效后**的状态和 `watched_resynced` |
 | GET | `/avatar/<steamid>` | 头像图片。没有缓存过就是 404 |
 | POST | `/avatars/sync` | `{steamids?, force?}` 排队同步头像。已有任务在跑时回 `queued: false` |
 | POST | `/extract` | `{ids:[...], force?}` 排队提取。`force` 忽略已有的 `.csz` 重新解析。全部 id 都不存在时返回 400 |
@@ -604,7 +636,7 @@ app/data/
 | POST | `/watch/inspect` | `{path}` 校验目录、数一下有几个 demo |
 | GET | `/watch/suggest` | 本机候选目录 |
 | POST | `/watch/scan` | `{force, extract}` 立即扫描；`extract` 缺省跟随 `auto_extract` |
-| GET/PUT | `/config` | 关注玩家、采样、自动提取、头像开关与 TTL 等。改 `watched_players` 时回 `watched_resynced: {checked, changed}` |
+| GET/PUT | `/config` | 关注玩家、采样、自动提取、头像开关与 TTL 等。`watched_players` 两种条目都收：17 位 SteamID（精确匹配账号）或游戏内名字（子串匹配）。改它时回 `watched_resynced: {checked, changed}` |
 | GET | `/storage` | `app/data` 下各类缓存的文件数与体积，外加原始 `.dem` 的合计 |
 | POST | `/storage/clean` | `{targets: ["csz" / "thumbs" / "avatars" / "recycle"]}`。回每类的 `files`/`bytes`/`errors` 和一份新统计。有任务在跑时 409 |
 | GET | `/jobs`、`/jobs/<id>` | 任务队列 |
@@ -915,6 +947,14 @@ Steam 昵称只作副标题。反过来做的话，用户按自己认识的名�
 不会让它动，要同步只能把每场的 `.csz` 重新读一遍（7–17 秒一场）。卡片已经高亮了，
 而卡片能零成本地跟着名单走。留一条对不上的粉线，比少一个装饰更糟。
 
+**后来发现「名单里存什么」本身也是错的。** 原本存的是游戏内名字，按子串匹配。可
+同一个账号在 5E 上叫一个名字、在官匹上叫另一个 —— 按名字关注只跟得住一半，改个名
+也会丢。所以名单现在两种条目都收：17 位纯数字按 **SteamID 精确匹配**（玩家页的
+「加入关注」写的就是它），其余按名字子串匹配（手打半截的老用法，以及老配置）。
+判断规则只有一份（`app/watched.py`），库卡片的高亮、玩家列表的「只看关注」、
+`watched_json` 的重算、`?watched=1` 的 SQL 过滤都走它 —— 四处各写一遍的话，
+"这个人算不算被关注"就会在四个地方有四个答案。
+
 ### 14. 回放页看起来像另一个产品
 
 回放页是 `visualizer` 自己的 `index.html`，被 `app.server` 原样挂在 `/replay`。
@@ -1056,6 +1096,30 @@ SQLite 允许 FROM 子句里的子查询引用外层的 `a.steamid`（标准 SQL
 
 `ready` 退回 `discovered` 是有意的：`unfinished_ids()` 下次扫描会把它们捞回来重新提取，
 所以整类清 `.csz` 是可恢复的操作，不是单向损失。
+
+### 21. 平台把热身也录进 demo，第一回合的 K/D 直接翻倍
+
+5E 的 demo 从服务器热身就开始录。热身和第一回合**都报 `total_rounds_played == 0`**，
+所以按回合号分桶时，热身击杀全落进了第一回合的击杀列表 —— 真实例子
+（`g161-20261120205240053507484_de_inferno.dem`）热身 71 杀、正赛 115 杀，一个
+K/D 2.86 的人会读成 4.1，而且**不报任何错**：数字看着很正常，只是不对。
+
+判据不是"看游戏时间"也不是"看有没有 begin_new_match"（不是每个平台都有这个事件），
+而是**每个回合自己的 `round_freeze_end`**：`.csz` 里第 0 个采样 tick 就是它，比它早
+的事件只可能是热身。三处一起改：
+
+| 层 | 改了什么 |
+| --- | --- |
+| 提取（`tools/demo_extract/extract.py`） | 击杀 / 伤害 / 炸弹 / 投掷物事件先按 `tick > round_start_tick` 裁一遍，`.csz` 本身不再带热身事件 |
+| 传统统计（`visualizer/stats.py`） | 同一个判据再裁一次：老的 `.csz`（修之前提取的）不用重新解析就对了 |
+| 记分板（`app/metadata.py`） | 同上，库里的 K/D 和统计面板逐项相等 |
+
+读侧也裁一遍不是重复劳动：`.csz` 是用户本机的产物，修完不重提取的文件还在硬盘上，
+只改提取器等于只修了以后入库的场次。`TRAD_VERSION` 因此 +1，磁盘上的旧统计缓存
+自动失效。
+
+被丢掉的条数记在 `warmup_kills` / `warmup_damage`，弹窗和档案页据此写一行
+「已排除赛前热身 N 杀」—— 用户拿这里的数字去和对战平台对不上，得有个说法。
 
 ---
 

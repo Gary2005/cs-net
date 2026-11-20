@@ -256,6 +256,75 @@ def test_synthetic() -> None:
           empty["players"] == [] and empty["teams"] == [] and empty["per_round"] == [])
 
 
+# ── 热身 ────────────────────────────────────────────────────────────────────
+#
+# 对战平台（5E）会把赛前热身整段录进 demo，而**热身和第一回合都报
+# `total_rounds_played == 0`**。真实例子（g161-…_de_inferno.dem）：热身 71 次
+# 击杀、正赛 115 次，不裁掉的话第一回合的 K/D 直接翻倍，而且不报任何错。
+#
+# 判据是"tick 早于本回合第一个采样点"—— `.csz` 里每个回合的 `ticks[0]` 就是它
+# 自己的 `round_freeze_end`，比它早的事件只可能是热身。
+
+
+def warmup_data() -> dict:
+    ticks = list(range(1000, 1011))
+    blank = {"x": [0.0] * 11, "y": [0.0] * 11, "z": [0.0] * 11, "yaw": [0.0] * 11,
+             "pitch": [0.0] * 11, "hp": [100.0] * 11, "alive": [True] * 11}
+    return {
+        "format": "cs2.demo.v7",
+        "meta": {"map": "de_test", "tickrate": 64},
+        "players": [{"steamid": str(i), "name": f"P{i}"} for i in range(4)],
+        "rounds": [{
+            "id": 0, "winner": "CT", "end_reason": "t_killed",
+            "ticks": ticks,
+            "round_seconds": [round((x - 1000) / 64.0, 6) for x in ticks],
+            "teams": ["CT", "CT", "T", "T"],
+            "players": [dict(blank) for _ in range(4)],
+            "events": {
+                "kills": [
+                    # 热身：全都发生在回合开始之前，只是被算进了 round 0 的桶里
+                    {"t": 300, "a": 0, "v": 1, "as": -1, "w": 1, "hs": False, "dmg": 100},
+                    {"t": 400, "a": 2, "v": 3, "as": -1, "w": 1, "hs": True, "dmg": 100},
+                    # 正赛：唯一一条
+                    {"t": 1005, "a": 0, "v": 2, "as": -1, "w": 1, "hs": False, "dmg": 100},
+                ],
+                "damage": [
+                    {"t": 350, "a": 1, "v": 0, "hp": 40, "w": 1},
+                    {"t": 1005, "a": 0, "v": 2, "hp": 100, "w": 1},
+                ],
+            },
+        }],
+    }
+
+
+def test_warmup() -> None:
+    print("\n热身不算进比赛数据（5E 这类平台会录热身）")
+    s = st.build_stats(warmup_data(), smoke=False)
+    p = {x["name"]: x for x in s["players"]}
+
+    check("热身击杀不进 K/D",
+          (p["P0"]["kills"], p["P2"]["kills"]) == (1, 0),
+          f"{[(x['name'], x['kills']) for x in s['players']]}")
+    check("热身死亡也不记",
+          (p["P1"]["deaths"], p["P3"]["deaths"]) == (0, 0),
+          f"{[(x['name'], x['deaths']) for x in s['players']]}")
+    check("热身伤害不进 ADR / 承伤",
+          (p["P0"]["damage_taken"], p["P2"]["damage_taken"]) == (0, 100),
+          f"{[(x['name'], x['damage_taken']) for x in s['players']]}")
+    check("正赛那一条照常算",
+          (p["P0"]["kills"], p["P2"]["deaths"]) == (1, 1))
+    check("被丢掉的条数报出来了（前端拿它解释和平台的差异）",
+          (s["warmup_kills"], s["warmup_damage"]) == (2, 1),
+          f"{s['warmup_kills']} / {s['warmup_damage']}")
+    check("每回合的数组也是干净的",
+          s["per_round"][0]["kills"] == [1, 0, 0, 0], f"{s['per_round'][0]['kills']}")
+    # 没有 ticks 的数据（老 .csz / 手搓夹具）不裁，否则会把整场都算成热身
+    legacy = warmup_data()
+    legacy["rounds"][0].pop("ticks")
+    check("没有 ticks 时不裁任何事件",
+          st.build_stats(legacy, smoke=False)["warmup_kills"] == 0)
+
+
 # ── 新指标：首杀 / 先手开枪 / 侧背身 / 穿烟 ──────────────────────────────────
 #
 # 合成用例（**和上面那场无关**，另造一场 4 人 / 1 回合的比赛），每个数都是手算的：
@@ -577,6 +646,7 @@ def test_real(csz: str) -> None:
 
 def main() -> int:
     test_synthetic()
+    test_warmup()
     test_extras()
     csz = _find_csz()
     if not csz or not Path(csz).exists():

@@ -829,13 +829,16 @@ def _build_round(
         )
 
     # ─ events ──────────────────────────────────────────────────────────────
-    kills = _kills(events.get("player_death"), rid, player_map, weapon_lookup)
-    damage = _damage(events.get("player_hurt"), rid, player_map, weapon_lookup)
-    bomb_events = _bomb_events(events, rid, round_start_time)
+    kills = _kills(events.get("player_death"), rid, player_map, weapon_lookup,
+                   round_start_tick)
+    damage = _damage(events.get("player_hurt"), rid, player_map, weapon_lookup,
+                     round_start_tick)
+    bomb_events = _bomb_events(events, rid, round_start_time, round_start_tick)
     grenades = _grenades(grenades_df, ticks_list, player_map)
 
     bomb_planted_time = next((b["s"] for b in bomb_events if b["e"] == "planted"), None)
-    smoke_iv, inferno_iv = _projectile_intervals(events, rid, round_start_time)
+    smoke_iv, inferno_iv = _projectile_intervals(events, rid, round_start_time,
+                                                 round_start_tick)
 
     # ─ fire / smoke for this round ─────────────────────────────────────────
     fire: list[dict] = []
@@ -980,10 +983,33 @@ def _sound_events(event_df, rid, ticks_list, round_start_tick, player_map, weapo
     return counts, out
 
 
-def _kills(event_df, rid, player_map, weapon_lookup) -> list[dict]:
+def _round_events(event_df, rid: int, round_start_tick: int):
+    """Rows that belong to *this* round: right round number **and** after its freeze.
+
+    Filtering on ``total_rounds_played`` alone is not enough.  The pre-match
+    warmup also reports round 0, and platforms that record it (5E does: a real
+    Inferno demo has 71 warmup kills against 115 in the match itself) put
+    hundreds of kills in that bucket -- all of which used to be credited to
+    round 0 of the match.  A round's own ``round_freeze_end`` is its real
+    origin, and nothing before it can belong to it: players cannot shoot
+    during freeze time, so the only events there are warmup ones.
+
+    Returns ``None`` when there is nothing to iterate, so callers can keep the
+    single ``if ... is None: return []`` shape.
+    """
     if _empty_or_df(event_df):
-        return []
+        return None
     sub = event_df[event_df["total_rounds_played"] == rid]
+    if sub.empty:
+        return None
+    keep = sub["tick"].to_numpy(dtype=np.int64) > int(round_start_tick)
+    return sub[keep]
+
+
+def _kills(event_df, rid, player_map, weapon_lookup, round_start_tick: int = 0) -> list[dict]:
+    sub = _round_events(event_df, rid, round_start_tick)
+    if sub is None:
+        return []
     out = []
     for row in sub.itertuples(index=False):
         d = row._asdict() if hasattr(row, "_asdict") else None
@@ -1007,10 +1033,10 @@ def _kills(event_df, rid, player_map, weapon_lookup) -> list[dict]:
     return out
 
 
-def _damage(event_df, rid, player_map, weapon_lookup) -> list[dict]:
-    if _empty_or_df(event_df):
+def _damage(event_df, rid, player_map, weapon_lookup, round_start_tick: int = 0) -> list[dict]:
+    sub = _round_events(event_df, rid, round_start_tick)
+    if sub is None:
         return []
-    sub = event_df[event_df["total_rounds_played"] == rid]
     out = []
     for row in sub.itertuples(index=False):
         d = row._asdict() if hasattr(row, "_asdict") else None
@@ -1026,14 +1052,15 @@ def _damage(event_df, rid, player_map, weapon_lookup) -> list[dict]:
     return out
 
 
-def _bomb_events(events: dict, rid: int, round_start_time: float) -> list[dict]:
+def _bomb_events(events: dict, rid: int, round_start_time: float,
+                 round_start_tick: int = 0) -> list[dict]:
     out = []
     for key, label in (("bomb_planted", "planted"), ("bomb_exploded", "exploded"),
                        ("bomb_defused", "defused")):
         df = events.get(key)
-        if _empty_or_df(df):
+        sub = _round_events(df, rid, round_start_tick)
+        if sub is None:
             continue
-        sub = df[df["total_rounds_played"] == rid]
         for row in sub.itertuples(index=False):
             out.append({
                 "t": int(row.tick),
@@ -1067,7 +1094,8 @@ def _grenades(grenades_df, ticks_list: list[int], player_map: dict) -> list[dict
     return out
 
 
-def _projectile_intervals(events: dict, rid: int, round_start_time: float) -> tuple[list, list]:
+def _projectile_intervals(events: dict, rid: int, round_start_time: float,
+                          round_start_tick: int = 0) -> tuple[list, list]:
     """Smoke / inferno lifetime intervals, paired from detonate + expire events.
 
     These carry the **detonation position** — the origin a smoke's voxel grid is
@@ -1106,6 +1134,9 @@ def _projectile_intervals(events: dict, rid: int, round_start_time: float) -> tu
             continue
         starting = name.endswith("_detonate") or name.endswith("_startburn")
         for row in df[df["total_rounds_played"] == rid].sort_values("tick").itertuples(index=False):
+            # 热身里的烟 / 火也不属于 round 0：它们会在回合开场凭空出现在地图上
+            if int(row.tick) <= int(round_start_tick):
+                continue
             eid = int(row.entityid)
             if starting:
                 live[eid] = begin(row)

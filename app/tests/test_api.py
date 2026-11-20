@@ -608,7 +608,8 @@ def test_players_api(c, tmp: Path) -> None:
     print("\nfollowing from a profile")
     r = c.patch(f"/api/library/players/{PLAYER_A}", json={"watched": True}).get_json()
     check("the response says they are watched", r["watched"] is True)
-    eq("written into the config", cfg_mod.Config().get("watched_players"), ["ZywOo"])
+    eq("written into the config as a SteamID", cfg_mod.Config().get("watched_players"),
+       [PLAYER_A])
     r = c.patch(f"/api/library/players/{PLAYER_A}", json={"watched": False}).get_json()
     check("and can be undone", r["watched"] is False)
     eq("gone from the config", cfg_mod.Config().get("watched_players"), [])
@@ -692,6 +693,50 @@ def test_players_api(c, tmp: Path) -> None:
        c.get(f"/api/library/list?steamid={PLAYER_A}").get_json()["total"], 1)
     eq("and excludes the other player",
        c.get(f"/api/library/list?steamid=76561190000000000").get_json()["total"], 0)
+
+
+    print("\nfollowing an account, not a name")
+    # 同一个人在两个平台用的是两个游戏内名字。关注写的是 SteamID，所以两场
+    # 都得亮起来 —— 这才是"关注这个 Steam 账号"的意思。
+    seed(c, tmp, "p2.dem", source="完美", map_name="de_inferno",
+         players_json=json.dumps([
+             {"steamid": PLAYER_A, "name": "gary-5E", "team": 1},
+             {"steamid": PLAYER_B, "name": "somebody", "team": 0},
+         ]), scoreboard_json=json.dumps([
+             {"steamid": PLAYER_A, "name": "gary-5E", "team": 1, "kills": 15,
+              "deaths": 12, "assists": 6, "hs": 7, "adr_damage": 1500, "kd": 1.25},
+             {"steamid": PLAYER_B, "name": "somebody", "team": 0, "kills": 9,
+              "deaths": 16, "assists": 1, "hs": 3, "adr_damage": 700, "kd": 0.56},
+         ]))
+
+    r = c.patch(f"/api/library/players/{PLAYER_A}", json={"watched": True}).get_json()
+    eq("both rows re-derived", r["watched_resynced"]["changed"], 2)
+    eq("configured by SteamID", cfg_mod.Config().get("watched_players"), [PLAYER_A])
+
+    def names_on(demo: str) -> list[str]:
+        items = c.get("/api/library/list?limit=10").get_json()["items"]
+        row = next(i for i in items if i["filename"] == demo)
+        return [w["name"] for w in (row["watched"] or [])]
+
+    eq("the 5E demo highlights the old name", names_on("p1.dem"), ["ZywOo"])
+    eq("and the 完美 one the new name", names_on("p2.dem"), ["gary-5E"])
+    eq("the watched filter counts both demos",
+       c.get("/api/library/list?watched=1").get_json()["total"], 2)
+
+    # The player index is keyed by SteamID, so the account shows up once with
+    # both in-game names -- that is what makes two platforms one person.
+    idx = {p["steamid"]: p for p in c.get("/api/library/players").get_json()["items"]}
+    eq("one player card for the account", idx[PLAYER_A]["matches"], 2)
+    check("carrying both in-game names",
+          {"ZywOo", "gary-5E"} <= set(idx[PLAYER_A]["names"]), idx[PLAYER_A]["names"])
+    eq("and it is the one the watched filter keeps",
+       c.get("/api/library/players?watched=1").get_json()["total"], 1)
+
+    r = c.patch(f"/api/library/players/{PLAYER_A}", json={"watched": False}).get_json()
+    eq("unfollowing drops the SteamID entry",
+       cfg_mod.Config().get("watched_players"), [])
+    eq("both highlights are gone",
+       c.get("/api/library/list?watched=1").get_json()["total"], 0)
 
 
 def test_avatar_sync_api(c, tmp: Path) -> None:

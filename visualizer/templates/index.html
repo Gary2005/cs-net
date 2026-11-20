@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title data-i18n="doc.replay">cs-net — 可视化回放</title>
 <link rel="stylesheet" href="/static/css/topbar.css?v=20261119a">
-<link rel="stylesheet" href="/static/css/style.css?v=20261118a">
+<link rel="stylesheet" href="/static/css/style.css?v=20261121a">
 
 <script type="importmap">
 {
@@ -414,6 +414,9 @@
     <div class="stats-head">
       <span class="stats-title">📊 <span data-i18n="replay.stats.title">比赛统计</span></span>
       <span id="stats-subtitle" class="stats-sub"></span>
+      <button id="btn-stats-share" class="stats-share"
+              data-i18n-title="common.share.btn.title"
+              title="把当前这份数据导出成一张 PNG（带 logo 和项目地址）">📷 <span data-i18n="common.share.btn">分享图片</span></button>
       <button id="btn-stats-close" class="stats-close" title="关闭（Esc）" data-i18n-title="replay.stats.close.title">✕</button>
     </div>
     <div class="stats-tabs" role="tablist">
@@ -433,6 +436,6 @@
   <div id="loading-overlay-text" data-i18n="common.action.loading">加载中…</div>
 </div>
 
-<script type="module" src="/static/js/main.js?v=20261118e"></script>
+<script type="module" src="/static/js/main.js?v=20261121a"></script>
 </body>
 </html>

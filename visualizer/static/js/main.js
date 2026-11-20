@@ -74,6 +74,8 @@ import { t } from './i18n/index.js';
 import { mountTips, tipTh } from './tips.js';
 // NDJSON 流（AI 回合预测 / 整场统计）—— 和玩家页共用同一份解析
 import { streamJson } from './ndjson.js';
+// 分享图（canvas 画一张 PNG）。和玩家页共用同一份实现，见该文件的文件头。
+import { downloadCard } from './share-card.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -237,6 +239,9 @@ function pollLoadJob(jobId, label) {
 
 let batchId = null;
 let batchTimer = null;
+//: 最近一次拿到的批次条目（队名 / 比分 / 雷达缩略图）。分享图要用它补上
+//: `/api/stats` 里没有的比赛信息 —— 那里只有"队伍 A / 队伍 B"。
+let batchItems = [];
 
 function batchOptionText(it) {
   const bits = [it.name];
@@ -271,6 +276,7 @@ async function refreshBatch() {
     if (!res.ok) return;
     const data = await res.json();
     const items = data.items || [];
+    batchItems = items;
     const hadReady = $('batch-select') && $('batch-select').dataset.activePath;
     renderBatchSelect(items);
 
@@ -299,6 +305,7 @@ async function initBatch() {
     if (!res.ok) throw new Error(t('replay.error.batchExpired'));
     const data = await res.json();
     const items = data.items || [];
+    batchItems = items;
     renderBatchSelect(items);
 
     const sel = $('batch-select');
@@ -925,6 +932,12 @@ function roundCaption(r) {
 }
 
 function tradBody(s, teams) {
+  // 平台把赛前热身也录进 demo 时（5E 就是），热身击杀曾经算进第一回合，
+  // K/D 因此偏高。服务端现在把它们剔掉了，这里明说剔掉了多少 —— 否则用户
+  // 只会看到"这里的 K/D 和对战平台对不上"，而不知道该信哪个。
+  const warm = s.warmup_kills
+    ? `<div class="stats-note">${t('replay.stats.warmupNote', { n: s.warmup_kills })}</div>`
+    : '';
   return `
     <div class="stats-block">
       <div class="section-title">${t('replay.stats.matchTotal')}</div>
@@ -935,6 +948,7 @@ function tradBody(s, teams) {
         </tr></thead>
         <tbody>${summaryTable(teams)}</tbody>
       </table>
+      ${warm}
       <div class="stats-note">${t('replay.stats.note')}</div>
     </div>
     <div class="stats-block">
@@ -1091,6 +1105,86 @@ function paintActiveRound(idx) {
   $('stats-modal')?.querySelectorAll('[data-round-col]').forEach((el) => {
     el.classList.toggle('active', Number(el.dataset.roundCol) === idx);
   });
+}
+
+// ── 分享图（单场）──────────────────────────────────────────────────────────
+//
+// 数据全部来自已经在页面里的两份载荷：`statsPayload`（传统）和
+// `aiStatsPayload`（AI，点了页签才有）。队名 / 真实比分 / 雷达缩略图只有 Demo
+// 库那一行才有，所以从批次条目里补 —— 不在批次里（直接开会话）时退回
+// "队伍 A / 队伍 B"。
+//
+// 画法在 /static/js/share-card.js，和玩家页共用；那边不管 url 布局，只管
+// 拿 spec 画图。
+
+function activeBatchItem() {
+  const sel = $('batch-select');
+  const path = sel && sel.dataset.activePath;
+  if (!path) return null;
+  return (batchItems || []).find((it) => it.csz_path === path) || null;
+}
+
+function shareMatchSpec() {
+  const s = statsPayload;
+  if (!s) return null;
+  const item = activeBatchItem();
+  const aiByIdx = new Map();
+  for (const row of (aiStatsPayload && aiStatsPayload.players) || []) {
+    aiByIdx.set(Number(row.idx), row);
+  }
+  const byIdx = new Map((s.players || []).map((p) => [Number(p.idx), p]));
+
+  const teams = (s.teams || []).map((team) => ({
+    idx: team.idx,
+    // 服务端的 label 是中文的"队伍 A / B"，只用它的 idx 决定取哪个真实队名
+    label: item ? (team.idx === 0 ? item.team_a_name : item.team_b_name) : '',
+    score: team.score,
+    side0: team.side0,
+    players: (team.players || []).map((i) => {
+      const p = byIdx.get(Number(i)) || {};
+      return {
+        name: p.name,
+        kills: p.kills,
+        deaths: p.deaths,
+        assists: p.assists,
+        headshots: p.headshots,
+        kd: p.kd,
+        adr: p.adr,
+        ai: aiByIdx.get(Number(i)) || null,
+      };
+    }),
+  }));
+
+  const rounds = s.rounds || 0;
+  return {
+    kind: 'match',
+    teams,
+    ai: Boolean(aiStatsPayload),
+    map: s.map || (item && item.map) || '',
+    rounds,
+    source: item ? item.source : '',
+    date: item ? item.date : '',
+    thumb: item ? item.thumb : null,
+    filename: (item && item.name) || s.map || 'match',
+  };
+}
+
+async function shareMatchImage() {
+  const spec = shareMatchSpec();
+  if (!spec) {
+    showToast(t('replay.stats.empty'), true);
+    return;
+  }
+  const btn = $('btn-stats-share');
+  if (btn) btn.disabled = true;
+  try {
+    const out = await downloadCard(spec, t);
+    showToast(t('common.share.done', { name: out.filename }));
+  } catch (err) {
+    showToast(t('common.share.fail', { msg: err.message }), true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function currentTick() {
@@ -3075,6 +3169,7 @@ function bindEvents() {
   // 比赛统计弹窗
   $('btn-stats').addEventListener('click', openStats);
   $('btn-stats-close').addEventListener('click', closeStats);
+  $('btn-stats-share').addEventListener('click', shareMatchImage);
   // 点弹窗外面的暗色区域也算关闭（点卡片内部不关）
   $('stats-modal').addEventListener('click', (e) => {
     if (e.target === $('stats-modal')) closeStats();

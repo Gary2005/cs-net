@@ -197,15 +197,20 @@ function renderFilterOptions(stats) {
 
 function rosterOf(d) {
   const players = d.players || [];
-  const watched = new Set((d.watched || []).map((w) => w.name));
+  const entries = d.watched || [];
+  // 关注名单里两种条目：SteamID（跟账号）和名字（老用法）。
+  // SteamID 优先，同一个人在不同平台用的是不同的游戏内名字。
+  const watchedIds = new Set(entries.map((w) => String(w.steamid || '')).filter(Boolean));
+  const watchedNames = new Set(entries.map((w) => w.name).filter(Boolean));
   const sb = new Map((d.scoreboard || []).map((r) => [r.name, r]));
   return players.map((p) => {
     const stat = sb.get(p.name);
     const av = S.avatars[p.steamid] || {};
+    const sid = String(p.steamid || '');
     return {
-      steamid: String(p.steamid || ''),
+      steamid: sid,
       name: p.name, team: p.team || 0,
-      watched: watched.has(p.name),
+      watched: watchedNames.has(p.name) || (sid ? watchedIds.has(sid) : false),
       kd: stat ? `${stat.kills}/${stat.deaths}` : '',
       avatar: av.url || '',
     };

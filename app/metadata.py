@@ -21,6 +21,8 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
+from . import watched as watched_rule
+
 #: `A-vs-B`, `A_vs_B`, `A vs B` -- how HLTV-style archives name their files.
 _VS_RE = re.compile(r"^(?P<a>[A-Za-z0-9_.]+?)[\s_-]+vs[\s_-]+(?P<b>[A-Za-z0-9_.]+)", re.I)
 
@@ -135,12 +137,19 @@ def match_watched(
     scoreboard: list[dict[str, Any]],
     watched_players: Optional[list[str]] = None,
 ) -> list[dict[str, Any]]:
-    """Players from ``scoreboard`` whose name matches the watched list.
+    """Players from ``scoreboard`` that the watched list matches.
 
-    Matching is a case-insensitive **substring** test, so a half-typed entry
+    An entry is either a **SteamID64** (exact match on the account) or a
+    **name**, matched case-insensitively as a substring so a half-typed entry
     ("Zyw") still finds the player -- at the cost of a short entry matching by
-    accident ("zy" also hits "Crazy").  At most one entry per player: a name
-    matched by two watched entries is reported once.
+    accident ("zy" also hits "Crazy").  SteamID wins whenever both would hit,
+    and at most one entry is reported per player.
+
+    Why the list accepts both: the same account plays under different in-game
+    names on different platforms (5E / 官匹 / FACEIT), so a name-only list
+    followed a person on one platform and not the other.  See
+    :mod:`app.watched`.  Each entry also carries the matched player's
+    ``steamid``, which is what the library UI keys the highlight on.
 
     This is its own function because the watched list is editable *after* a demo
     has been extracted.  The API re-derives ``watched_json`` from the stored
@@ -153,18 +162,19 @@ def match_watched(
     watched: list[dict[str, Any]] = []
     for entry in scoreboard:
         name = str(entry.get("name") or "")
-        low = name.lower()
-        for w in wanted:
-            if w.lower() in low:
-                watched.append({
-                    "name": name,
-                    "matched": w,
-                    "team": entry.get("team"),
-                    "kills": entry.get("kills"),
-                    "deaths": entry.get("deaths"),
-                    "assists": entry.get("assists"),
-                })
-                break
+        steamid = str(entry.get("steamid") or "")
+        hit = watched_rule.matched_entry(wanted, name=name, steamid=steamid)
+        if hit is None:
+            continue
+        watched.append({
+            "name": name,
+            "steamid": steamid,
+            "matched": hit,
+            "team": entry.get("team"),
+            "kills": entry.get("kills"),
+            "deaths": entry.get("deaths"),
+            "assists": entry.get("assists"),
+        })
     return watched
 
 
@@ -223,7 +233,15 @@ def build_metadata(
 
     for rnd in rounds:
         events = rnd.get("events") or {}
+        # 热身不算：事件按 `total_rounds_played` 分桶，而热身也报第 0 回合
+        # （5E 这类平台会把热身整段录进 demo）。回合自己的第一个采样 tick
+        # 就是它的 freeze_end，比它早的一律不是这一回合的击杀。
+        ticks = rnd.get("ticks") or []
+        lo = int(ticks[0]) if ticks else None
         for k in events.get("kills") or []:
+            t = k.get("t")
+            if lo is not None and t is not None and int(t) < lo:
+                continue
             a, v, s = k.get("a", -1), k.get("v", -1), k.get("as", -1)
             if 0 <= a < n:
                 kills[a] += 1
