@@ -585,6 +585,33 @@ with VisOracle("de_mirage") as o:            # 加载地图 ~1 s，进程只做�
 
 ---
 
+### 3.10 整回合逐帧遮挡（`obstruction` 列从哪来）
+
+`aim` / `spatial_prediction` 样本里的 `obstruction (T,10,10)` 不是每次现算的，而是
+**按回合缓存**在 `<csz>.obs/r<回合>.npz`（和 `.csz` 并排；5666 帧的回合压完 4 KB）：
+
+```python
+from scripts.training_data import obstruction_cache as oc
+
+arr = oc.ensure(store.paths[0], store.round(0, 0), "de_mirage", 10)   # (T,10,10) int8
+arr[t, i, j]      # 0 通 / 1 烟 / 2 墙；死人的行/列全是 0
+```
+
+命中缓存就是一次读盘（**7 ms**，且不加载地图 BVH）；没有才整回合重算（**0.5 s**）
+再写回。整回合算而不是只算需要的窗口，是为了同一个回合的任意帧、任意任务都能直接
+切片 —— 不会出现"这些帧有、那些帧没有"的分支。
+
+`build_round()` 怎么做到 0.5 秒：每 8 帧算一帧**锚点**（整张矩阵），中间的帧逐对
+判断 —— 两端值相同就填，不同就二分定位，死亡帧只算活着的那几帧。实测（mirage
+round 0，5666 帧）求值量是精确算法的 **12.8%**，和精确值差 **45 个对格 / 415 364**
+（0.011%），全部是"墙角 peek"那种翻了又翻回来的短事件；击杀帧前后 ±4 帧内没有错格。
+
+`CACHE_VERSION` / `PAIR_STRIDE` / 包围盒眼高常量 / 地图 OBJ 的 `size+mtime` 任何一项
+变了，缓存自动不认（见 `obstruction_cache.basis`）。要强制重算：删掉那个 `.obs`
+目录即可。
+
+---
+
 ## 4. 代码结构
 
 ```
@@ -607,6 +634,8 @@ scripts/
     │                  （里面的字段表、量级、坑照用；切法你不必照抄）
     ├── spatial.py     fire / smoke 空间特征（可选，很贵，默认不用）
     ├── vis_oracle.py  单个局面的可见性：VisOracle.can_see(a, b) / player_state()（§3.9）
+    ├── obstruction.py 整回合逐帧两两遮挡：精确的 `Occluder` + 稀疏的 `build_round()`（§3.10）
+    ├── obstruction_cache.py  它的磁盘缓存（<csz>.obs/r<回合>.npz、版本键、load/save/ensure）
     ├── oracle_golden.npz  冻结的行为快照（64 帧，`--selftest` 用它；`--freeze` 重做）
     ├── js/            node 那侧的两个脚本（几何代码一行都没有，全 import app 的）
     │   ├── vis_common.mjs   OBJ→BVH / 烟体素 / SCALE

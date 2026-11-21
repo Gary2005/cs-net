@@ -36,6 +36,8 @@ const TEMPLATES = [
 const JS_FILES = [
   'visualizer/static/js/main.js',
   'visualizer/static/js/ai-chart.js',
+  // 分享图：`t` 是参数（不 import），但键名仍然是字面量，所以要一起查
+  'visualizer/static/js/share-card.js',
   'app/static/js/library.js',
   'app/static/js/players.js',
   'app/static/js/player.js',

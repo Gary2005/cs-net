@@ -46,8 +46,9 @@
   —— 这些没有对手，"谁先打谁"无从谈起；
 * 只收**落在本回合采样范围内**的事件（外加回合结束那一枪 ``ticks[-1] + 1``，和
   ``app/ai/service.py::_round_kills`` 同一件事）。``events`` 是按「上一回合结束 →
-  本回合结束」分桶的，round 0 里还混着赛前热身的几十条击杀；K / D 那几列沿用老
-  口径（和库里的记分板逐项相等），新指标不收热身。
+  本回合结束」分桶的，round 0 里还混着赛前热身的几十条击杀（5E 这类平台会把热身
+  整段录进 demo）；K / D 那几列同样**不收热身**（判据就是「tick 早于本回合第一个
+  采样点」），被丢掉的条数记在 ``warmup_kills`` / ``warmup_damage`` 里。
 
 于是每个选手每回合有四个分母（前端把比例显示成 "7/14"，四个数都给了）：
 
@@ -504,6 +505,8 @@ def build_stats(data: dict, *, smoke: bool = True) -> dict:
                          openers: [...], side_kills: [...],
                          side_deaths: [...], smoke_kills: [...]}, ...],
           "smoke_ok": True,     # False = 穿烟判定不可用（无地图 / 无 numba）
+          "warmup_kills": 0,    # 被排除的热身击杀（平台录了热身时 > 0）
+          "warmup_damage": 0,   # 同上，伤害事件条数
           "ms": 1234.5,
         }
 
@@ -526,6 +529,11 @@ def build_stats(data: dict, *, smoke: bool = True) -> dict:
 
     新指标的口径见模块 docstring；比例类字段（``*_pct``）是 0~100 的百分数，
     分母为 0 时是 0.0（不是 "—"：前端还有分子 / 分母可以显示成 "0/0"）。
+
+    热身不算：每一回合只看 ``tick >= ticks[0]`` 的事件。``.csz`` 里事件是按
+    ``total_rounds_played`` 分桶的，而热身也报第 0 回合，所以第一回合的击杀
+    列表里会混着热身击杀（5E 的对战 demo 里能占三分之一）。被丢掉的条数记在
+    ``warmup_kills`` / ``warmup_damage``，前端用它解释和对战平台的差异。
 
     Args:
         smoke: 算不算「穿烟击杀」。关掉的话一个回合只要扫 events（毫秒级），
@@ -552,6 +560,8 @@ def build_stats(data: dict, *, smoke: bool = True) -> dict:
     dealt = [0] * n
     taken = [0] * n
     per_round: list[dict] = []
+    #: 被丢掉的热身事件数（只可能是第一回合之前的那些，见下面的注释）
+    warmup = {"kills": 0, "damage": 0}
 
     # 新指标的累计（和每回合的数组是同一份数据，最后再拼比例）
     totals = _blank_extras(n)
@@ -569,6 +579,21 @@ def build_stats(data: dict, *, smoke: bool = True) -> dict:
 
     for ri, rnd in enumerate(rounds):
         events = rnd.get("events") or {}
+        # 这一回合真正的起点：第一个采样 tick（= 它的 round_freeze_end）。
+        # 事件是按 `total_rounds_played` 分桶的，而赛前热身也算第 0 回合 ——
+        # 5E 这类平台会把热身整段录进 demo，一个真实例子里热身有 71 次击杀、
+        # 正赛只有 115 次，不裁掉的话第一回合的 K/D 直接翻倍。没有 ticks 的
+        # 数据（老文件 / 测试夹具）就不裁。
+        ticks = rnd.get("ticks") or []
+        round_lo = int(ticks[0]) if ticks else None
+
+        def before_round(event: dict) -> bool:
+            """这条事件是不是发生在回合开始之前（热身）。"""
+            if round_lo is None:
+                return False
+            t = event.get("t")
+            return t is not None and int(t) < round_lo
+
         rk = [0] * n
         rd = [0] * n
         r_dealt = [0] * n
@@ -582,6 +607,9 @@ def build_stats(data: dict, *, smoke: bool = True) -> dict:
         slot = [100] * n
 
         for k in events.get("kills") or []:
+            if before_round(k):
+                warmup["kills"] += 1
+                continue
             a, v, s = _idx(k.get("a")), _idx(k.get("v")), _idx(k.get("as"))
             if 0 <= a < n:
                 kills[a] += 1
@@ -596,6 +624,9 @@ def build_stats(data: dict, *, smoke: bool = True) -> dict:
                 assists[s] += 1
 
         for d in events.get("damage") or []:
+            if before_round(d):
+                warmup["damage"] += 1
+                continue
             a, v = _idx(d.get("a")), _idx(d.get("v"))
             hp = int(d.get("hp") or 0)
             if a == v:
@@ -709,5 +740,9 @@ def build_stats(data: dict, *, smoke: bool = True) -> dict:
         "teams": teams,
         "per_round": per_round,
         "smoke_ok": bool(smoke_ok),
+        # 被排除在统计之外的热身事件（回合开始之前发生的）。> 0 说明这份 demo
+        # 的平台录了热身，前端拿它解释"为什么我这里的 K/D 和对战平台不一样"。
+        "warmup_kills": warmup["kills"],
+        "warmup_damage": warmup["damage"],
         "ms": round((time.perf_counter() - t_start) * 1000.0, 1),
     }

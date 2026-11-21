@@ -21,7 +21,9 @@ from typing import Any, Optional
 
 from flask import Blueprint, jsonify, request, send_file
 
-from . import avatars, config, db, ingest, jobs, radar, storage, uploads, watcher
+from . import (
+    avatars, config, db, ingest, jobs, radar, storage, uploads, watched, watcher,
+)
 
 bp = Blueprint(
     "library",
@@ -68,6 +70,8 @@ def _batch_view(batch_id: str) -> Optional[dict[str, Any]]:
                 "ready": ready,
                 "csz_path": csz if ready else None,
                 "source": row.get("source"),
+                "date": row.get("match_date"),
+                "rounds": row.get("total_rounds"),
                 "team_a_name": row.get("team_a_name"),
                 "team_b_name": row.get("team_b_name"),
                 "team_a_score": row.get("team_a_score"),
@@ -144,15 +148,21 @@ def _roster_ids(items: list[dict[str, Any]]) -> list[str]:
 
 
 def _mark_watched(players: list[dict[str, Any]]) -> None:
-    """Flag the players whose in-game name matches the watched list.
+    """Flag the players the watched list matches (SteamID first, then name).
 
-    Matching is by substring, case-insensitively, exactly like the library's
-    highlight, so the two pages cannot disagree about who is "watched".
+    Same rule as the library's ``watched_json`` highlight -- one implementation
+    in :mod:`app.watched`, so the three pages cannot disagree about who is
+    "watched".  A SteamID64 entry follows the *account*, which is what makes a
+    player followed on 5E stay followed when the same account shows up on
+    another platform under a different in-game name.
     """
-    wanted = [str(w).lower() for w in (config.Config().get("watched_players") or []) if w]
+    entries = config.Config().get("watched_players") or []
     for player in players:
-        name = str(player.get("name") or "").lower()
-        player["watched"] = bool(name) and any(w in name for w in wanted)
+        player["watched"] = watched.is_watched(
+            entries,
+            name=player.get("name"),
+            steamid=player.get("steamid"),
+        )
 
 
 # ── library rows ─────────────────────────────────────────────────────────────
@@ -383,14 +393,19 @@ def api_player(steamid: str):
 
 @bp.patch("/api/library/players/<steamid>")
 def api_player_update(steamid: str):
-    """Add or remove a player from the watched list.
+    """Follow or unfollow this player's **Steam account**.
 
-    The watched list is a list of *names*, not SteamIDs -- it is also used to
-    highlight players who only appear in a scoreboard -- so this writes the
-    player's current in-game name and reports back whether that actually made
-    them watched.  Removing only drops an exact name match: a partial entry the
-    user typed by hand ("Zyw") still matches, and the response says so rather
-    than pretending the player is gone.
+    Following writes the SteamID64, not the in-game name.  That is the whole
+    point of the change: the same account plays under different names on
+    different platforms, and a name-only list followed the person on whichever
+    platform happened to use that name.  The name form still works (it is what
+    a user types by hand in Settings) and is matched as a substring, so old
+    entries and half-typed ones keep their behaviour.
+
+    Unfollowing drops the SteamID entry, and also an exact-name entry -- an
+    install from before this change has only the name.  A *partial* entry the
+    user typed by hand ("Zyw") is left alone and the response reports the
+    player as still watched rather than pretending the follow is gone.
     """
     row = db.get_player(steamid)
     if row is None:
@@ -398,29 +413,35 @@ def api_player_update(steamid: str):
     body = _body()
     if "watched" not in body:
         return _bad("没有可更新的字段")
+    sid = str(row.get("steamid") or steamid).strip()
     name = str(row.get("name") or "").strip()
-    if not name:
-        return _bad("这个玩家没有可用的名字")
+    if not sid and not name:
+        return _bad("这个玩家没有可用的名字或 SteamID")
 
     cfg = config.Config()
-    watched = [str(w).strip() for w in (cfg.get("watched_players") or []) if str(w).strip()]
-    low = name.lower()
+    entries = [str(w).strip() for w in (cfg.get("watched_players") or []) if str(w).strip()]
     if body["watched"]:
-        if low not in {w.lower() for w in watched}:
-            watched.append(name)
+        if sid and sid not in entries:
+            entries.append(sid)
+        # No SteamID at all (a hand-edited row): fall back to the name, which
+        # is the old behaviour and still better than silently doing nothing.
+        elif not sid and name.lower() not in {e.lower() for e in entries}:
+            entries.append(name)
     else:
-        watched = [w for w in watched if w.lower() != low]
-    cfg.update({"watched_players": watched})
+        entries = [
+            e for e in entries
+            if e != sid and not (not watched.is_steamid(e) and e.lower() == name.lower())
+        ]
+    cfg.update({"watched_players": entries})
     watcher.watcher.poke()
     # The library cards read a per-row copy of the match, so following from a
     # profile has to refresh it too -- otherwise unfollowing here leaves the
     # old matches highlighted on the library page with nothing to explain it.
     resynced = ingest.resync_watched()
 
-    fresh = [w.lower() for w in watched]
     return jsonify({
-        "watched": any(w in low for w in fresh),
-        "watched_players": watched,
+        "watched": watched.is_watched(entries, name=name, steamid=sid),
+        "watched_players": entries,
         "watched_resynced": resynced,
     })
 
@@ -777,9 +798,18 @@ def api_config_put():
         raw = patch["watched_players"]
         if not isinstance(raw, list):
             return _bad("watched_players 必须是数组")
-        patch["watched_players"] = [
-            str(x).strip() for x in raw[:100] if str(x).strip()
-        ]
+        # 两种条目都收（SteamID64 或游戏内名字，见 app/watched.py），
+        # 这里只做去空白、去重、去空行。
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for entry in raw[:100]:
+            text = str(entry).strip()
+            key = watched.normalize(text)
+            if not text or key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(text)
+        patch["watched_players"] = cleaned
     if "sampling" in patch:
         s = patch["sampling"]
         if not isinstance(s, dict):

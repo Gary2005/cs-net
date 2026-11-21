@@ -39,7 +39,8 @@ from . import config, db
 bp = Blueprint("stats", __name__)
 
 #: 传统统计缓存文件的格式版本（改了 `build_stats` 的字段就 +1）。
-TRAD_VERSION = 1
+#: 2: 热身击杀不再算进第一回合（平台录了热身的 demo，K/D 会变）。
+TRAD_VERSION = 2
 
 #: 跨场求和时直接相加的字段（比例和派生值最后重算）。
 TRAD_SUM = (
@@ -266,6 +267,7 @@ def api_player_stats(steamid: str):
             rows.append(row)
             matches.append({**base, "cached": bool(st.get("cached")),
                             "rounds": int(st.get("rounds") or base["rounds"]),
+                            "warmup_kills": int(st.get("warmup_kills") or 0),
                             "stats": row})
             say_((i + 1) / max(1, total_n), f"第 {i + 1}/{total_n} 场 · {label} · 完成")
 
@@ -275,6 +277,8 @@ def api_player_stats(steamid: str):
             "matches": matches,
             "totals": sum_trad(rows),
             "smoke_ok": bool(smoke_ok and rows),
+            # 这些比赛里一共被排除掉多少热身击杀（0 = 平台没录热身）
+            "warmup_kills": sum(m.get("warmup_kills") or 0 for m in matches),
             "errors": errors,
             "elapsed": round(time.perf_counter() - t0, 1),
         }

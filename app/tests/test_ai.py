@@ -5,10 +5,11 @@
 `visualizer/tests/test_ai_overlay.mjs` 的事）。这里量的是那些"错了也不报错、
 只会悄悄画错"的地方：
 
-* `duel_windows`：只认敌人、不认自杀 / 队友 / 队伍未知、窗口 = 死前 3 秒、
+* `duel_windows`：只认敌人、不认自杀 / 队友 / 队伍未知、弧线 = 死前 2 秒、
   终点取受害者**最后一个活帧**
-* `assign_duels` / `duel_entries`：窗口重叠时归谁、4 秒窗口里死过人就不喂模型
-* `RoundTensors.aim_arrays`：补齐、`seconds` 对零、`frame_mask`、窗口边界
+* `plan_duels`：一枪一条窗口（锚在击杀帧、193 帧）、窗口里死过人就丢掉、列号换算
+* `RoundTensors.aim_arrays`：补齐到固定 193 帧、`seconds` 对零、`frame_mask`、
+  窗口起点 / 列号
 * `Progress`：只增不减、finish 之后变成 result / error 事件
 * 缓存：键跟着文件**内容**变（mtime 变了不算）、版本不对就作废、写进去能读回来
 * 权重：`PINNED_WEIGHTS` 的扁平 `<run>.pt` + 同名 `<run>.yaml`（老布局也认），
@@ -104,9 +105,9 @@ def _kill(tick: int, attacker: int, victim: int) -> dict:
 def test_duel_windows() -> None:
     from app.ai.service import DUEL_LEAD, duel_windows
 
-    eq("对枪窗口是死前 3 秒", DUEL_LEAD, 3.0)
+    eq("弧线画死前 2 秒", DUEL_LEAD, 2.0)
 
-    # 6 号在 400 帧杀了 3 号 → 窗口 = [400 帧前 3 秒, 398]（3 号最后一个活帧）
+    # 6 号在 400 帧杀了 3 号 → 弧线 = [400 帧前 2 秒, 398]（3 号最后一个活帧）
     tensors, rnd = _round(deaths={3: 400})
     rnd["events"]["kills"] = [_kill(1000 + 400, 6, 3)]
     duels = duel_windows(tensors, rnd)
@@ -115,11 +116,11 @@ def test_duel_windows() -> None:
     eq("A 端 = 受害者", d.a, 3)
     eq("B 端 = 击杀者", d.b, 6)
     eq("终点 = 受害者最后一个活帧（不是击杀帧）", d.i1, 399)
-    eq("起点 = 死前 3 秒（6.234 - 3 = 3.234 s → 第 207 帧）", d.i0, 207)
-    check("窗口正好 3 秒", abs((d.t1 - d.t0) - 3.0) < 0.0001, f"{d.t0}..{d.t1}")
+    eq("起点 = 死前 2 秒（6.234 - 2 = 4.234 s → 第 271 帧）", d.i0, 271)
+    check("弧线正好 2 秒", abs((d.t1 - d.t0) - 2.0) < 0.0001, f"{d.t0}..{d.t1}")
     eq("as_dict 里两个端点和帧号都带出去",
        {k: d.as_dict()[k] for k in ("a", "b", "i0", "i1")},
-       {"a": 3, "b": 6, "i0": 207, "i1": 399})
+       {"a": 3, "b": 6, "i0": 271, "i1": 399})
 
     # 各种"不该有对枪"的情况
     cases = {
@@ -171,7 +172,8 @@ def test_round_end_kill() -> None:
     死亡那一 tick 就把回合计数加一），`round_events()` 会整条滤掉；不补的话每个
     回合的最后一杀都没有弧线。
     """
-    from app.ai.service import assign_duels, duel_entries, duel_windows
+    from app.ai.features import AIM_WINDOW
+    from app.ai.service import duel_windows, plan_duels
 
     tensors, rnd = _round()                       # 600 帧 / 9.375 s，谁都没死
     hi = int(tensors.ticks[-1])
@@ -182,14 +184,21 @@ def test_round_end_kill() -> None:
     eq("A 端 = 受害者", d.a, 3)
     eq("B 端 = 击杀者", d.b, 6)
     eq("挂在最后一帧上（受害者活到那一帧）", d.i1, tensors.frames - 1)
-    eq("起点仍是死前 3 秒（9.359 - 3 = 6.359 s → 第 407 帧）", d.i0, 407)
-    check("窗口正好 3 秒", abs((d.t1 - d.t0) - 3.0) < 0.0001, f"{d.t0}..{d.t1}")
+    eq("起点仍是死前 2 秒（9.359 - 2 = 7.359 s → 第 471 帧）", d.i0, 471)
+    check("弧线正好 2 秒", abs((d.t1 - d.t0) - 2.0) < 0.0001, f"{d.t0}..{d.t1}")
+
+    runs = plan_duels(tensors, duels)
+    eq("一枪一条窗口（不是一帧一条）", len(runs), 1)
+    run = runs[0]
+    eq("窗口锚在击杀帧上（3 秒 → 193 帧）", run.start, d.i1 - (AIM_WINDOW - 1))
+    eq("窗口固定 193 帧", run.length, AIM_WINDOW)
+    eq("击杀帧是最后一列", run.column(d.i1), AIM_WINDOW - 1)
+    eq("弧线第一列 = 窗口第 64 列（死前 2 秒）", run.column(d.i0), 64)
 
     grid = np.arange(0, tensors.frames, 16, dtype=np.int64)
-    entries, _ = duel_entries(tensors, grid, assign_duels(duels, grid))
-    eq("窗口里的采样点都喂了模型", len(entries), 12)
-    check("最后一个采样点也有对枪预测",
-          bool(entries) and entries[-1] == (int(grid[-1]), 3, 6), str(entries[-1:]))
+    cols = [run.column(int(i)) for i in grid if d.i0 <= i <= d.i1]
+    check("弧线上的采样点都落在窗口里", bool(cols) and min(cols) >= 64
+          and max(cols) <= AIM_WINDOW - 1, str(cols))
 
     # 只补 +1：+2 已经不是"下一个 tick"，没有帧可挂
     tensors2, rnd2 = _round()
@@ -213,7 +222,8 @@ def test_round_end_kill() -> None:
 
 
 def test_assign_duels() -> None:
-    from app.ai.service import Duel, assign_duels, duel_entries
+    from app.ai.features import AIM_WINDOW
+    from app.ai.service import Duel, assign_duels, plan_duels
 
     d1 = Duel(a=3, b=6, i0=100, i1=300, t0=1.5, t1=4.6)
     d2 = Duel(a=4, b=7, i0=200, i1=480, t0=3.1, t1=7.5)
@@ -227,22 +237,25 @@ def test_assign_duels() -> None:
     eq("窗口之前没有对枪", by_frame[0], None)
     eq("两场都结束之后没有对枪", by_frame[576], None)
 
-    # 4 秒窗口里有人死过 → 不喂模型（训练分布里双方全程活着）
+    # 窗口里有人死过 → 这场对枪不喂模型（训练分布里双方全程活着）
     tensors, _ = _round(deaths={3: 340})
-    d = Duel(a=3, b=6, i0=200, i1=339, t0=3.1, t1=5.3)
-    grid = np.arange(0, 600, 16, dtype=np.int64)
-    entries, where = duel_entries(tensors, grid, assign_duels([d], grid))
-    inside = [i for i in range(0, 600, 16) if 200 <= i <= 339]
-    eq("窗口内的采样点都喂了模型", len(entries), len(inside))
-    check("配对是（受害者, 击杀者）", all(e[1:] == (3, 6) for e in entries),
-          str(entries[:3]))
-    eq("where 是它们在 samples 里的位置", where[0], list(grid).index(inside[0]))
+    d = Duel(a=3, b=6, i0=211, i1=339, t0=3.3, t1=5.3)   # 弧线 = 死前 2 秒
+    runs = plan_duels(tensors, [d])
+    eq("双方全程活着 → 给一条窗口", len(runs), 1)
+    eq("窗口从击杀帧往回 193 帧", runs[0].start, 339 - (AIM_WINDOW - 1))
+    eq("击杀帧是最后一列", runs[0].column(339), AIM_WINDOW - 1)
+    eq("弧线第一列 = 第 64 列（死前 2 秒）", runs[0].column(d.i0), 64)
 
-    # 击杀者在窗口里死过 → 这一段整个跳过
+    # 击杀者在窗口里死过 → 整场丢掉
     tensors2, _ = _round(deaths={3: 340, 6: 100})
-    probe = np.array([288, 296, 304], dtype=np.int64)
-    entries2, _ = duel_entries(tensors2, probe, assign_duels([d], probe))
-    eq("窗口里死过人就跳过", len(entries2), 0)
+    eq("击杀者死过 → 跳过", len(plan_duels(tensors2, [d])), 0)
+
+    # 回合最开头那一刀：窗口被帧 0 截短
+    tensors3, _ = _round(deaths={3: 40})
+    d3 = Duel(a=3, b=6, i0=0, i1=39, t0=0.0, t1=0.609)
+    run3 = plan_duels(tensors3, [d3])[0]
+    eq("太靠前的击杀：窗口从 0 开始", run3.start, 0)
+    eq("…只有 40 帧（其余靠补零）", run3.length, 40)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -256,14 +269,21 @@ def _tensors(frames: int = 300):
 
 
 def test_aim_arrays() -> None:
+    from app.ai.features import AIM_WINDOW
+
     t = _tensors(300)
     eq("回合第一帧的窗口只有 1 帧", t.window_bounds(0), (0, 1))
-    eq("最后一帧的窗口是完整 257 帧", t.window_bounds(299), (43, 300))
+    eq("最后一帧的窗口是完整 193 帧", t.window_bounds(299), (107, 300))
 
-    arrays, lengths = t.aim_arrays([(299, 4, 7), (0, 0, 9)])
-    eq("补齐到 batch 内最长的窗口", arrays["ctx_player"].shape, (2, 257, 10, 20))
-    eq("每个样本自己的真实长度", list(lengths), [257, 1])
-    eq("frame_mask 只标真帧", arrays["frame_mask"].sum(axis=1).tolist(), [257, 1])
+    arrays, starts, lengths = t.aim_arrays([(299, 4, 7), (0, 0, 9)])
+    eq("T 固定 193（不再按 batch 内最长补齐）", arrays["ctx_player"].shape,
+       (2, AIM_WINDOW, 10, 20))
+    eq("每条窗口的起点", list(starts), [107, 0])
+    eq("每个样本自己的真实帧数", list(lengths), [AIM_WINDOW, 1])
+    eq("frame_mask 只标真帧", arrays["frame_mask"].sum(axis=1).tolist(),
+       [AIM_WINDOW, 1])
+    eq("最后一帧是最后一列（列号 = 帧号 - 起点）",
+       int(299 - starts[0]), AIM_WINDOW - 1)
     eq("pair 按 (A, B) 原样写进去", arrays["pair"].tolist(), [[4, 7], [0, 9]])
     check("seconds 从窗口第一帧对零",
           abs(arrays["seconds"][0, 1] - 1 / 64.0) < 1e-7
@@ -273,10 +293,12 @@ def test_aim_arrays() -> None:
     eq("补齐帧的道具 id 是 -1", int(arrays["ctx_projectile_id"][1, 1, 0]), -1)
     eq("dashboard map_id 每行都有", arrays["map_id"].tolist(), [0, 0])
 
-    # 两个窗口都短、长度不同 → 仍然按最长补齐
-    arrays, lengths = t.aim_arrays([(5, 1, 2), (9, 1, 2)])
+    # 两个短窗口：长度不同，但都补到固定的 193 帧
+    arrays, starts, lengths = t.aim_arrays([(5, 1, 2), (9, 1, 2)])
     eq("短窗口各自长度", list(lengths), [6, 10])
-    eq("短窗口的 Tmax", arrays["ctx_player"].shape[1], 10)
+    eq("短窗口都从帧 0 开始", list(starts), [0, 0])
+    eq("T 恒等于 AIM_WINDOW", arrays["ctx_player"].shape[1], AIM_WINDOW)
+    eq("短窗口的尾巴是补的", int(arrays["frame_mask"][0, 6:].sum()), 0)
 
 
 def test_spatial_arrays() -> None:
@@ -712,6 +734,172 @@ def test_stream_work_shares_one_job() -> None:
     eq("结果挂在任务上（下一次点开是缓存）", jobs[0]["result"]["value"], 7)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 整回合遮挡：稀疏构建 + 磁盘缓存
+# ═══════════════════════════════════════════════════════════════════════════
+
+#: `view_render` 把 three 空间的 OBJ 换成 game 空间用的比例（`(gx,gy,gz)=(tz,tx,ty)/S`）。
+_OBJ_SCALE = 0.0254
+
+
+def _wall_obj(path: Path) -> Path:
+    """一面 ``x = 0`` 的墙（game 空间），写成 OBJ。
+
+    OBJ 是 three 空间：``(tx,ty,tz) = (gy,gz,gx)·S``，和 `scripts/extract_maps.py`
+    拆出来的地图同轴 —— 这样稀疏构建和精确算法看的是同一面墙，比较才有意义。
+    """
+    s = _OBJ_SCALE
+    game = [
+        (0.0, -200.0, -16.0),
+        (0.0, 200.0, -16.0),
+        (0.0, 200.0, 96.0),
+        (0.0, -200.0, 96.0),
+    ]
+    lines = [f"v {gy * s:.6f} {gz * s:.6f} {gx * s:.6f}" for gx, gy, gz in game]
+    lines += ["f 1 2 3", "f 1 3 4"]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _wall_round(frames: int = 120) -> dict:
+    """2 个玩家：0 号一直站在墙左边，1 号从左穿到右（穿墙，只为制造一次单调翻转）。"""
+    xs = np.linspace(60.0, -60.0, frames)
+    z = [0.0] * frames
+
+    def player(x) -> dict:
+        return {
+            "x": list(x),
+            "y": z,
+            "z": z,
+            "crouch": z,
+            "crouching": [False] * frames,
+            "alive": [True] * frames,
+        }
+
+    return {
+        "id": 0,
+        "ticks": list(range(1000, 1000 + frames)),
+        "round_seconds": [i / 64.0 for i in range(frames)],
+        "players": [player([-60.0] * frames), player(xs)],
+        "smoke": [],
+        "fire": [],
+        "events": {},
+    }
+
+
+def test_build_round_sparse() -> None:
+    """`build_round` 和精确逐帧算法在"单调变化"的回合上必须逐位相同。"""
+    from scripts.training_data import obstruction as obst
+
+    d = scratch()
+    obj = _wall_obj(d / "wall.obj")
+    saved = obst.load_map
+    obst.load_map = lambda _name: saved("tt_wall", obj_path=str(obj))
+    try:
+        rnd = _wall_round()
+        exact = obst.Occluder(rnd, "tt_wall", 2).window(0, len(rnd["ticks"]))
+        sparse = obst.build_round(rnd, "tt_wall", 2)
+
+        eq("形状和精确一致", sparse.shape, exact.shape)
+        check("确实有被墙挡死的帧", int((exact[:, 0, 1] == 2).sum()) > 0)
+        check("也确实有通的帧", int((exact[:, 0, 1] == 0).sum()) > 0)
+        eq("单调穿越：稀疏 == 精确", int((sparse != exact).sum()), 0)
+
+        # 锚点稀疏到 16 帧，二分仍能定位到那一帧（变化只有一次，不会"翻了又翻回来"）
+        eq("stride=16 也精确", int((obst.build_round(rnd, "tt_wall", 2, stride=16) != exact).sum()), 0)
+        # 对角线永远是 0
+        eq("对角线是 0", int(np.abs(np.einsum("tii->ti", sparse)).sum()), 0)
+
+        # 死亡：死人的行 / 列必须是 0，且和精确值一致
+        rnd2 = _wall_round()
+        rnd2["players"][1]["alive"][60:] = [False] * 60
+        exact2 = obst.Occluder(rnd2, "tt_wall", 2).window(0, 120)
+        sparse2 = obst.build_round(rnd2, "tt_wall", 2)
+        eq("有死亡的回合：稀疏 == 精确", int((sparse2 != exact2).sum()), 0)
+        eq(
+            "死人的行 / 列全是 0",
+            int(np.abs(sparse2[60:, 1, :]).sum() + np.abs(sparse2[60:, :, 1]).sum()),
+            0,
+        )
+    finally:
+        obst.load_map = saved
+
+
+def test_obstruction_cache() -> None:
+    """缓存：写完能读、对不上就重建、命中不碰几何、删 csz 一起清。"""
+    from scripts.training_data import obstruction as obst
+    from scripts.training_data import obstruction_cache as oc
+    from app import obstruction as app_obst
+
+    d = scratch()
+    csz = d / "demo__ab12cd34.csz"
+    csz.write_bytes(b"not a real csz")
+    rnd = {"id": 3, "ticks": list(range(40))}
+    arr = (np.arange(40 * 10 * 10, dtype=np.int8) % 3).reshape(40, 10, 10)
+
+    calls = {"n": 0}
+    # `ensure()` 是**调用时**才从 obstruction 里取 build_round 的（为了不把 numba
+    # 拖进"只想摸文件"的调用方），所以补丁打在 obstruction 上，不是打在这里。
+    saved_build = obst.build_round
+
+    def fake_build(_rnd, _map, _n, **_kw):
+        calls["n"] += 1
+        return arr
+
+    obst.build_round = fake_build
+    saved_map = obst.load_map
+    try:
+        got = oc.ensure(csz, rnd, "de_mirage", 10)
+        eq("没有缓存 → 建一次", calls["n"], 1)
+        check("返回的数组和算出来的一致", np.array_equal(got, arr))
+        check("缓存文件落盘了", oc.round_path(csz, 3).is_file())
+
+        # 命中缓存时**不许碰几何**：把 load_map 换成"一调就炸"
+        obst.load_map = lambda _n, **_kw: (_ for _ in ()).throw(RuntimeError("不许碰几何"))
+        got2 = app_obst.ensure_round(csz, rnd, "de_mirage")
+        eq("第二次 → 不再算", calls["n"], 1)
+        check("读回来的数组一致", np.array_equal(got2, arr))
+        obst.load_map = saved_map
+
+        check("has() 认这个缓存", oc.has(csz, 3, 40, map_name="de_mirage"))
+        check("帧数对不上 → 不认", not oc.has(csz, 3, 41, map_name="de_mirage"))
+        check("帧数对不上 → load 返回 None", oc.load(csz, 3, 41, map_name="de_mirage") is None)
+        check("地图名换了 → 不认（basis 变了）",
+              not oc.has(csz, 3, 40, map_name="de_anubis"))
+
+        # 算法版本一变，老缓存自动作废
+        oc.CACHE_VERSION += 1
+        check("CACHE_VERSION +1 → 不认", not oc.has(csz, 3, 40, map_name="de_mirage"))
+        oc.CACHE_VERSION -= 1
+
+        # 坏文件 = 没命中，不是异常
+        oc.round_path(csz, 3).write_bytes(b"garbage")
+        check("坏缓存 → 当没命中", oc.load(csz, 3, 40, map_name="de_mirage") is None)
+        oc.save(csz, 3, arr, map_name="de_mirage")
+        check("覆盖之后又能读", np.array_equal(oc.load(csz, 3, 40, map_name="de_mirage"), arr))
+
+        # 整个 demo 一轮：两个回合，一个命中一个新建
+        data = {
+            "meta": {"map": "de_mirage"},
+            "rounds": [rnd, {"id": 4, "ticks": list(range(40))}],
+        }
+        info = app_obst.build_demo(csz, data)
+        eq("build_demo 覆盖两个回合", info["rounds"], 2)
+        eq("其中一个命中缓存", info["cached"], 1)
+        eq("另一个新建", info["built"], 1)
+        eq("没有失败", info["failed"], [])
+        check("第二个回合也有缓存文件", oc.round_path(csz, 4).is_file())
+
+        # 删 csz 时缓存目录一起没
+        app_obst.discard(csz)
+        csz.unlink()
+        check("discard 之后目录没了", not oc.cache_dir(csz).exists())
+        check("discard 之后再 load → None", oc.load(csz, 3, 40, map_name="de_mirage") is None)
+    finally:
+        obst.build_round = saved_build
+        obst.load_map = saved_map
+
+
 def main() -> int:
     print("app/ai 单元测试")
     for name, fn in [
@@ -726,6 +914,8 @@ def main() -> int:
         ("models pinned", test_pinned_models),
         ("routes", test_routes),
         ("stream_work jobs", test_stream_work_shares_one_job),
+        ("build_round sparse", test_build_round_sparse),
+        ("obstruction cache", test_obstruction_cache),
     ]:
         print(f"\n[{name}]")
         try:

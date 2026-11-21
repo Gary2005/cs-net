@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from . import config
+from . import watched as watched_rule
 
 #: A demo whose file is present but which has not been extracted yet.
 STATUS_DISCOVERED = "discovered"
@@ -785,8 +786,9 @@ def list_players(
     SteamID.  ``search_players`` is the ranked version of the same idea.
 
     ``watched_names`` is the config's watched list, passed in rather than read
-    here so the query layer stays free of settings.  Matching is the same
-    case-insensitive substring test the library highlight uses.
+    here so the query layer stays free of settings.  A SteamID64 entry matches
+    the account exactly; anything else is the case-insensitive substring test
+    the library highlight has always used (see :mod:`app.watched`).
     """
     where: list[str] = []
     params: list[Any] = []
@@ -803,12 +805,18 @@ def list_players(
         )
         like = f"%{q}%"
         params += [like, like, like, like]
-    names = [str(w).strip() for w in (watched_names or []) if str(w or "").strip()]
-    if names:
+    names, sids = watched_rule.split(watched_names)
+    if names or sids:
         parts = []
+        # SteamID entries are exact account matches; name entries keep the old
+        # case-insensitive substring test.  Both live in one list (see
+        # app/watched.py), so "watched only" cannot mean two different things.
+        for steamid_wanted in sids[:200]:
+            parts.append("steamid = ?")
+            params.append(steamid_wanted)
         for name in names[:50]:
             parts.append("LOWER(IFNULL(name, '')) LIKE ?")
-            params.append(f"%{name.lower()}%")
+            params.append(f"%{name}%")
         where.append(f"({' OR '.join(parts)})")
     clause = f"WHERE {' AND '.join(where)}" if where else ""
 

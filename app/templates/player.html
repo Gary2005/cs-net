@@ -39,7 +39,14 @@
   <section class="phead">
     <div id="profile-head" class="phead-identity"></div>
     <div class="phead-actions">
-      <button id="btn-watch" class="btn-glass" data-i18n="player.common.watch.add">加入关注</button>
+      <button id="btn-share" class="btn-glass"
+              data-i18n-title="common.share.btn.title"
+              title="把当前这份数据导出成一张 PNG（带 logo 和项目地址）"
+              data-i18n="common.share.btn">分享图片</button>
+      <button id="btn-watch" class="btn-glass"
+              data-i18n-title="player.common.watch.title"
+              title="关注的是这个 Steam 账号：换平台、换游戏内名字都还认得出来"
+              data-i18n="player.common.watch.add">加入关注</button>
       <button id="btn-refresh-avatar" class="btn-glass"
               data-i18n-title="player.profile.refreshAvatar.title"
               title="忽略缓存，重新从 Steam 取一次头像"
@@ -96,6 +103,6 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script type="module" src="/lib-static/js/player.js?v=20261118c"></script>
+<script type="module" src="/lib-static/js/player.js?v=20261121a"></script>
 </body>
 </html>

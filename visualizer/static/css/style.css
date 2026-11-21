@@ -1230,6 +1230,17 @@ body {
   padding: 2px 8px; border-radius: 6px;
 }
 .stats-close:hover { color: var(--text); background: rgba(255, 255, 255, 0.07); }
+/* 分享图：和关闭按钮并排，但它是"动作"不是"关灯"，所以给个淡底 */
+.stats-share {
+  font-family: inherit; font-size: 12px; cursor: pointer;
+  color: var(--cyan-bright);
+  background: rgba(56, 189, 248, 0.10);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 7px; padding: 4px 10px; white-space: nowrap;
+  align-self: center;
+}
+.stats-share:hover { background: rgba(56, 189, 248, 0.18); }
+.stats-share:disabled { opacity: 0.55; cursor: progress; }
 .stats-body {
   padding: 16px 20px 20px;
   overflow: auto;

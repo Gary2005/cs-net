@@ -73,7 +73,20 @@ from . import config
 #: Resolution of the cached per-map radar.
 RADAR_SIZE = 1024
 #: Size of the per-demo thumbnail written to disk.
-THUMB_SIZE = (640, 400)
+#:
+#: **Square on purpose.** Radar art is square in world space, so any wide box has
+#: to throw away either the top/bottom or the left/right of the map
+#: (``640x400`` kept the full width and cut ~19% off each end of the height).
+#: The consumers crop it themselves when they want a wide frame and, unlike this
+#: file, they all have the original to crop from:
+#:
+#: * library grid / list / player rows -- CSS ``object-fit: cover``;
+#: * share image (``visualizer/static/js/share-card.js``) -- draws it whole.
+#:
+#: Already-written thumbnails keep the old shape (the file name is not part of
+#: the size); nothing rebuilds them automatically, same as the "empty thumbnail
+#: from before the maps were unpacked" case -- re-extract the demo to redraw.
+THUMB_SIZE = (640, 640)
 #: Barycentric samples per pixel of projected triangle area.  Higher = smoother
 #: coverage at a linear cost in time.
 SAMPLE_DENSITY = 3.0
@@ -576,6 +589,10 @@ def _thumb_crop(radar: MapRadar, W: int, H: int):
     Centred on the map's own content rather than the image, because the art has
     a transparent margin whose size differs per map; clamping keeps the box
     inside the image when a map hugs one edge.
+
+    With the square :data:`THUMB_SIZE` this is the whole image (no crop).  It
+    still takes W/H because nothing in here assumes they are equal, and a
+    caller that wants a letterboxed ratio gets a correctly centred crop.
     """
     n = radar.size
     mask = radar.filled_mask()
@@ -632,9 +649,10 @@ def render_demo_thumbnail(
         return False
 
     W, H = THUMB_SIZE
-    # Crop (never squash) to the card's aspect.  Radar art is square in world
-    # space, so resizing it straight to 640x400 would stretch the map by 1.6x
-    # horizontally -- and the card's `object-fit: cover` then crops it again.
+    # Crop (never squash) to the target aspect -- with a square target that is
+    # the whole map.  Radar art is square in world space, so resizing it to a
+    # wide box would stretch the map; cutting it instead loses whole edges of
+    # the map, which is what 640x400 used to do (19% off the top and bottom).
     box, (u0, u1, v0, v1) = _thumb_crop(radar, W, H)
     base = (Image.fromarray(radar.image)
             .crop(box).resize((W, H), Image.LANCZOS).convert("RGB"))
@@ -672,9 +690,15 @@ def render_demo_thumbnail(
         if a is not None and b is not None
         else f"{team_names[0]}  vs  {team_names[1]}"
     )
-    _text_with_backdrop(draw, (10, 9), badge, size=15)
+    # Labels go in the middle band, not at the edges: the library crops this
+    # square to 16:10 with `object-fit: cover` (18.75% off the top and bottom),
+    # so anything drawn near the edge disappears there.  The share image draws
+    # the whole square, where the same band just looks like a margin.
+    top = round(H * 0.20)
+    bottom = H - round(H * 0.20)
+    _text_with_backdrop(draw, (10, top), badge, size=15)
     if map_name:
-        _text_with_backdrop(draw, (10, H - 27), map_name, size=14)
+        _text_with_backdrop(draw, (10, bottom - 18), map_name, size=14)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_path.with_suffix(".png.tmp")

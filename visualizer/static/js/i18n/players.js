@@ -26,7 +26,8 @@ export default {
 
     'player.common.watch.add': '加入关注',
     'player.common.watch.remove': '取消关注',
-    'player.common.watch.added': '已加入关注玩家',
+    'player.common.watch.title': '关注的是这个 Steam 账号：换平台、换游戏内名字都还认得出来',
+    'player.common.watch.added': '已加入关注（按 Steam 账号，跨平台有效）',
     'player.common.watch.removed': '已从关注玩家移除',
     'player.common.watch.highlights': '，{n} 场比赛的高亮已更新',
 
@@ -131,7 +132,8 @@ export default {
 
     'player.common.watch.add': 'Watch',
     'player.common.watch.remove': 'Unwatch',
-    'player.common.watch.added': 'Added to watched players',
+    'player.common.watch.title': 'Follows the Steam account: still recognised after a platform or in-game name change',
+    'player.common.watch.added': 'Now watching this Steam account (all platforms)',
     'player.common.watch.removed': 'Removed from watched players',
     'player.common.watch.highlights': ', {n} match highlights updated',
 

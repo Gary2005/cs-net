@@ -30,15 +30,23 @@ spatial（一帧一个预测）：
 aim（一个对枪窗口一个预测）：`P(A 击杀 B)`。**A = 受害者，B = 击杀者**，也就是
 网页上那条弧线的两端；弧上的游标 = A 的胜率。
 
-对枪只在"死前 3 秒"里显示（`DUEL_LEAD`）
-----------------------------------------
-训练数据里 aim 的样本是「受害者最后一个活帧 - 4 s → 最后一个活帧」，label 在
-整条窗口的**每一帧**上都算一个样本。所以推理时只需要问死前 3 秒内的每一帧
-（都落在 4 秒窗口里，全在训练分布内），其余时间不给预测 —— 没有对枪就没有
-弧线。两个人用的是**这一回合真实的击杀双方**（来自 `.csz` 的 kills 事件）：
-aim 模型是"这两个人谁会赢"，喂一对"模型猜的对枪"进去既不是训练分布，也会在
-没有对枪的时候乱跳。谁"即将被打死"这件事由 spatial 的 next_death / next_kill
-在指标表里回答。
+对枪：一枪一条窗口，锚在击杀那一刻（`DUEL_LEAD` / `AIM_WINDOW`）
+------------------------------------------------------------------
+训练数据里 aim 的样本是「[受害者最后一个活帧 - 4 s, 受害者最后一个活帧]」，label
+在整条窗口的**每一帧**上都算一个样本。所以推理时也**一枪一条窗口**：窗口终点恒是
+受害者最后一个活帧，屏幕上的 2 秒弧线是这条窗口的最后 128 列。两个人用的是**这一
+回合真实的击杀双方**（来自 `.csz` 的 kills 事件）：aim 模型是"这两个人谁会赢"，
+喂一对"模型猜的对枪"进去既不是训练分布，也会在没有对枪的时候乱跳。谁"即将被打死"
+这件事由 spatial 的 next_death / next_kill 在指标表里回答。
+
+窗口取 193 帧（3 秒）而不是训练的 257 帧，理由见 `features.AIM_WINDOW`：257 是
+`time_bins` 的上限，训练时窗口终点恒是击杀帧，于是 `k=256` 只在"最后一帧"出现 ——
+位置编码本身就把答案写了进去。193 帧把那一格躲开，最后一列是 `k=192`。
+
+**以前不是这么算的**：老代码是"每个采样点开一条以该帧结尾的 4 秒窗口"，于是弧线
+最早那个点（死前 3 秒）看到的其实是 `[死前 7 秒, 死前 3 秒]`，而且 `k=256` ——
+既是训练里没出现过的状态，又把 71 个窗口算完只取最后一列（约 10 倍的浪费）。
+改成一枪一条之后 aim 从 ~15 s 降到 ~1.8 s（实测 13900K / CPU torch）。
 
 **回合结束那一枪也要有弧线**（`_round_kills`）
 --------------------------------------------
@@ -53,10 +61,10 @@ tick 就把 `total_rounds_played` 加一，所以那一帧的采样已经归到�
 ----------------------------------------------
 `predict_round` 顺手把统计页「AI 数据」那五个数算出来（`app/ai/stats.py`）：
 击杀 / 回合影响力、站位死亡风险、站位击杀率、对枪评分。它们全都建立在**同一次**
-前向之上 —— spatial 的逐帧胜率 / next_death / next_kill 已经在那儿了，只多跑一次
-aim（每场对枪问"击杀前 2 秒"的两个方向）。所以这些数和回放页的弧线是同一批预测，
-不会出现"统计里的胜率和画面上的对不上"；而且它们和预测一起进同一个缓存文件，
-换页签、开关弹窗都不用再跑模型。
+前向之上 —— spatial 的逐帧胜率 / next_death / next_kill 已经在那儿了，对枪评分
+只是从对枪窗口里读一列（第 64 列 = 死前 2 秒），**不再多跑一次 aim**。所以这些数
+和回放页的弧线是同一批预测，不会出现"统计里的胜率和画面上的对不上"；而且它们和
+预测一起进同一个缓存文件，换页签、开关弹窗都不用再跑模型。
 """
 
 from __future__ import annotations
@@ -87,7 +95,7 @@ from scripts.training_data.tasks._util import last_alive  # noqa: E402
 
 #: 网页上的时间分辨率：每 16 个采样点（逐 tick 的 demo 就是 4 Hz）算一次。
 #: 4 Hz 对"看一眼谁要打起来"足够了，而代价是下面这些数的线性函数：
-#: 6800 采样的回合 ≈ 427 个预测点，aim 约 2 s。
+#: 6800 采样的回合 ≈ 427 个预测点，spatial 约 2.5 s（aim 与采样点无关，一枪一次）。
 DEFAULT_STRIDE = 16
 
 #: 结果 JSON 的格式版本。改了 payload 结构就 +1，旧缓存自动作废。
@@ -99,14 +107,17 @@ DEFAULT_STRIDE = 16
 #:       `death_sum` / `death_n` 没了
 #:   v6：回合影响力改记到「涨落之前」那一帧的存活名单上，某队全灭后沿用最后一个
 #:       还有人活着的帧
-CACHE_VERSION = 6
+#:   v7：aim 改成一枪一条窗口（锚在击杀帧、193 帧）、弧线画死前 2 秒、对枪评分取
+#:       同一条窗口的第 64 列 —— 预测值全变了，旧缓存必须作废
+CACHE_VERSION = 7
 
-#: 对枪窗口的长度（秒）：**死前 3 秒**开始显示，直到有人死（那一帧）。
-#: 为什么是 3 而不是训练用的 4（`features.AIM_WINDOW` / `tasks/aim.py::LOOKBACK`）：
-#: 训练窗口是从死前 4 秒到死前最后一帧，模型对窗口内的**每一帧**都输出一个
-#: 预测，所以死前 3 秒的每一帧本来就都在训练分布内；而屏幕上多留 1 秒只会让
-#: "还没打起来"的阶段也挂着一条弧线。
-DUEL_LEAD = 3.0
+#: 弧线在屏幕上画多长（秒）：从**死前 2 秒**画到击杀那一帧。
+#:
+#: 为什么是 2 而不是 3：窗口是 193 帧 = 3 秒（`features.AIM_WINDOW`），取最后 2 秒
+#: 就留出 1 秒历史 —— 弧线第一个点已经看了 64 帧数据，而不是从"刚有一帧"开始猜。
+#: 这 1 秒同时也是 `stats.KILL_PROBE_SEC`：对枪评分要的就是"模型只看了 1 秒时怎么
+#: 判断"，和弧线起点是同一列（`features.ARC_FROM_END`）。
+DUEL_LEAD = 2.0
 
 #: 进程内最多留几个回合的输入张量（一个约 10 MB）。
 _TENSORS_KEEP = 3
@@ -343,34 +354,36 @@ class Predictor:
     def run_aim(
         self,
         tensors: RoundTensors,
-        entries: list[tuple[int, int, int]],
+        windows: list[tuple[int, int, int]],
         *,
         chunk: int = 32,
         progress: Optional[Callable[[int, int], None]] = None,
     ) -> np.ndarray:
-        """`[(采样下标, A, B), …]` → `P(A 击杀 B)`（取每个窗口的最后一列）。"""
-        if not entries:
-            return np.zeros(0, dtype=np.float32)
+        """`[(窗口终点, A, B), …]` → 概率矩阵 `(行, AIM_WINDOW)`，行 = 窗口。
+
+        **返回整条窗口**（不是最后一列）：一次前向里所有列都算出来了，调用方按
+        `列号 = 帧号 - starts[row]` 去取（`starts` 见 `RoundTensors.aim_arrays`）。
+        以前每个采样点开一条窗口、只留最后一列，等于把 256/257 的结果扔掉。
+        """
+        if not windows:
+            return np.zeros((0, AIM_WINDOW), dtype=np.float32)
         bundle = self.bundle()
         torch = bundle.torch
-        out = np.zeros(len(entries), dtype=np.float32)
+        out = np.zeros((len(windows), AIM_WINDOW), dtype=np.float32)
         with torch.inference_mode():
-            for start in range(0, len(entries), chunk):
-                part = entries[start:start + chunk]
-                arrays, lengths = tensors.aim_arrays(part)
+            for start in range(0, len(windows), chunk):
+                part = windows[start:start + chunk]
+                arrays, _starts, _lengths = tensors.aim_arrays(part)
                 batch = {
                     k: torch.from_numpy(np.ascontiguousarray(v)).to(bundle.device)
                     for k, v in arrays.items()
                 }
                 with self._autocast():
                     result = bundle.aim(batch)
-                probs = result["probs"].float()
-                # 第 row 条样本的"最后一列" = 看完整条窗口之后的那一刻
-                rows = torch.arange(len(part), device=probs.device)
-                picked = probs[rows, torch.as_tensor(lengths - 1, device=probs.device)]
-                out[start:start + len(part)] = picked.cpu().numpy()
+                probs = result["probs"].float().cpu().numpy()
+                out[start:start + len(part)] = probs
                 if progress is not None:
-                    progress(min(len(entries), start + len(part)), len(entries))
+                    progress(min(len(windows), start + len(part)), len(windows))
         return out
 
 
@@ -389,21 +402,41 @@ class _nullcontext:
 
 @dataclass(frozen=True)
 class Duel:
-    """一场对枪：谁死、谁杀，以及它在**采样轴**上的窗口 `[i0, i1]`。
+    """一场对枪：谁死、谁杀，以及屏幕上的弧线区间 `[i0, i1]`。
 
     `a` 是受害者（弧线的 A 端，也就是游标的 0 点），`b` 是击杀者。
+    `[i0, i1]` 是**画弧线**的那 2 秒（`DUEL_LEAD`），不是模型窗口：模型窗口是
+    `[i1 - (AIM_WINDOW-1), i1]`（3 秒），见 :class:`DuelRun`。
     """
 
     a: int      # 受害者的槽位 0..9
     b: int      # 击杀者的槽位 0..9
-    i0: int     # 窗口第一个采样帧（死前 `DUEL_LEAD` 秒）
-    i1: int     # 窗口最后一帧 = 受害者最后一个活帧
+    i0: int     # 弧线第一个采样帧（死前 `DUEL_LEAD` 秒）
+    i1: int     # 弧线最后一帧 = 受害者最后一个活帧
     t0: float   # `i0` 的回合内秒数
     t1: float   # `i1` 的回合内秒数
 
     def as_dict(self) -> dict[str, Any]:
         return {"a": self.a, "b": self.b, "i0": self.i0, "i1": self.i1,
                 "t0": round(self.t0, 3), "t1": round(self.t1, 3)}
+
+
+@dataclass(frozen=True)
+class DuelRun:
+    """一场对枪占 `run_aim` 结果里的哪一行，以及这条窗口盖住哪几帧。
+
+    `start` 是窗口第一帧（`[start, i1]`，正常是 193 帧，回合开头那几刀会被帧 0
+    截短），于是"第 `i` 帧的预测"= 第 `i - start` 列。
+    """
+
+    duel: Duel
+    row: int
+    start: int
+    length: int
+
+    def column(self, i: int) -> int:
+        """第 `i` 帧在这条窗口里的列号（调用方保证 `start <= i <= i1`）。"""
+        return int(i) - self.start
 
 
 def _round_kills(rnd: dict) -> list[dict]:
@@ -481,7 +514,7 @@ def assign_duels(
     """每个采样点归哪一场对枪（窗口不重叠时一眼可见，重叠时取"死得最早"的那场）。
 
     重叠只出现在**换人**的瞬间（比如 A 死了 0.3 秒后 B 被补枪）：那时候前一场
-    已经结束、后一场还没到"死前 3 秒"以外的部分，取更近的那场才不会让弧线
+    已经结束、后一场还没到"死前 2 秒"以内的部分，取更近的那场才不会让弧线
     在两个人之间来回跳。
     """
     duels = list(duels)
@@ -495,30 +528,50 @@ def assign_duels(
     return out
 
 
-def duel_entries(
-    tensors: RoundTensors,
-    samples: np.ndarray,
-    assigned: list[Optional[Duel]],
-) -> tuple[list[tuple[int, int, int]], list[int]]:
-    """`(采样下标, A, B)` 的列表 + 它们在 `samples` 里的位置。
+def plan_duels(tensors: RoundTensors, duels: Iterable[Duel]) -> list[DuelRun]:
+    """给每场对枪分配 `run_aim` 里的一行：窗口 `[i1-192, i1]`，锚在击杀帧。
 
-    跳过：这一帧没有对枪窗口、配对里有人这一帧已经死了、或者**4 秒窗口内**
-    有人死过（模型只在"双方全程活着"的窗口上训过）。
+    跳过窗口里有人死过的：模型只在"双方全程活着"的窗口上训过（`tasks/aim.py`
+    造数据时用 `alive[a, win].all()` 卡过这一条）。受害者的 i1 就是它最后一个
+    活帧，所以正常情况下只有"击杀者在这一段里已经死了"（补枪 / 换人）才会命中
+    这里 —— 那场对枪就不给弧线，免得喂一条分布外的窗口。
+
+    返回的顺序就是 `run_aim` 结果的**行号**（`DuelRun.row`）。
     """
-    entries: list[tuple[int, int, int]] = []
-    where: list[int] = []
-    for k, (i, duel) in enumerate(zip(samples, assigned)):
-        if duel is None:
+    out: list[DuelRun] = []
+    for d in duels:
+        start = max(0, d.i1 - (AIM_WINDOW - 1))
+        stop = d.i1 + 1
+        if not (tensors.alive[start:stop, d.a].all()
+                and tensors.alive[start:stop, d.b].all()):
             continue
-        a, b = duel.a, duel.b
-        if not (tensors.alive[i, a] and tensors.alive[i, b]):
+        out.append(DuelRun(duel=d, row=len(out), start=start, length=stop - start))
+    return out
+
+
+def probe_value(
+    runs: Iterable[DuelRun], probe: dict, probs: np.ndarray
+) -> Optional[float]:
+    """`kill_probes()` 的一条探针 → 对应窗口里那一列的概率（`P(受害者赢)`）。
+
+    匹配条件：同一对（受害者、击杀者）、且探针帧落在这一场的弧线区间里。
+    同一对可能打两场（先 A 杀 B、后来 B 杀 A），取 `i1` 更近的那一场。
+
+    返回 `None` = 这场对枪没有窗口（`plan_duels` 跳过了），调用方不计入分母。
+    """
+    victim, killer, i = int(probe["v"]), int(probe["a"]), int(probe["i"])
+    best: Optional[DuelRun] = None
+    for r in runs:
+        if r.duel.a != victim or r.duel.b != killer:
             continue
-        start, stop = tensors.window_bounds(int(i))
-        if not (tensors.alive[start:stop, a].all() and tensors.alive[start:stop, b].all()):
+        if not (r.duel.i0 <= i <= r.duel.i1):
             continue
-        entries.append((int(i), int(a), int(b)))
-        where.append(k)
-    return entries, where
+        if best is None or r.duel.i1 < best.duel.i1:
+            best = r
+    if best is None:
+        return None
+    col = min(AIM_WINDOW - 1, max(0, best.column(i)))
+    return float(probs[best.row, col])
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -660,7 +713,9 @@ def _write_cache(path: Path, payload: dict[str, Any]) -> None:
 _COMPUTE_LOCK = threading.Lock()
 
 
-def _tensors_of(data: dict, round_idx: int, *, progress=None) -> RoundTensors:
+def _tensors_of(
+    data: dict, round_idx: int, *, csz_path: Optional[str | Path] = None, progress=None
+) -> RoundTensors:
     store: Optional[dict[int, RoundTensors]] = data.get("_ai_tensors")
     if store is None:
         store = {}
@@ -668,7 +723,7 @@ def _tensors_of(data: dict, round_idx: int, *, progress=None) -> RoundTensors:
     cached = store.get(round_idx)
     if cached is not None:
         return cached
-    tensors = build_round_tensors(data, round_idx, progress=progress)
+    tensors = build_round_tensors(data, round_idx, csz_path=csz_path, progress=progress)
     store[round_idx] = tensors
     # 只留最近几个回合：一个约 10 MB，回合多的比赛不该被这一层吃掉内存
     while len(store) > _TENSORS_KEEP:
@@ -753,6 +808,7 @@ def predict_round(
         )
         tensors = _tensors_of(
             data, round_idx,
+            csz_path=csz_path,
             progress=lambda frac, msg: say(_sub(_STAGE_FEAT, frac), msg),
         )
         samples = np.arange(0, tensors.frames, stride, dtype=np.int64)
@@ -769,49 +825,50 @@ def predict_round(
 
         duels = duel_windows(tensors, rounds[round_idx])
         assigned = assign_duels(duels, samples)
-        entries, where = duel_entries(tensors, samples, assigned)
+        runs = plan_duels(tensors, duels)
         # 掉一场"窗口里一个采样点都没有"的对枪（补枪时两场窗口重叠，死得早的那场
         # 会占满重叠部分）：留着它只会让界面说"这场有预测"但一个点都画不出来。
         shown = {id(d) for d in assigned if d is not None}
         duels = [d for d in duels if id(d) in shown]
         probs = predictor.run_aim(
-            tensors, entries,
+            tensors, [(r.duel.i1, r.duel.a, r.duel.b) for r in runs],
             progress=lambda done, total: say(
                 _sub(_STAGE_AIM, done / max(1, total)),
                 f"对枪推理 {done}/{total}…",
             ),
         )
 
-        # ── AI 数据统计：对枪评分要问"击杀前 2 秒"的预测，顺手一起算 ────────
-        # 同一批窗口、同一把锁：这是 `predict_round` 唯一多出来的前向（一次
-        # 二三十个窗口 ≈ 0.2 s），结果和 spatial 一起进 `stats`，按回合缓存。
+        # ── 对枪评分：同一条窗口的第 64 列（死前 2 秒）────────────────────
+        # 不再为探针另跑一次前向：`kill_probes()` 只是把"哪一枪、哪一帧"点出来，
+        # 概率从刚才那张矩阵里读（见 `probe_value`）。
         probes = stats_mod.kill_probes(tensors, rounds[round_idx])
-        probe_probs = np.zeros(0, dtype=np.float32)
         if probes:
             say(_sub(_STAGE_AIM, 0.99), f"对枪评分 {len(probes)} 场…")
-            probe_probs = predictor.run_aim(
-                tensors,
-                [(q["i"], q["a"], q["v"]) for q in probes]
-                + [(q["i"], q["v"], q["a"]) for q in probes],
-            )
+            for q in probes:
+                value = probe_value(runs, q, probs)
+                if value is not None:
+                    q["p"] = value
         round_stats = stats_mod.build_round_stats(
-            tensors, rounds[round_idx], samples, spatial, probes, probe_probs
+            tensors, rounds[round_idx], samples, spatial, probes
         )
 
+        by_duel = {id(r.duel): r for r in runs}
         duel_a: list[Optional[int]] = [None] * samples.size
         duel_b: list[Optional[int]] = [None] * samples.size
         duel_p: list[Optional[float]] = [None] * samples.size
         win0: list[Optional[float]] = [None] * samples.size
         win1: list[Optional[float]] = [None] * samples.size
-        for k, duel in enumerate(assigned):
+        for k, (i, duel) in enumerate(zip(samples, assigned)):
             if duel is None:
                 continue
             win0[k] = round(duel.t0, 3)
             win1[k] = round(duel.t1, 3)
-        for (_, a, b), k, p in zip(entries, where, probs):
-            duel_a[k] = a
-            duel_b[k] = b
-            duel_p[k] = float(p)
+            run = by_duel.get(id(duel))
+            if run is None:
+                continue          # 窗口里死过人：这场对枪不给弧线
+            duel_a[k] = duel.a
+            duel_b[k] = duel.b
+            duel_p[k] = float(probs[run.row, run.column(int(i))])
 
         say(0.99, "写缓存…")
         payload = {

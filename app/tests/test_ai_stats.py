@@ -39,6 +39,17 @@ PASSED = 0
 FAILED: list[str] = []
 
 
+def _with_p(probes: list[dict], values: list[float]) -> list[dict]:
+    """给探针塞上 `p = P(受害者赢)`。
+
+    新口径一枪只问一个方向（模型的 `antisym` 让两个方向精确互补），概率由
+    `service.predict_round` 从对枪窗口的第 64 列读出来塞进 `p`，这里直接模拟。
+    """
+    for q, p in zip(probes, values):
+        q["p"] = float(p)
+    return probes
+
+
 def check(name: str, cond: bool, detail: str = "") -> None:
     global PASSED
     if cond:
@@ -155,9 +166,9 @@ def test_round_stats() -> None:
     print("\n一回合的五个指标（手算）")
     tensors, rnd, spatial = fixture()
     probes = st.kill_probes(tensors, rnd)
-    probs = np.array([0.9, 0.2, 0.4, 0.75])       # 两个方向各两个
+    _with_p(probes, [0.1, 0.75])                  # P(受害者赢)，一枪一个方向
     out = st.build_round_stats(tensors, rnd, np.arange(tensors.ticks.size),
-                               spatial, probes, probs)
+                               spatial, probes)
     rows = {r["idx"]: r for r in out["players"]}
     check("每个人一行", len(out["players"]) == 10)
 
@@ -184,21 +195,27 @@ def test_round_stats() -> None:
     check("死去之后不再计入（玩家 3 只有 4 个活着的采样点）",
           rows[3]["risk_n"] == 4, str(rows[3]["risk_n"]))
 
-    check("对枪评分：击杀者得 1 - p", close(rows[0]["duel_sum"], 0.1),
-          str(rows[0]["duel_sum"]))
+    check("对枪评分：击杀者得 p（模型越不看好，这枪越漂亮）",
+          close(rows[0]["duel_sum"], 0.1), str(rows[0]["duel_sum"]))
     check("对枪评分：受害者得 -p", close(rows[1]["duel_sum"], -0.75),
           str(rows[1]["duel_sum"]))
-    check("一个人两次对枪的分相加", close(rows[5]["duel_sum"], 0.4)
+    check("一个人两次对枪的分相加（-0.1 + 0.75）", close(rows[5]["duel_sum"], 0.65)
           and rows[5]["duel_n"] == 2, f"{rows[5]['duel_sum']} / {rows[5]['duel_n']}")
 
     check("对枪次数合计 == 传统统计的 duels（一次击杀算两边）",
           sum(r["duel_n"] for r in out["players"]) == 4,
           str(sum(r["duel_n"] for r in out["players"])))
+    check("一次击杀两个人加起来正好是 0（同一个 p 反号）",
+          abs(rows[0]["duel_sum"] + rows[1]["duel_sum"] + rows[5]["duel_sum"]) < 1e-9,
+          f"{rows[0]['duel_sum']} / {rows[1]['duel_sum']} / {rows[5]['duel_sum']}")
 
-    # 概率个数对不上时不要瞎配对（宁可整块不给分，也不要拿错的人的分）
+    # 没有窗口的对枪（`plan_duels` 跳过）没有 `p` —— 整场不进分母，不是记 0 分
+    bare = [dict(q) for q in probes]
+    for q in bare:
+        q.pop("p", None)
     out2 = st.build_round_stats(tensors, rnd, np.arange(tensors.ticks.size),
-                                spatial, probes, np.array([0.9]))
-    check("概率个数对不上时对枪分数整块留空",
+                                spatial, bare)
+    check("没有 p 的探针不进分母",
           all(r["duel_n"] == 0 for r in out2["players"]))
 
 
@@ -210,7 +227,7 @@ def test_wipe_guard() -> None:
     tensors = SimpleNamespace(**{**vars(tensors), "alive": alive})
     rnd = {**rnd, "winner": "CT"}
     out = st.build_round_stats(tensors, rnd, np.arange(tensors.ticks.size),
-                               spatial, [], np.zeros(0))
+                               spatial, [])
     rows = {r["idx"]: r for r in out["players"]}
     check("没有 NaN / inf", all(np.isfinite(r["round_impact"]) for r in out["players"]))
     check("全灭之后那几步照算：CT = .06 + .025 - .175 + .2 = .11",
@@ -236,7 +253,7 @@ def test_attribution() -> None:
     spatial = {"win": np.array([0.5, 0.5, 0.5, 0.9]),
                "next_death": spatial["next_death"][:4],
                "next_kill": spatial["next_kill"][:4]}
-    out = st.build_round_stats(tensors, rnd, np.arange(4), spatial, [], np.zeros(0))
+    out = st.build_round_stats(tensors, rnd, np.arange(4), spatial, [])
     rows = {r["idx"]: r for r in out["players"]}
     check("0.4 那一跳记给涨落之前还活着的 5 个 CT（他下一步才死）",
           close(rows[0]["round_impact"], 0.08), str(rows[0]["round_impact"]))
@@ -253,9 +270,9 @@ def test_aggregate() -> None:
     print("\n聚合（一场 / 跨场）")
     tensors, rnd, spatial = fixture()
     probes = st.kill_probes(tensors, rnd)
-    probs = np.array([0.9, 0.2, 0.4, 0.75])
+    _with_p(probes, [0.1, 0.75])
     one = {"stats": st.build_round_stats(tensors, rnd, np.arange(tensors.ticks.size),
-                                         spatial, probes, probs)}
+                                         spatial, probes)}
 
     agg = st.aggregate([one])
     p0 = agg["players"][0]
@@ -299,9 +316,9 @@ def test_predict_match() -> None:
 
     tensors, rnd, spatial = fixture()
     probes = st.kill_probes(tensors, rnd)
-    probs = np.array([0.9, 0.2, 0.4, 0.75])
+    _with_p(probes, [0.1, 0.75])
     round_stats = st.build_round_stats(tensors, rnd, np.arange(tensors.ticks.size),
-                                       spatial, probes, probs)
+                                       spatial, probes)
 
     data = {
         "meta": {"map": "de_test"},
@@ -389,9 +406,9 @@ def test_routes() -> None:
 
         tensors, rnd, spatial = fixture()
         probes = st.kill_probes(tensors, rnd)
-        probs = np.array([0.9, 0.2, 0.4, 0.75])
+        _with_p(probes, [0.1, 0.75])
         rs = st.build_round_stats(tensors, rnd, np.arange(tensors.ticks.size),
-                                  spatial, probes, probs)
+                                  spatial, probes)
         data = {"meta": {"map": "de_test"}, "format": "cs2.demo.v7",
                 "players": [{"steamid": f"id{p}", "name": f"P{p}"} for p in range(10)],
                 "rounds": [rnd]}

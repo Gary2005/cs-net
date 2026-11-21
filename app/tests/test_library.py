@@ -689,6 +689,61 @@ def test_match_watched() -> None:
     eq("and carries the stats the card shows",
        (entry["kills"], entry["deaths"], entry["assists"], entry["team"]), (19, 7, 7, 0))
 
+    print("\nwatched accounts (SteamID instead of a name)")
+    # 同一个人在不同平台用不同的游戏内名字。按名字关注只跟得住一半，按 SteamID
+    # 关注才是"关注这个账号"（见 app/watched.py）。
+    acc = [
+        {"steamid": "76561198000000001", "name": "gary-5E"},
+        {"steamid": "76561198000000002", "name": "gary"},
+    ]
+    acc_names = lambda wanted: [w["name"] for w in metadata.match_watched(acc, wanted)]  # noqa: E731
+    eq("a SteamID matches the account", acc_names(["76561198000000001"]), ["gary-5E"])
+    eq("and not the name that merely contains it",
+       metadata.match_watched(acc, ["7656119800000000"]), [])
+    eq("both entries resolve to their own player",
+       acc_names(["76561198000000001", "76561198000000002"]), ["gary-5E", "gary"])
+    eq("the same list still takes names", acc_names(["gary"]), ["gary-5E", "gary"])
+    eq("a SteamID beats a name that also matches",
+       metadata.match_watched(acc, ["gary", "76561198000000001"])[0]["matched"],
+       "76561198000000001")
+    eq("the entry carries the account",
+       metadata.match_watched(acc, ["76561198000000001"])[0]["steamid"],
+       "76561198000000001")
+
+
+def test_warmup_ignored() -> None:
+    """赛前热身不算进记分板。
+
+    对战平台（5E）会把热身整段录进 demo，而热身和第一回合都报
+    ``total_rounds_played == 0``，于是热身击杀全被算进第一回合，K/D 直接偏高。
+    判据是"tick 早于本回合第一个采样点"（回合自己的 ``round_freeze_end``）。
+    """
+    print("\nwarmup kills are not part of the match")
+    data = make_demo()
+    first = data["rounds"][0]
+    # 第一回合的采样从 tick 100 开始（= 它的 round_freeze_end），100 之前是热身
+    first["ticks"] = [100, 400]
+    # 热身里的一次击杀：发生在冻结结束之前
+    first["events"]["kills"].insert(
+        0, {"t": 50, "a": 9, "v": 8, "as": -1, "w": 10, "hs": False, "dmg": 100})
+
+    md = metadata.build_metadata(data, filename="a-vs-b.dem")
+    sb = {r["name"]: r for r in json.loads(md["scoreboard_json"])}
+    names = [p["name"] for p in data["players"]]
+    eq("the warmup kill is not counted for the killer", sb[names[9]]["kills"], 0)
+    eq("nor as a death for the victim", sb[names[8]]["deaths"], 0)
+    eq("the round's real kills still count", sb[names[0]]["kills"], 1)
+    eq("and the score is unaffected", (md["team_a_score"], md["team_b_score"]), (2, 2))
+
+    # 没有 ticks 的数据（老 .csz / 手搓的夹具）不裁：那里面根本没有"回合从哪一
+    # 刻开始"这个概念，硬裁会把整场都算没有。
+    plain = make_demo()
+    plain["rounds"][0]["events"]["kills"].insert(
+        0, {"t": 500, "a": 9, "v": 8, "as": -1, "w": 10, "hs": False, "dmg": 100})
+    md2 = metadata.build_metadata(plain, filename="a-vs-b.dem")
+    sb2 = {r["name"]: r for r in json.loads(md2["scoreboard_json"])}
+    eq("a round without ticks keeps every kill", sb2[names[9]]["kills"], 1)
+
 
 def test_watched_resync() -> None:
     """Editing the watched list has to update rows that are already parsed.
@@ -963,6 +1018,7 @@ def main() -> int:
     test_config_defaults()
     test_migrate_legacy_data_dir()
     test_match_watched()
+    test_warmup_ignored()
     test_watched_resync()
     test_stop_drops_queued_jobs()
     test_duplicate_extraction_guard()
