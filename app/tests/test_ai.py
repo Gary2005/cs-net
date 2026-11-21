@@ -5,10 +5,11 @@
 `visualizer/tests/test_ai_overlay.mjs` 的事）。这里量的是那些"错了也不报错、
 只会悄悄画错"的地方：
 
-* `duel_windows`：只认敌人、不认自杀 / 队友 / 队伍未知、窗口 = 死前 3 秒、
+* `duel_windows`：只认敌人、不认自杀 / 队友 / 队伍未知、弧线 = 死前 2 秒、
   终点取受害者**最后一个活帧**
-* `assign_duels` / `duel_entries`：窗口重叠时归谁、4 秒窗口里死过人就不喂模型
-* `RoundTensors.aim_arrays`：补齐、`seconds` 对零、`frame_mask`、窗口边界
+* `plan_duels`：一枪一条窗口（锚在击杀帧、193 帧）、窗口里死过人就丢掉、列号换算
+* `RoundTensors.aim_arrays`：补齐到固定 193 帧、`seconds` 对零、`frame_mask`、
+  窗口起点 / 列号
 * `Progress`：只增不减、finish 之后变成 result / error 事件
 * 缓存：键跟着文件**内容**变（mtime 变了不算）、版本不对就作废、写进去能读回来
 * 权重：`PINNED_WEIGHTS` 的扁平 `<run>.pt` + 同名 `<run>.yaml`（老布局也认），
@@ -104,9 +105,9 @@ def _kill(tick: int, attacker: int, victim: int) -> dict:
 def test_duel_windows() -> None:
     from app.ai.service import DUEL_LEAD, duel_windows
 
-    eq("对枪窗口是死前 3 秒", DUEL_LEAD, 3.0)
+    eq("弧线画死前 2 秒", DUEL_LEAD, 2.0)
 
-    # 6 号在 400 帧杀了 3 号 → 窗口 = [400 帧前 3 秒, 398]（3 号最后一个活帧）
+    # 6 号在 400 帧杀了 3 号 → 弧线 = [400 帧前 2 秒, 398]（3 号最后一个活帧）
     tensors, rnd = _round(deaths={3: 400})
     rnd["events"]["kills"] = [_kill(1000 + 400, 6, 3)]
     duels = duel_windows(tensors, rnd)
@@ -115,11 +116,11 @@ def test_duel_windows() -> None:
     eq("A 端 = 受害者", d.a, 3)
     eq("B 端 = 击杀者", d.b, 6)
     eq("终点 = 受害者最后一个活帧（不是击杀帧）", d.i1, 399)
-    eq("起点 = 死前 3 秒（6.234 - 3 = 3.234 s → 第 207 帧）", d.i0, 207)
-    check("窗口正好 3 秒", abs((d.t1 - d.t0) - 3.0) < 0.0001, f"{d.t0}..{d.t1}")
+    eq("起点 = 死前 2 秒（6.234 - 2 = 4.234 s → 第 271 帧）", d.i0, 271)
+    check("弧线正好 2 秒", abs((d.t1 - d.t0) - 2.0) < 0.0001, f"{d.t0}..{d.t1}")
     eq("as_dict 里两个端点和帧号都带出去",
        {k: d.as_dict()[k] for k in ("a", "b", "i0", "i1")},
-       {"a": 3, "b": 6, "i0": 207, "i1": 399})
+       {"a": 3, "b": 6, "i0": 271, "i1": 399})
 
     # 各种"不该有对枪"的情况
     cases = {
@@ -171,7 +172,8 @@ def test_round_end_kill() -> None:
     死亡那一 tick 就把回合计数加一），`round_events()` 会整条滤掉；不补的话每个
     回合的最后一杀都没有弧线。
     """
-    from app.ai.service import assign_duels, duel_entries, duel_windows
+    from app.ai.features import AIM_WINDOW
+    from app.ai.service import duel_windows, plan_duels
 
     tensors, rnd = _round()                       # 600 帧 / 9.375 s，谁都没死
     hi = int(tensors.ticks[-1])
@@ -182,14 +184,21 @@ def test_round_end_kill() -> None:
     eq("A 端 = 受害者", d.a, 3)
     eq("B 端 = 击杀者", d.b, 6)
     eq("挂在最后一帧上（受害者活到那一帧）", d.i1, tensors.frames - 1)
-    eq("起点仍是死前 3 秒（9.359 - 3 = 6.359 s → 第 407 帧）", d.i0, 407)
-    check("窗口正好 3 秒", abs((d.t1 - d.t0) - 3.0) < 0.0001, f"{d.t0}..{d.t1}")
+    eq("起点仍是死前 2 秒（9.359 - 2 = 7.359 s → 第 471 帧）", d.i0, 471)
+    check("弧线正好 2 秒", abs((d.t1 - d.t0) - 2.0) < 0.0001, f"{d.t0}..{d.t1}")
+
+    runs = plan_duels(tensors, duels)
+    eq("一枪一条窗口（不是一帧一条）", len(runs), 1)
+    run = runs[0]
+    eq("窗口锚在击杀帧上（3 秒 → 193 帧）", run.start, d.i1 - (AIM_WINDOW - 1))
+    eq("窗口固定 193 帧", run.length, AIM_WINDOW)
+    eq("击杀帧是最后一列", run.column(d.i1), AIM_WINDOW - 1)
+    eq("弧线第一列 = 窗口第 64 列（死前 2 秒）", run.column(d.i0), 64)
 
     grid = np.arange(0, tensors.frames, 16, dtype=np.int64)
-    entries, _ = duel_entries(tensors, grid, assign_duels(duels, grid))
-    eq("窗口里的采样点都喂了模型", len(entries), 12)
-    check("最后一个采样点也有对枪预测",
-          bool(entries) and entries[-1] == (int(grid[-1]), 3, 6), str(entries[-1:]))
+    cols = [run.column(int(i)) for i in grid if d.i0 <= i <= d.i1]
+    check("弧线上的采样点都落在窗口里", bool(cols) and min(cols) >= 64
+          and max(cols) <= AIM_WINDOW - 1, str(cols))
 
     # 只补 +1：+2 已经不是"下一个 tick"，没有帧可挂
     tensors2, rnd2 = _round()
@@ -213,7 +222,8 @@ def test_round_end_kill() -> None:
 
 
 def test_assign_duels() -> None:
-    from app.ai.service import Duel, assign_duels, duel_entries
+    from app.ai.features import AIM_WINDOW
+    from app.ai.service import Duel, assign_duels, plan_duels
 
     d1 = Duel(a=3, b=6, i0=100, i1=300, t0=1.5, t1=4.6)
     d2 = Duel(a=4, b=7, i0=200, i1=480, t0=3.1, t1=7.5)
@@ -227,22 +237,25 @@ def test_assign_duels() -> None:
     eq("窗口之前没有对枪", by_frame[0], None)
     eq("两场都结束之后没有对枪", by_frame[576], None)
 
-    # 4 秒窗口里有人死过 → 不喂模型（训练分布里双方全程活着）
+    # 窗口里有人死过 → 这场对枪不喂模型（训练分布里双方全程活着）
     tensors, _ = _round(deaths={3: 340})
-    d = Duel(a=3, b=6, i0=200, i1=339, t0=3.1, t1=5.3)
-    grid = np.arange(0, 600, 16, dtype=np.int64)
-    entries, where = duel_entries(tensors, grid, assign_duels([d], grid))
-    inside = [i for i in range(0, 600, 16) if 200 <= i <= 339]
-    eq("窗口内的采样点都喂了模型", len(entries), len(inside))
-    check("配对是（受害者, 击杀者）", all(e[1:] == (3, 6) for e in entries),
-          str(entries[:3]))
-    eq("where 是它们在 samples 里的位置", where[0], list(grid).index(inside[0]))
+    d = Duel(a=3, b=6, i0=211, i1=339, t0=3.3, t1=5.3)   # 弧线 = 死前 2 秒
+    runs = plan_duels(tensors, [d])
+    eq("双方全程活着 → 给一条窗口", len(runs), 1)
+    eq("窗口从击杀帧往回 193 帧", runs[0].start, 339 - (AIM_WINDOW - 1))
+    eq("击杀帧是最后一列", runs[0].column(339), AIM_WINDOW - 1)
+    eq("弧线第一列 = 第 64 列（死前 2 秒）", runs[0].column(d.i0), 64)
 
-    # 击杀者在窗口里死过 → 这一段整个跳过
+    # 击杀者在窗口里死过 → 整场丢掉
     tensors2, _ = _round(deaths={3: 340, 6: 100})
-    probe = np.array([288, 296, 304], dtype=np.int64)
-    entries2, _ = duel_entries(tensors2, probe, assign_duels([d], probe))
-    eq("窗口里死过人就跳过", len(entries2), 0)
+    eq("击杀者死过 → 跳过", len(plan_duels(tensors2, [d])), 0)
+
+    # 回合最开头那一刀：窗口被帧 0 截短
+    tensors3, _ = _round(deaths={3: 40})
+    d3 = Duel(a=3, b=6, i0=0, i1=39, t0=0.0, t1=0.609)
+    run3 = plan_duels(tensors3, [d3])[0]
+    eq("太靠前的击杀：窗口从 0 开始", run3.start, 0)
+    eq("…只有 40 帧（其余靠补零）", run3.length, 40)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -256,14 +269,21 @@ def _tensors(frames: int = 300):
 
 
 def test_aim_arrays() -> None:
+    from app.ai.features import AIM_WINDOW
+
     t = _tensors(300)
     eq("回合第一帧的窗口只有 1 帧", t.window_bounds(0), (0, 1))
-    eq("最后一帧的窗口是完整 257 帧", t.window_bounds(299), (43, 300))
+    eq("最后一帧的窗口是完整 193 帧", t.window_bounds(299), (107, 300))
 
-    arrays, lengths = t.aim_arrays([(299, 4, 7), (0, 0, 9)])
-    eq("补齐到 batch 内最长的窗口", arrays["ctx_player"].shape, (2, 257, 10, 20))
-    eq("每个样本自己的真实长度", list(lengths), [257, 1])
-    eq("frame_mask 只标真帧", arrays["frame_mask"].sum(axis=1).tolist(), [257, 1])
+    arrays, starts, lengths = t.aim_arrays([(299, 4, 7), (0, 0, 9)])
+    eq("T 固定 193（不再按 batch 内最长补齐）", arrays["ctx_player"].shape,
+       (2, AIM_WINDOW, 10, 20))
+    eq("每条窗口的起点", list(starts), [107, 0])
+    eq("每个样本自己的真实帧数", list(lengths), [AIM_WINDOW, 1])
+    eq("frame_mask 只标真帧", arrays["frame_mask"].sum(axis=1).tolist(),
+       [AIM_WINDOW, 1])
+    eq("最后一帧是最后一列（列号 = 帧号 - 起点）",
+       int(299 - starts[0]), AIM_WINDOW - 1)
     eq("pair 按 (A, B) 原样写进去", arrays["pair"].tolist(), [[4, 7], [0, 9]])
     check("seconds 从窗口第一帧对零",
           abs(arrays["seconds"][0, 1] - 1 / 64.0) < 1e-7
@@ -273,10 +293,12 @@ def test_aim_arrays() -> None:
     eq("补齐帧的道具 id 是 -1", int(arrays["ctx_projectile_id"][1, 1, 0]), -1)
     eq("dashboard map_id 每行都有", arrays["map_id"].tolist(), [0, 0])
 
-    # 两个窗口都短、长度不同 → 仍然按最长补齐
-    arrays, lengths = t.aim_arrays([(5, 1, 2), (9, 1, 2)])
+    # 两个短窗口：长度不同，但都补到固定的 193 帧
+    arrays, starts, lengths = t.aim_arrays([(5, 1, 2), (9, 1, 2)])
     eq("短窗口各自长度", list(lengths), [6, 10])
-    eq("短窗口的 Tmax", arrays["ctx_player"].shape[1], 10)
+    eq("短窗口都从帧 0 开始", list(starts), [0, 0])
+    eq("T 恒等于 AIM_WINDOW", arrays["ctx_player"].shape[1], AIM_WINDOW)
+    eq("短窗口的尾巴是补的", int(arrays["frame_mask"][0, 6:].sum()), 0)
 
 
 def test_spatial_arrays() -> None:

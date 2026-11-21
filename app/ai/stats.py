@@ -36,22 +36,23 @@ y 个 T，每个 CT `+d[k]/x`、每个 T `-d[k]/y`（涨落之后才死的人也
 "下一个死的是谁"给出的概率，只在活人之间归一化。**平均站位击杀率**同理，用
 `next_kill[p]`。这两个都是"站在这个位置、这个时刻"的风险 / 收益，逐帧取平均。
 
-**对枪评分**：对 p 造成的每次击杀，问模型「击杀发生前 2 秒，p 赢下这场对枪的
-概率」p̂，这一次的分数是 `1 - p̂`（模型越不看好、越说明这一枪打得漂亮）；p 被击杀
-时问「2 秒前 p 赢的概率」p̂，分数是 `-p̂`（模型越看好、这次死越亏）。
+**对枪评分**：对 p 造成的每次击杀，取模型在「击杀前 2 秒」这一刻给出的
+`p̂ = P(受害者赢)`（也就是屏幕上那条弧线的**第一个点**）。这一次的分数：击杀者
+`+p̂`（模型越不看好他，这枪越漂亮），受害者 `-p̂`（模型越看好他，这次死越亏）。
 对枪评分 = （Σ 击杀分数 + Σ 被击杀分数）/（击杀次数 + 被击杀次数）。
 
 为什么是"前 2 秒"
 ------------------
-网页上的对枪是从死前 3 秒开始看的（`service.DUEL_LEAD`），而模型的窗口是往回看
-4 秒（`features.AIM_WINDOW`）。取击杀前 2 秒那一刻的预测，等于让模型只看到
-`[死前 2 秒 - 4 秒, 死前 2 秒]` —— 也就是"人还没死"的那段，天然不包含已发生的结果。
-一个击杀同时算两个人：击杀者的 `1 - p̂` 和受害者的 `-p̂`，所以
-`duel_n` 的合计 == 传统统计里 `duels` 的合计。
+弧线画的是死前 2 秒（`service.DUEL_LEAD`），模型窗口是 3 秒
+（`features.AIM_WINDOW = 193`，锚在击杀帧）。所以"前 2 秒"就是窗口的第 64 列：
+那一刻模型只看了 1 秒数据，既不是"还没打起来"，也完全不含击杀之后的信息。
+一个击杀算两个人，两边用同一个 `p̂` 反号，所以 `duel_n` 的合计 == 传统统计里
+`duels` 的合计（例外：`plan_duels` 丢掉的对枪 —— 窗口里死过人，模型没在那种窗口
+上训过，那几场不进分母）。
 
-一条击杀同时是"击杀者的收益"和"受害者的损失"，两个方向各问模型一次
-（`(A, B)` 和 `(B, A)`），不做 `1 - p` 的翻转：模型在两种朝向下不是严格互补的，
-而训练集本来就是 50% 交换过的，两边都在分布内。
+**只问一个方向**：模型的 `antisym` 让 `P(A 赢) + P(B 赢) = 1` 精确成立（实测 7 场
+探针误差 0.000000），所以"反向再问一次"纯属重复计算 —— 以前那个双向探针是
+`antisym` 之前留下的写法，白跑一倍窗口。
 """
 
 from __future__ import annotations
@@ -82,10 +83,12 @@ SUM_KEYS: tuple[str, ...] = (
 
 
 def kill_probes(tensors, rnd: dict) -> list[dict]:
-    """本回合每一场对枪的「击杀前 `KILL_PROBE_SEC` 秒」采样点。
+    """本回合每一场对枪的「击杀前 `KILL_PROBE_SEC` 秒」那一帧。
 
-    返回 `[{a, v, t, i}, ...]`：`a` 击杀 `v`，`t` 是击杀 tick，`i` 是问模型用的
-    采样下标（`seconds <= 击杀时刻 - 2 s` 的最后一个采样点，夹在 `[0, frames-1]`）。
+    返回 `[{a, v, t, i}, ...]`：`a` 击杀 `v`，`t` 是击杀 tick，`i` 是**帧号**
+    （`seconds <= 击杀时刻 - 2 s` 的最后一帧，夹在 `[0, frames-1]`）。
+    概率不在这里算：`service.predict_round` 拿 `i` 去对枪窗口里读那一列，塞进
+    `p`（见 `build_round_stats`）。
 
     回合结束那一枪（`t == ticks[-1] + 1`，采样轴之外）用"最后一帧 + 1 tick"当成
     击杀时刻，所以它的 `i` 落在最后几帧上 —— 和 `service._round_kills()` 把那一枪
@@ -168,7 +171,6 @@ def build_round_stats(
     samples: np.ndarray,
     spatial: dict[str, np.ndarray],
     probes: list[dict],
-    probs: np.ndarray,
 ) -> dict:
     """一回合的 AI 统计（逐选手的求和 + 计数，聚合时直接相加）。
 
@@ -178,9 +180,9 @@ def build_round_stats(
             现算 —— 这里千万别把 tick 当成下标用（那会让每次击杀都落到"回合最后
             一个采样点之后"，影响力全变成 ±1 分钱那么小）。
         spatial: `Predictor.run_spatial()` 的返回值（`win` / `next_death` / `next_kill`）。
-        probes: `kill_probes()` 的结果。
-        probs: `len(probes) * 2` 个概率 —— 前一半是 `P(击杀者赢)`，后一半是
-            `P(受害者赢)`（同一个 `i`，两个方向各问一次）。
+        probes: `kill_probes()` 的结果，**每条带一个 `p`** = 模型在"击杀前 2 秒"
+            给出的 `P(受害者赢)`（`service.predict_round` 从对枪窗口里读出来）。
+            没有 `p` 的条目（那场对枪没有窗口）不计入分母。
 
     返回 `{"players": [{idx, kill_sum, ..., duel_sum, duel_n}, ...]}`。
     """
@@ -246,17 +248,17 @@ def build_round_stats(
     impact = (ct_mask.astype(np.float64).T @ ct_share
               + t_mask.astype(np.float64).T @ t_share)
 
-    # ── 对枪评分：击杀前 2 秒的模型预测 ───────────────────────────────────
-    probs = np.asarray(probs, dtype=np.float64).reshape(-1)
-    if probes and probs.size == len(probes) * 2:
-        half = len(probes)
-        for j, pr in enumerate(probes):
-            p_killer = float(probs[j])                 # P(击杀者赢)
-            p_victim = float(probs[half + j])          # P(受害者赢)
-            acc[pr["a"]]["duel_sum"] += 1.0 - p_killer
-            acc[pr["a"]]["duel_n"] += 1
-            acc[pr["v"]]["duel_sum"] += -p_victim
-            acc[pr["v"]]["duel_n"] += 1
+    # ── 对枪评分：击杀前 2 秒那一列的模型预测 ─────────────────────────────
+    for pr in probes:
+        p = pr.get("p")
+        if p is None:
+            continue
+        p = float(p)
+        # `p` = P(受害者赢)。击杀者的得分是 `1 - P(击杀者赢)` = `p`；受害者是 `-p`。
+        acc[pr["a"]]["duel_sum"] += p
+        acc[pr["a"]]["duel_n"] += 1
+        acc[pr["v"]]["duel_sum"] += -p
+        acc[pr["v"]]["duel_n"] += 1
 
     players = []
     for p in range(n):
