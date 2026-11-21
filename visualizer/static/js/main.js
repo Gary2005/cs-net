@@ -1110,9 +1110,10 @@ function paintActiveRound(idx) {
 // ── 分享图（单场）──────────────────────────────────────────────────────────
 //
 // 数据全部来自已经在页面里的两份载荷：`statsPayload`（传统）和
-// `aiStatsPayload`（AI，点了页签才有）。队名 / 真实比分 / 雷达缩略图只有 Demo
-// 库那一行才有，所以从批次条目里补 —— 不在批次里（直接开会话）时退回
-// "队伍 A / 队伍 B"。
+// `aiStatsPayload`（AI，点了页签才有）。队名 / 真实比分 / 雷达缩略图 / 平台
+// 来源只有 Demo 库那一行才有，所以从批次条目里补 —— 不在批次里（直接开会话，
+// 或者拖一个 .csz 进来）时退回"队伍 A / 队伍 B"、并且**不写来源**：那种情况下
+// 页面里根本没有平台信息（`loadedSource` 是文件名，不是平台）。
 //
 // 画法在 /static/js/share-card.js，和玩家页共用；那边不管 url 布局，只管
 // 拿 spec 画图。
@@ -1162,7 +1163,7 @@ function shareMatchSpec() {
     ai: Boolean(aiStatsPayload),
     map: s.map || (item && item.map) || '',
     rounds,
-    source: item ? item.source : '',
+    source: item ? item.source : '',   // 平台代码（5E / 完美 / 官匹），图里翻成显示名
     date: item ? item.date : '',
     thumb: item ? item.thumb : null,
     filename: (item && item.name) || s.map || 'match',

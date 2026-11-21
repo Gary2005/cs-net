@@ -16,9 +16,10 @@
  * import 会指到那个目录里去。所以这里不 import 任何东西，文案函数由调用方传进来。
  * 键名仍然全在 i18n 表里（`common.share.*`），中文界面画中文，英文界面画英文。
  *
- * 固定 1600 宽，不跟 devicePixelRatio：这是一张要发出去的图，不是自适应界面。
- * 高度按内容算（见 `matchHeight` / `playerHeight`），所以有 AI 数据时卡片就高
- * 一截，不会留一片空白。
+ * 版面按 1600 宽设计、高度按内容算（见 `matchHeight` / `playerHeight`），所以有
+ * AI 数据时卡片就高一截，不会留一片空白。**画布本身按 `SCALE` 倍画**（1600 × 2.4
+ * = 3840 宽），放大看是清楚的，不跟 devicePixelRatio —— 这是一张要发出去的图，
+ * 不是自适应界面。
  *
  * 每张图都带 logo 和项目地址，这是这个功能的硬性要求 —— 图片会离开这个应用，
  * 得能认出来源。
@@ -48,9 +49,25 @@ const MONO = '"Cascadia Mono", Consolas, "SF Mono", Menlo, monospace';
 const CARD_W = 1600;
 const PAD = 72;
 
-// 各块的高度（px）。改了这里就要连着 `matchHeight` / `playerHeight` 一起改。
-const M = { header: 156, title: 172, teamHead: 48, row: 46, gap: 44, footer: 108 };
+/**
+ * 导出倍率：画布宽 = `CARD_W * SCALE` = 3840（4K 宽度）。
+ *
+ * 所有坐标和字号仍然按设计稿（1600 宽）写，靠一次 `ctx.scale()` 放过去 ——
+ * 文字、圆角、渐变都是按 3840 的分辨率**重画**的。反过来做（画 1600 再拉大）
+ * 只会糊：canvas 是位图，放大不补信息。
+ */
+const SCALE = 2.4;
+
+// 各块的高度（px，设计稿单位）。改了这里就要连着 `matchHeight` / `playerHeight`
+// 一起改。
+const M = { header: 156, title: 172, thumb: 72, teamHead: 48, row: 46, gap: 44, footer: 108 };
 const P = { header: 156, identity: 176, tiles: 126, tilesGap: 56, recentHead: 64, row: 44, gap: 40, footer: 108 };
+
+//: 雷达缩略图的正方形盒子（px）和它的上沿。缩略图按**原比例**装进这个盒子，
+//: 上下居中 —— 不是裁成正方形：旧缩略图是 640×400，直接当正方形画会拉扁。
+//: 盒子底 = 140 + 240 = 380，表头 = 156 + 172 + `M.thumb` = 400，中间留一口气。
+const THUMB_BOX = 240;
+const THUMB_TOP = 140;
 
 //: 页头的 logo（高 92，宽按 viewBox 的 131.76 : 101.11 算）。原图是"cs·net"
 //: 的字标，所以旁边不再写一遍品牌名。
@@ -153,6 +170,21 @@ function drawAvatar(ctx, img, x, y, size) {
 
 // ── 卡片骨架 ────────────────────────────────────────────────────────────────
 
+/**
+ * 建一张画布，返回已经按 `SCALE` 缩放好的 2D 上下文。
+ *
+ * 之后所有绘制都用设计稿单位（1600 宽那一套），不用再想倍率的事。画布尺寸
+ * 仍然是 `* SCALE`，所以是**按 3840 重画**，不是把 1600 的图放大。
+ */
+function newCard(w, h) {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(w * SCALE);
+  canvas.height = Math.round(h * SCALE);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(SCALE, SCALE);
+  return { canvas, ctx };
+}
+
 function drawBackground(ctx, w, h) {
   const g = ctx.createLinearGradient(0, 0, w * 0.7, h);
   g.addColorStop(0, '#070b16');
@@ -192,7 +224,9 @@ function drawBackground(ctx, w, h) {
 function lightLogo(img) {
   if (!img) return null;
   try {
-    const scale = 3;
+    // 放大再改像素，是为了让这张离屏位图够 `SCALE` 倍导出用：logo 在卡片上
+    // 只有 92 设计像素高，导出时是 221 物理像素，窄了就会糊。
+    const scale = 6;
     const w = Math.max(1, Math.round(img.naturalWidth * scale));
     const h = Math.max(1, Math.round(img.naturalHeight * scale));
     const off = document.createElement('canvas');
@@ -348,8 +382,8 @@ function matchHeight(spec, { thumb = false } = {}) {
   const rows = (spec.teams || []).reduce((a, team) => a + (team.players || []).length, 0);
   const teams = (spec.teams || []).length;
   // 22 = 每队写完之后留的那口气（和 drawMatchTable 里的 `cy += 22` 同一个数），
-  // 40 = 雷达缩略图给标题那一行加的高度
-  return M.header + M.title + (thumb ? 40 : 0)
+  // `M.thumb` = 雷达缩略图（正方形盒子）压下来的那一截
+  return M.header + M.title + (thumb ? M.thumb : 0)
     + teams * (M.teamHead + 22) + rows * M.row + M.gap + M.footer;
 }
 
@@ -358,7 +392,66 @@ function matchColumns(spec) {
   return TRAD_COLS;
 }
 
-function drawMatchScore(ctx, spec, y, t, w) {
+/**
+ * 平台代码 → 文案键。
+ *
+ * `app/config.py::SOURCE_LABELS` 里的键才是数据（筛选参数、配置文件、库页的
+ * `src-*` class 都用它），图上要写的是人能读的名字。文案键复用库页那份
+ * `lib.source.*`：四个页面的文案表在 i18n 运行时里合并成一张，平台名必须和
+ * 库页筛选器里一模一样，另抄一份就一定会漂。表里没有的代码（用户在库里手填
+ * 过、或者以后新增的平台）原样写出来 —— 总比不写强。
+ */
+const SOURCE_LABEL_KEY = {
+  '本地': 'lib.source.local',
+  '5E': 'lib.source.5e',
+  '完美': 'lib.source.perfect',
+  '官匹': 'lib.source.official',
+};
+
+function sourceLabel(t, code) {
+  const key = SOURCE_LABEL_KEY[code];
+  return key ? t(key) : String(code == null ? '' : code);
+}
+
+//: 来源徽章的高度（px）和最大宽度。`maxW` 只是防用户手填了一个超长的来源。
+const SOURCE_BADGE_H = 36;
+const SOURCE_MAX_W = 460;
+
+/**
+ * 来源徽章：`来源  5E 对战平台`，一个圆角胶囊。返回它的右边界。
+ *
+ * `y` 是**基线**：胶囊以它为中心上下摊开，所以后面的地图 / 回合数 / 日期
+ * 跟它同一行文字对齐，不用另算一套坐标。
+ */
+function drawSourceBadge(ctx, code, x, y, t, maxW) {
+  const prefix = t('common.share.source');
+  const padX = 15;
+  const gap = 9;
+
+  // 量宽度得先把字体设上（clipText 也用当前 ctx.font）
+  ctx.font = font(18, 400);
+  const wPrefix = ctx.measureText(prefix).width;
+  ctx.font = font(21, 700);
+  const rest = Math.max(56, maxW - wPrefix - gap - padX * 2);
+  const name = clipText(ctx, sourceLabel(t, code), rest);
+  const wName = ctx.measureText(name).width;
+
+  const w = padX * 2 + wPrefix + gap + wName;
+  const top = y - SOURCE_BADGE_H / 2 - 7;   // 字形中线 ≈ 基线 - 7
+
+  ctx.fillStyle = 'rgba(56, 189, 248, 0.13)';
+  roundRect(ctx, x, top, w, SOURCE_BADGE_H, SOURCE_BADGE_H / 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(125, 211, 252, 0.36)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  text(ctx, prefix, x + padX, y, { size: 18, color: C.dim });
+  text(ctx, name, x + padX + wPrefix + gap, y, { size: 21, weight: 700, color: C.cyanBright });
+  return x + w;
+}
+
+function drawMatchScore(ctx, spec, y, t, w, maxRight = w - PAD) {
   const [a, b] = spec.teams || [];
   const left = a ? a.label || t('replay.stats.teamA') : 'Team A';
   const right = b ? b.label || t('replay.stats.teamB') : 'Team B';
@@ -377,9 +470,16 @@ function drawMatchScore(ctx, spec, y, t, w) {
   const bits = [];
   if (spec.map) bits.push(spec.map);
   if (spec.rounds) bits.push(t('common.share.rounds', { n: spec.rounds }));
-  if (spec.source) bits.push(spec.source);
   if (spec.date) bits.push(spec.date);
-  text(ctx, bits.join('  ·  '), PAD, y + 46, { size: 22, color: C.dim, maxW: w - PAD * 2 });
+
+  // 来源**打头**：先说清这是哪个平台的一场比赛，地图 / 回合数 / 日期跟着它。
+  // 以前来源夹在这行字中间、写的还是内部代码（`5E`），图发出去没人知道那是什么。
+  const metaY = y + 46;
+  let x = PAD;
+  if (spec.source) x = drawSourceBadge(ctx, spec.source, x, metaY, t, SOURCE_MAX_W) + 20;
+  if (bits.length && maxRight - x > 40) {
+    text(ctx, bits.join('  ·  '), x, metaY, { size: 22, color: C.dim, maxW: maxRight - x });
+  }
 }
 
 function drawMatchTable(ctx, spec, y, t, w) {
@@ -470,23 +570,26 @@ async function renderMatch(spec, t) {
   const logo = lightLogo(logoImg);
   const h = matchHeight(spec, { thumb: Boolean(thumb) });
 
-  const canvas = document.createElement('canvas');
-  canvas.width = CARD_W;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
+  const { canvas, ctx } = newCard(CARD_W, h);
   const kindLabel = t('common.share.kind.match');
 
   drawBackground(ctx, CARD_W, h);
   drawHeader(ctx, CARD_W, t, kindLabel, logo);
 
-  drawMatchScore(ctx, spec, M.header + 66, t, CARD_W);
+  // 雷达缩略图在右上角时，标题那一行的可用宽度要收窄（元信息行也算在内 ——
+  // 它现在带着来源徽章，比以前长，不兜住就会压到缩略图上）
+  const maxRight = thumb ? CARD_W - PAD - THUMB_BOX - 24 : CARD_W - PAD;
+  drawMatchScore(ctx, spec, M.header + 66, t, CARD_W, maxRight);
 
-  // 雷达缩略图（有就画在右上角，没有就留空 —— 卡片不缺这一块）
+  // 雷达缩略图（有就画在右上角，没有就留空 —— 卡片不缺这一块）。
+  // 按原比例缩进 `THUMB_BOX` 的正方形里：缩略图现在是正方形的整张地图，
+  // 但旧文件是 640×400 —— 硬拉成正方形会把地图压扁。
   if (thumb) {
-    const tw = 300;
-    const th = tw * (thumb.height / Math.max(1, thumb.width));
-    const tx = CARD_W - PAD - tw;
-    const ty = M.header + 18;
+    const k = Math.min(THUMB_BOX / thumb.width, THUMB_BOX / thumb.height);
+    const tw = thumb.width * k;
+    const th = thumb.height * k;
+    const tx = CARD_W - PAD - THUMB_BOX + (THUMB_BOX - tw) / 2;
+    const ty = THUMB_TOP + (THUMB_BOX - th) / 2;
     ctx.save();
     roundRect(ctx, tx, ty, tw, th, 12);
     ctx.clip();
@@ -498,8 +601,7 @@ async function renderMatch(spec, t) {
     ctx.stroke();
   }
 
-  // 雷达图在右上角时，标题那一行的可用宽度要收窄
-  const tableTop = M.header + M.title + (thumb ? 40 : 0);
+  const tableTop = M.header + M.title + (thumb ? M.thumb : 0);
   drawMatchTable(ctx, spec, tableTop, t, CARD_W);
   drawFooter(ctx, CARD_W, h, t);
   return canvas;
@@ -621,10 +723,7 @@ function drawRecent(ctx, spec, y, t, w) {
 
 async function renderPlayer(spec, t) {
   const h = playerHeight(spec);
-  const canvas = document.createElement('canvas');
-  canvas.width = CARD_W;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
+  const { canvas, ctx } = newCard(CARD_W, h);
   const kindLabel = t('common.share.kind.player');
 
   const [logoImg, avatar] = await Promise.all([
