@@ -402,9 +402,19 @@ def run_extraction(demo_id: int, job: jobs.Job) -> dict[str, Any]:
 
     job.set_step(f"解析 demo（{cfg.sampling_label()}）…", 0.1)
     t0 = time.time()
+    # side-channel 的暂存文件（`.csz` 那步之前的一个 blob）默认落在
+    # `tempfile.gettempdir()`，也就是 `%TEMP%`。这在两种机器上会直接失败：
+    # 杀软 / 组策略禁止未知 exe 往 `%TEMP%` 写、以及沙箱只放行工作区。
+    # 报到用户眼前就是 `side-channel failed (exit 1): ... Access is denied`。
+    # 放到数据目录里（和 `.csz` 同一个盘、同样的权限），一条命令都不用加。
+    scratch = Path(config.DATA_DIR) / "tmp"
+    try:
+        scratch.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        scratch = Path(config.DATA_DIR)      # 数据目录本身可写就够
     try:
         with _ticker(job, f"解析 demo（{cfg.sampling_label()}）"):
-            data = extract_demo(str(src), **kwargs)
+            data = extract_demo(str(src), workdir=scratch, **kwargs)
     except _FATAL:
         db.update_demo(demo_id, status=db.STATUS_ERROR, error_msg="已中断")
         raise
