@@ -956,6 +956,17 @@ def smoke_volumes(rnd: dict, tick: int, cache: dict | None = None):
     `solid=True`（凸包填充），和浏览器默认一致。`cache` 用来摊掉那次纯 Python
     凸包（实测 **101 ms/颗/个 change index**，见 `spatial.py`）—— 传同一个 dict
     进来的话，同一颗烟的同一个"变更序号"只算一次。
+
+    ## 缓存的两条硬性要求
+
+    1. **存活期必须在查缓存之前判。** `voxel._record_index()` 只做二分：``tick >
+       last_tick``（烟已经散了）时它照样返回最后一条记录的序号，于是"散之前"和
+       "散之后"是**同一个键**，命中的是散之前那张栅格。`voxel.journal_at()` 里有
+       同一条 ``first_tick <= tick <= last_tick`` 的守卫，但缓存命中时根本走不到
+       那里 —— 漏了这一步，烟散了之后会一直被当成有烟。
+    2. **`first_tick` 也是键的一部分。** 同一个回合里 `entity_id` 会被复用（Source
+       的实体槽回收），只按 ``(entity_id, rec)`` 缓存的话，后一颗烟会覆盖 / 读到
+       前一颗烟的栅格（`rec` 是各自 `changes` 列表里的下标，天然会撞）。
     """
     from demo_extract import recipes
     from demo_extract import voxel as _voxel
@@ -966,10 +977,13 @@ def smoke_volumes(rnd: dict, tick: int, cache: dict | None = None):
         det = inst.get("detonation")
         if det is None:
             continue                               # 放不进世界坐标：和浏览器一样丢掉
+        first_tick = int(inst["first_tick"])
+        if tick < first_tick or tick > int(inst["last_tick"]):
+            continue                               # 还没炸 / 已经散了：和 journal_at 同一条守卫
         key = None
         if cache is not None:
             rec = _voxel._record_index(inst, tick)          # noqa: SLF001 —— 只为缓存键
-            key = ("smoke", inst["entity_id"], rec)
+            key = ("smoke", inst["entity_id"], first_tick, rec)
             hit = cache.get(key)
             if hit is not None:
                 if hit is False:

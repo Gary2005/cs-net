@@ -41,7 +41,11 @@ from .constants import N_PLAYERS
 
 #: 缓存格式 / 算法版本。**改了 ``build_round`` 的规则或几何常量就 +1**，老缓存会
 #: 在下一次 :func:`load` 时被认成不命中。
-CACHE_VERSION = 1
+#:
+#: v2：修掉 `view_render.smoke_volumes()` 的缓存绕过存活期检查（烟散了还按有烟算）
+#: 和 entity_id 复用时互相覆盖 —— 两者都会直接污染已经落盘的 ``.obs``，所以老缓存
+#: 必须整批作废重算。
+CACHE_VERSION = 2
 
 #: 缓存目录后缀：``match__ab12cd34.csz`` → ``match__ab12cd34.obs/``。
 CACHE_SUFFIX = ".obs"

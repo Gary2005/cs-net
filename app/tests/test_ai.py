@@ -12,6 +12,8 @@
   窗口起点 / 列号
 * `Progress`：只增不减、finish 之后变成 result / error 事件
 * 缓存：键跟着文件**内容**变（mtime 变了不算）、版本不对就作废、写进去能读回来
+* 烟体积缓存：跟着存活期走（散了不许命中旧的栅格）、同回合复用 entity_id 的两颗烟
+  不许互相覆盖
 * 权重：`PINNED_WEIGHTS` 的扁平 `<run>.pt` + 同名 `<run>.yaml`（老布局也认），
   缺了要报出是哪条路径
 * 路由：没有会话 / 模型不可用 / 数据不合规 各自的状态码；`?progress=1` 的 NDJSON 流
@@ -24,6 +26,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import struct
 import sys
 import uuid
 from pathlib import Path
@@ -825,6 +828,70 @@ def test_build_round_sparse() -> None:
         obst.load_map = saved
 
 
+def _smoke_instance(eid: int, first: int, last: int, lo: int, det: list[float]) -> dict:
+    """一颗最小的烟：8 个种子点围成小立方体（凸包退化不了）。
+
+    journal 的字节布局和 `tools/demo_extract/tests/test_roundtrip.py` 里的
+    `_keyframe` / `_record` 一样：8 字节一个种子 + 空的 mask 表。
+    """
+    from demo_extract import voxel
+
+    seeds = [(lo + dx, lo + dy, lo + dz)
+             for dx in (0, 4) for dy in (0, 4) for dz in (0, 4)]
+    payload = bytearray([0, voxel.KEYFRAME, len(seeds)])
+    for x, y, z in seeds:
+        payload += bytes([x, y, z, 0, 0, 0, 0, 0])
+    payload += struct.pack("<H", 0)
+    j = struct.pack("<HH", 0, len(payload)) + bytes(payload)
+    return {
+        "entity_id": eid,
+        "detonation": det,
+        "first_tick": first,
+        "last_tick": last,
+        "capacity": 3072,
+        "changes": [{"tick": first, "size": len(j), "update": 0,
+                     "mode": voxel.MODE_APPEND, "data": j}],
+    }
+
+
+def test_smoke_volumes_cache() -> None:
+    """烟体积缓存必须跟着存活期走，且能区分同回合复用 entity_id 的两颗烟。
+
+    两条都是"错了不报错、只把 `.obs` 悄悄算错"的 bug（实测：补上存活期检查后重算
+    单个回合，有数百帧、上千个玩家对的标签从 1 变回 0，且全部落在场上没有存活烟的
+    时段）：
+
+    * `voxel._record_index()` 只做二分，`tick > last_tick` 时照样返回最后一条记录
+      的序号 —— 缓存键里没有存活期，"烟散了"就会命中"烟还在"的那一格，绕过
+      `journal_at()` 的守卫。
+    * 键里没有 `first_tick`，同回合复用的 entity_id 会互相覆盖（`rec` 是各自
+      `changes` 下标，天然会撞）。
+    """
+    from demo_extract import voxel
+    from scripts.training_data import obstruction as obst
+
+    a = _smoke_instance(7, 1000, 1010, 8, [100.0, 200.0, 50.0])
+    b = _smoke_instance(7, 2000, 2010, 20, [-300.0, 400.0, 80.0])
+    rnd = {"smoke": [a, b]}
+
+    eq("存活期内有一颗烟", obst.smoke_volumes(rnd, 1010)[0].shape[0], 1)
+    eq("散了之后一颗都不该有", obst.smoke_volumes(rnd, 1011)[0].shape[0], 0)
+    check("journal_at 在 last_tick+1 是 None", voxel.journal_at(a, 1011) is None)
+    check("_record_index 在 last_tick+1 仍是最后一条",
+          voxel._record_index(a, 1011) == voxel._record_index(a, 1010))
+
+    cache: dict = {}
+    eq("先查存活期最后一帧", obst.smoke_volumes(rnd, 1010, cache)[0].shape[0], 1)
+    eq("再查消散之后（缓存不许命中）", obst.smoke_volumes(rnd, 1011, cache)[0].shape[0], 0)
+
+    cache2: dict = {}
+    eq("先查第一颗烟", obst.smoke_volumes(rnd, 1005, cache2)[0].shape[0], 1)
+    det, _ = obst.smoke_volumes(rnd, 2005, cache2)
+    eq("第二颗烟生效时只剩它自己", det.shape[0], 1)
+    check("拿到的是第二颗烟的爆点", bool(np.allclose(det[0], b["detonation"])),
+          f"{det[0].tolist()} vs {b['detonation']}")
+
+
 def test_obstruction_cache() -> None:
     """缓存：写完能读、对不上就重建、命中不碰几何、删 csz 一起清。"""
     from scripts.training_data import obstruction as obst
@@ -915,6 +982,7 @@ def main() -> int:
         ("routes", test_routes),
         ("stream_work jobs", test_stream_work_shares_one_job),
         ("build_round sparse", test_build_round_sparse),
+        ("smoke volumes cache", test_smoke_volumes_cache),
         ("obstruction cache", test_obstruction_cache),
     ]:
         print(f"\n[{name}]")
