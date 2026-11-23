@@ -112,11 +112,14 @@ def late_kills(rnd: dict, *, n_frames: int) -> list[dict]:
     """回合结束瞬间的那一枪 → 采样下标 `n_frames`（= 最后一帧**之后**）。
 
     `kills()` / `features.round_events()` 只保留 `ticks[0] <= t <= ticks[-1]`，而
-    "打死最后一个敌人、回合立刻结束"的那一枪落在 `ticks[-1] + 1`：引擎在死亡那一
-    tick 才把 `total_rounds_played` 加一，所以那一帧的采样已经归到**下一个**回合了。
-    实测 4 份 demo 的 78 个回合里有 49 个（63%）是这么结束的（`end_reason ∈
-    {t_killed, ct_killed}`），不补的话这一枪一条样本都没有 —— 回放页的「AI 对枪」
-    也会在最后 3 秒整段空着（`app/ai/service.py::_round_kills` 是同一件事的推理侧版本）。
+    "打死最后一个敌人、回合立刻结束"的那一枪落在 `ticks[-1] + 1`，在采样轴之外。
+    它通常仍带着**刚结束**回合的 `total_rounds_played`（同一 tick 的 `player_death`
+    在 `round_end` 之前发出），所以在 `rnd["events"]["kills"]` 里；如果某份 demo
+    把它记到下一回合名下，extract 现在也会把它归回上一回合。两种情况下判据都是
+    `t == ticks[-1] + 1`。实测 4 份 demo 的 78 个回合里有 49 个（63%）是这么结束的
+    （`end_reason ∈ {t_killed, ct_killed}`），不补的话这一枪一条样本都没有 ——
+    回放页的「AI 对枪」也会在最后 3 秒整段空着（`app/ai/service.py::_round_kills`
+    是同一件事的推理侧版本）。
 
     下标给 `n_frames` 而不是 `n_frames - 1`：它表达的是"发生在最后一帧之后"，
     具体怎么用由标签侧决定：
@@ -126,10 +129,12 @@ def late_kills(rnd: dict, *, n_frames: int) -> list[dict]:
     * `aim` 那边 `last_alive(alive[..., i])` 会自己往前找到受害者最后一个活帧，
       所以窗口终点仍是"死前一帧"，和正常样本同一种形状。
 
-    判据就一条 `t == ticks[-1] + 1`：引擎在死亡那一 tick 才把 `total_rounds_played`
-    加一，所以"收尾那一枪"必然落在最后一个采样 tick 的**下一个** tick 上。实测 4 份
-    demo 里所有落在采样范围之外的击杀，偏差**恰好都是 +1**（没有 +2 或更大）；真出现
-    更大的偏差说明这份 demo 被截断了，这时没有对应的帧、也不知道真实时间，不做猜测。
+    判据就一条 `t == ticks[-1] + 1`：这一枪在采样轴之外，恰好落在最后一个采样
+    tick 的下一个 tick 上。实测 4 份 demo 里所有落在采样范围之外的击杀，偏差
+    **恰好都是 +1**（没有 +2 或更大）；真出现更大的偏差说明这份 demo 被截断了，
+    这时没有对应的帧、也不知道真实时间，不做猜测。两个回合之间更晚的 `post` 事件
+    （`t` 还可能更晚）不是收尾一枪，不在这里补；它们只进传统 KDA。最后一个回合
+    结束之后的事件不属于任何回合，也不会被补进来。
     """
     hi = int(rnd["ticks"][-1]) + 1
     out: list[dict] = []

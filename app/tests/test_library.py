@@ -745,6 +745,30 @@ def test_warmup_ignored() -> None:
     eq("a round without ticks keeps every kill", sb2[names[9]]["kills"], 1)
 
 
+def test_self_and_post_kills() -> None:
+    """Self-kills are deaths, not kills; post-round kills are KDA."""
+    print("\nself-kills / post-round kills")
+    data = make_demo()
+    names = [p["name"] for p in data["players"]]
+    data["rounds"][1]["events"]["kills"].extend([
+        {"t": 300, "a": 2, "v": 2, "as": -1, "w": 0, "hs": False, "dmg": 50},
+        {"t": 999, "a": 3, "v": 6, "as": -1, "w": 10, "hs": True, "dmg": 100,
+         "post": True},
+        # 4 号（CT）误伤 3 号（CT），5 号（T）补掉：事件里有 assister，但不算助攻
+        {"t": 301, "a": 5, "v": 3, "as": 4, "w": 10, "hs": False, "dmg": 100},
+        # 6 号（T）是 3 号的敌人：这才是有效助攻
+        {"t": 302, "a": 5, "v": 3, "as": 6, "w": 10, "hs": False, "dmg": 100},
+    ])
+    md = metadata.build_metadata(data, filename="a-vs-b.dem")
+    sb = {r["name"]: r for r in json.loads(md["scoreboard_json"])}
+    eq("自杀不算击杀", sb[names[2]]["kills"], 0)
+    eq("自杀仍然算死亡", sb[names[2]]["deaths"], 1)
+    eq("两回合之间的击杀计入 KDA", sb[names[3]]["kills"], 1)
+    eq("两回合之间的死亡也计入", sb[names[6]]["deaths"], 1)
+    eq("队友误伤的 assister 不算助攻", sb[names[4]]["assists"], 0)
+    eq("敌人的 assister 才算助攻", sb[names[6]]["assists"], 1)
+
+
 def test_watched_resync() -> None:
     """Editing the watched list has to update rows that are already parsed.
 
@@ -1019,6 +1043,7 @@ def main() -> int:
     test_migrate_legacy_data_dir()
     test_match_watched()
     test_warmup_ignored()
+    test_self_and_post_kills()
     test_watched_resync()
     test_stop_drops_queued_jobs()
     test_duplicate_extraction_guard()

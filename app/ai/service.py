@@ -446,10 +446,12 @@ def _round_kills(rnd: dict) -> list[dict]:
     """本回合的击杀，**含"回合结束那一枪"**，每条都带采样下标 `i`。
 
     `round_events()` 只收 `ticks[0] <= t <= ticks[-1]` 的事件，而"打死最后一个
-    敌人、回合立刻结束"的那一枪恰好落在 `ticks[-1] + 1`：引擎在死亡那一 tick 就把
-    `total_rounds_played` 加一，所以那一帧的采样已经算进下一个回合了
-    （`scripts/training_data/tasks/_util.py::late_kills` 记的是同一
-    件事，造数侧把这类事件当成"最后一帧之后"）。实测 4 份 demo / 78 个回合：
+    敌人、回合立刻结束"的那一枪恰好落在 `ticks[-1] + 1`，在采样轴之外。它通常仍
+    带着刚结束回合的 `total_rounds_played`（同一 tick 的 `player_death` 在
+    `round_end` 之前发出）；如果某份 demo 把它记到下一回合名下，extract 现在也会
+    归回上一回合。两种情况下都靠 `t == ticks[-1] + 1` 找回
+    （`scripts/training_data/tasks/_util.py::late_kills` 记的是同一件事）。实测
+    4 份 demo / 78 个回合：
 
     * 49 个回合（63%）是这种结束方式（`end_reason ∈ {t_killed, ct_killed}`）；
     * 所有"落在采样范围之后"的击杀，与最后一帧的距离**恰好都是 1 tick**；
@@ -458,8 +460,9 @@ def _round_kills(rnd: dict) -> list[dict]:
 
     这里只补 `t == ticks[-1] + 1` 这一种：采样步长恒为 1 tick
     （`build_round_tensors` 卡了这一条），所以它对应的就是"下一个 tick"，模型看到
-    的是训练样本里再普通不过的一帧 —— 受害者还活着、下一 tick 才被杀。再往后
-    （`+2` 及以上）的事件既没有帧可挂、也不知道真实时间，仍然丢掉。
+    的是训练样本里再普通不过的一帧 —— 受害者还活着、下一 tick 才被杀。两个回合
+    之间更晚的 `post` 事件没有帧可挂，只进传统 KDA，不进 AI；最后一个回合结束
+    之后的事件不属于任何回合，也不会出现在这里。
     """
     out = round_events(rnd, "kills")
     ticks = rnd.get("ticks") or []

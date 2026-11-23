@@ -411,9 +411,12 @@ def test_extras() -> None:
           f"{[x['first_kills'] for x in s['players']]}")
     check("首死记第一个被击杀的人（2）", p["P2"]["first_deaths"] == 1
           and sum(x["first_deaths"] for x in s["players"]) == 1)
-    check("击杀总表（含自杀 / 队友击杀 / 回合外的）还是老口径",
-          [x["kills"] for x in s["players"]] == [2, 1, 1, 1],
+    check("击杀总表：自杀不算击杀，队友击杀 / 回合外的仍是老口径",
+          [x["kills"] for x in s["players"]] == [2, 0, 1, 1],
           f"{[x['kills'] for x in s['players']]}")
+    check("自杀仍然算死亡",
+          [x["deaths"] for x in s["players"]] == [0, 3, 1, 1],
+          f"{[x['deaths'] for x in s['players']]}")
     check("对枪击杀只数敌人的（自杀 / 队友击杀 / 回合外都不算）",
           [x["enemy_kills"] for x in s["players"]] == [1, 0, 0, 1],
           f"{[x['enemy_kills'] for x in s['players']]}")
@@ -644,10 +647,29 @@ def test_real(csz: str) -> None:
             vis._clear_session()
 
 
+def test_assist_team_rule() -> None:
+    """助攻只算敌人：队友误伤、再由对面补掉，事件里有 assister 也不计。"""
+    print("\n助攻口径：只算敌人")
+    data = extras_data()
+    data["rounds"][0]["events"]["kills"].extend([
+        # 3(T) 杀 1(CT)，4 号没有；assister 0 是 CT（和受害者同队）→ 不算
+        {"t": 100, "a": 3, "v": 1, "as": 0, "w": 1, "hs": False, "dmg": 100},
+        # assister 2 是 T（受害者的敌人）→ 算
+        {"t": 101, "a": 3, "v": 1, "as": 2, "w": 1, "hs": False, "dmg": 100},
+    ])
+    s = st.build_stats(data, smoke=False)
+    p = {x["name"]: x for x in s["players"]}
+    check("队友误伤的 assister 不算助攻", p["P0"]["assists"] == 0,
+          str(p["P0"]["assists"]))
+    check("敌人的 assister 才算助攻", p["P2"]["assists"] == 1,
+          str(p["P2"]["assists"]))
+
+
 def main() -> int:
     test_synthetic()
     test_warmup()
     test_extras()
+    test_assist_team_rule()
     csz = _find_csz()
     if not csz or not Path(csz).exists():
         print("\nSKIP: 没有 .csz（传一个路径或设 CS2_CSZ）—— 只跑了合成用例")

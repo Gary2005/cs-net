@@ -201,6 +201,31 @@ e["sound"]     # [{'t':1213,'ty':'fire','p':4,'w':13,'sil':False}, ...]
 * `as` = assister 的玩家索引（`-1` = 无）
 * `eid` = 实体 id，`ty` = 类型名，`th` = 投掷物类型编号
 
+**回合结束后的有效交火（`post`）。** CS2 在 `round_end` 那一 tick 就把
+`total_rounds_played` 加一，但下一回合真正开始（`round_freeze_end`）还有几秒；
+这几秒里玩家仍在非热身、非冻结状态，可以继续交火，**游戏内终场记分板也会计入**。
+这些 `player_death` / `player_hurt` 事件在新文件里被归到**刚刚结束的回合**
+（`rnd["events"]["kills"]` / `["damage"]`），并多带一个 `"post": True`：
+
+```python
+k = {"t": 34607, "a": 4, "v": 7, ..., "post": True}   # 回合结束后、下一回合前
+k["t"] > rnd["ticks"][-1]                             # 它没有对应的采样帧
+```
+
+* **传统 KDA / 记分板统计要收**：`app/metadata.py`、`visualizer/stats.py` 的
+  K / D / A 都按 tick 下界过滤，不设上界，所以这些事件天然计入。
+* **采样 / 训练标签不要收**：它们没有采样帧。`recipes.sample_index()` 会返回
+  `-1`，`features.round_events()` / `events_in_window()` 按
+  `ticks[0] <= t <= ticks[-1]` 过滤，已经自动排除。`tasks/_util.py::late_kills()`
+  只补 `t == ticks[-1] + 1` 的收尾一枪，不会把更晚的 `post` 事件当成标签。
+* 只归并**两个回合之间**的交火（本回合 `round_end` → 下一回合 `round_freeze_end`）。
+  第一个回合开始之前的热身、最后一个回合结束之后的击杀/自杀/清理死亡都不属于任何
+  回合，一律不收。
+* `meta["post_round_events"]` 为 `True` 表示这份文件带上述语义（老文件没有这个键，
+  行为仍是旧的：这些事件被丢弃）。
+* 自杀（`a == v`）在原始事件里存在，但传统 KDA 只把它算作死亡，不算击杀 ——
+  和游戏内记分板一致。
+
 ### 1.8 tick、秒、采样下标，三者别混
 
 一份 demo 里同时存在三种"时间"：

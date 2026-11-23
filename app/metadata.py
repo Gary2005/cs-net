@@ -243,14 +243,18 @@ def build_metadata(
             if lo is not None and t is not None and int(t) < lo:
                 continue
             a, v, s = k.get("a", -1), k.get("v", -1), k.get("as", -1)
-            if 0 <= a < n:
+            # 自杀（a == v）在记分板上只算死亡、不算击杀；世界击杀（a == -1）
+            # 同理。`post` 事件是两个回合之间的有效交火，正常计入 KDA。
+            if 0 <= a < n and a != v:
                 kills[a] += 1
                 damage[a] += int(k.get("dmg") or 0)
                 if k.get("hs"):
                     headshots[a] += 1
             if 0 <= v < n:
                 deaths[v] += 1
-            if 0 <= s < n:
+            # 助攻只算"敌人"：`assister_steamid` 在队友误伤、再由对面补掉时也会
+            # 有人，但游戏记分板不算这种助攻。自杀同理。
+            if 0 <= s < n and s != v and team_of[s] != team_of[v]:
                 assists[s] += 1
 
     scoreboard = []

@@ -559,6 +559,19 @@ def extract(
             print(f"sidechannel: {sc.summary(side)}")
         _require_fire_smoke_matches_events(events, side)
 
+    # ── post-round tail ────────────────────────────────────────────────────
+    # CS2 bumps `total_rounds_played` on the round_end tick, so live fire in
+    # the few seconds between "round decided" and the next freeze_end is
+    # bucketed under the *next* round, before its origin.  It is real damage
+    # and the in-game scoreboard counts it, but it has no sampled frame.
+    # Attribute the part **between two rounds** to the round that just ended so
+    # KDA/stats are complete.  Warmup (before the first round) and anything
+    # after the last round are deliberately not included: there is no "next
+    # round" for them to belong to.  The events are marked `post` and the
+    # training side (which filters on `ticks[0] <= t <= ticks[-1]`) keeps
+    # ignoring them.
+    last_rid = max(round_start_tick) if round_start_tick else None
+
     # ── per-round assembly ──────────────────────────────────────────────────
     rounds_data: list[dict] = []
     skipped: list[dict] = []
@@ -580,6 +593,8 @@ def extract(
         if sub.empty:
             skip(rid, "no sampled ticks fell inside this round")
             continue
+        tail = _tail_window(rid, round_start_tick, round_ticks_all,
+                            round_end_df, last_rid)
         try:
             rd = _build_round(
                 rid=rid,
@@ -588,6 +603,7 @@ def extract(
                 round_start_tick=round_start_tick[rid],
                 round_start_time=round_start_time[rid],
                 round_end_df=round_end_df,
+                tail=tail,
                 player_map=player_map,
                 player_metas=player_metas,
                 weapon_lookup=weapon_lookup,
@@ -618,6 +634,12 @@ def extract(
             "has_fire_smoke": side is not None,
             "has_ground_contact": "CCSPlayerPawn.m_fFlags" in df.columns,
             "has_crouch": DUCK_PROP in df.columns,
+            # v7 semantics: kills/damage in the gap **between two rounds**
+            # (round_end -> next round_freeze_end) are attached to the round
+            # that just ended and carry `post: True`.  Warmup and post-match
+            # events are not included.  Sampling and training still use the
+            # tick window, so no `post` event ever becomes a training frame.
+            "post_round_events": True,
             "sidechannel_tickrate": side["tickrate"] if side else None,
             "voxel_capacity": side["voxel_capacity"] if side else None,
             "inferno_type_names": {str(k): v for k, v in INFERNO_TYPE_NAMES.items()},
@@ -706,6 +728,7 @@ def _build_round(
     round_start_tick: int,
     round_start_time: float,
     round_end_df,
+    tail: tuple | None,
     player_map: dict,
     player_metas: list,
     weapon_lookup: dict,
@@ -830,9 +853,9 @@ def _build_round(
 
     # ─ events ──────────────────────────────────────────────────────────────
     kills = _kills(events.get("player_death"), rid, player_map, weapon_lookup,
-                   round_start_tick)
+                   round_start_tick, tail)
     damage = _damage(events.get("player_hurt"), rid, player_map, weapon_lookup,
-                     round_start_tick)
+                     round_start_tick, tail)
     bomb_events = _bomb_events(events, rid, round_start_time, round_start_tick)
     grenades = _grenades(grenades_df, ticks_list, player_map)
 
@@ -940,14 +963,65 @@ def _spot(spotted_list, enemies: set[str], player_map: dict) -> list[int]:
     return sorted(out)
 
 
-def _end_value(round_end_df, start_tick: int, column: str) -> str:
-    """First round_end after this round's freeze_end carries this round's result."""
-    if _empty_or_df(round_end_df) or column not in getattr(round_end_df, "columns", []):
-        return ""
+def _end_row(round_end_df, start_tick: int):
+    """The round_end row that closes the round starting at `start_tick`."""
+    if _empty_or_df(round_end_df) or "tick" not in getattr(round_end_df, "columns", []):
+        return None
     rows = round_end_df[round_end_df["tick"] > start_tick]
     if rows.empty:
+        return None
+    return rows.iloc[0]
+
+
+def _end_tick(round_end_df, start_tick: int) -> int | None:
+    row = _end_row(round_end_df, start_tick)
+    return int(row["tick"]) if row is not None else None
+
+
+def _tail_window(
+    rid: int,
+    round_start_tick: dict[int, int],
+    round_ticks_all: dict[int, np.ndarray],
+    round_end_df,
+    last_rid: int | None,
+) -> tuple | None:
+    """`(next_round_id, round_end_tick, cutoff_tick)` or None.
+
+    Events in this window carry the *next* round's `total_rounds_played` even
+    though they belong to the round that just ended.  `cutoff_tick` is exclusive.
+
+    Only gaps **between two rounds** count.  The first round has no warmup tail
+    (nothing before its freeze_end belongs to it) and the last played round has
+    no tail at all: there is no next round, and post-match world/self deaths
+    are cleanup, not a round result.
+    """
+    start = round_start_tick.get(rid)
+    if start is None:
+        return None
+    if last_rid is not None and rid >= last_rid:
+        return None
+    end = _end_tick(round_end_df, start)
+    if end is None or end <= start:
+        return None
+    nxt = rid + 1
+    hi = round_start_tick.get(nxt)
+    if hi is None:
+        # Next round exists but has no round_freeze_end (skipped): its
+        # first bucket tick is the best available upper bound.  If there is no
+        # next round at all, the demo is truncated: no tail either.
+        tk = round_ticks_all.get(nxt)
+        hi = int(tk[0]) if tk is not None and len(tk) else None
+    if hi is None or hi <= end:
+        return None
+    return (nxt, end, hi)
+
+
+def _end_value(round_end_df, start_tick: int, column: str) -> str:
+    """First round_end after this round's freeze_end carries this round's result."""
+    row = _end_row(round_end_df, start_tick)
+    if row is None or column not in getattr(round_end_df, "columns", []):
         return ""
-    return str(rows.iloc[0][column])
+    return str(row[column])
 
 
 def _sound_events(event_df, rid, ticks_list, round_start_tick, player_map, weapon_lookup, kind):
@@ -983,7 +1057,7 @@ def _sound_events(event_df, rid, ticks_list, round_start_tick, player_map, weapo
     return counts, out
 
 
-def _round_events(event_df, rid: int, round_start_tick: int):
+def _round_events(event_df, rid: int, round_start_tick: int, tail: tuple | None = None):
     """Rows that belong to *this* round: right round number **and** after its freeze.
 
     Filtering on ``total_rounds_played`` alone is not enough.  The pre-match
@@ -994,32 +1068,55 @@ def _round_events(event_df, rid: int, round_start_tick: int):
     origin, and nothing before it can belong to it: players cannot shoot
     during freeze time, so the only events there are warmup ones.
 
+    ``tail`` adds the *post-round* window (see :func:`_tail_window`): after
+    ``round_end`` the engine already reports the next round number, but those
+    few seconds of live fire belong to the round that just ended and are what
+    the in-game scoreboard counts.  Only gaps *between two rounds* are added;
+    warmup and post-match events are never part of a round.  They are only
+    added to kills/damage, never to sampled state, and carry a ``post`` flag on
+    the event.
+
     Returns ``None`` when there is nothing to iterate, so callers can keep the
     single ``if ... is None: return []`` shape.
     """
     if _empty_or_df(event_df):
         return None
-    sub = event_df[event_df["total_rounds_played"] == rid]
-    if sub.empty:
-        return None
-    keep = sub["tick"].to_numpy(dtype=np.int64) > int(round_start_tick)
-    return sub[keep]
+    keep = (event_df["total_rounds_played"] == rid) & (
+        event_df["tick"] > int(round_start_tick)
+    )
+    if tail is not None:
+        tail_rid, tail_lo, tail_hi = tail
+        more = (event_df["total_rounds_played"] == tail_rid) & (
+            event_df["tick"] >= int(tail_lo)
+        )
+        if tail_hi is not None:
+            more &= event_df["tick"] < int(tail_hi)
+        keep |= more
+    sub = event_df[keep]
+    return None if sub.empty else sub
 
 
-def _kills(event_df, rid, player_map, weapon_lookup, round_start_tick: int = 0) -> list[dict]:
-    sub = _round_events(event_df, rid, round_start_tick)
+def _kills(event_df, rid, player_map, weapon_lookup, round_start_tick: int = 0,
+           tail: tuple | None = None) -> list[dict]:
+    sub = _round_events(event_df, rid, round_start_tick, tail)
     if sub is None:
         return []
+    tail_rid = tail[0] if tail is not None else None
     out = []
     for row in sub.itertuples(index=False):
         d = row._asdict() if hasattr(row, "_asdict") else None
         get = (lambda k, dv=None: d.get(k, dv)) if d else (lambda k, dv=None: getattr(row, k, dv))
         attacker = player_map.get(_num(get("attacker_steamid")), -1)
+        victim = player_map.get(_num(get("user_steamid")), -1)
+        try:
+            post = tail_rid is not None and int(get("total_rounds_played", rid)) == tail_rid
+        except (TypeError, ValueError):  # pragma: no cover - malformed event
+            post = False
         assister = player_map.get(_num(get("assister_steamid")), -1)
-        out.append({
+        ev = {
             "t": int(get("tick")),
             "a": attacker,
-            "v": player_map.get(_num(get("user_steamid")), -1),
+            "v": victim,
             "as": assister if assister != attacker else -1,
             "w": weapon_lookup.get(_normalise_weapon_name(str(get("weapon", ""))), -1),
             "hs": bool(get("headshot", False)),
@@ -1028,26 +1125,40 @@ def _kills(event_df, rid, player_map, weapon_lookup, round_start_tick: int = 0) 
             "ai": bool(get("attackerinair", False)),
             "af": bool(get("assistedflash", False)),
             "dmg": int(get("dmg_health", 0) or 0),
-        })
+        }
+        if post:
+            ev["post"] = True
+        out.append(ev)
     out.sort(key=lambda k: k["t"])
     return out
 
 
-def _damage(event_df, rid, player_map, weapon_lookup, round_start_tick: int = 0) -> list[dict]:
-    sub = _round_events(event_df, rid, round_start_tick)
+def _damage(event_df, rid, player_map, weapon_lookup, round_start_tick: int = 0,
+            tail: tuple | None = None) -> list[dict]:
+    sub = _round_events(event_df, rid, round_start_tick, tail)
     if sub is None:
         return []
+    tail_rid = tail[0] if tail is not None else None
     out = []
     for row in sub.itertuples(index=False):
         d = row._asdict() if hasattr(row, "_asdict") else None
         get = (lambda k, dv=None: d.get(k, dv)) if d else (lambda k, dv=None: getattr(row, k, dv))
-        out.append({
+        attacker = player_map.get(_num(get("attacker_steamid")), -1)
+        victim = player_map.get(_num(get("user_steamid")), -1)
+        try:
+            post = tail_rid is not None and int(get("total_rounds_played", rid)) == tail_rid
+        except (TypeError, ValueError):  # pragma: no cover - malformed event
+            post = False
+        ev = {
             "t": int(get("tick")),
-            "a": player_map.get(_num(get("attacker_steamid")), -1),
-            "v": player_map.get(_num(get("user_steamid")), -1),
+            "a": attacker,
+            "v": victim,
             "hp": int(get("dmg_health", 0) or 0),
             "w": weapon_lookup.get(_normalise_weapon_name(str(get("weapon", ""))), -1),
-        })
+        }
+        if post:
+            ev["post"] = True
+        out.append(ev)
     out.sort(key=lambda x: x["t"])
     return out
 

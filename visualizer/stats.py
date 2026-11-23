@@ -37,6 +37,9 @@
 自伤（``a == v``）两边都不算；世界伤害（``a == -1``，摔落 / C4）只算承伤、不算
 任何人的输出 —— 但它同样扣血，所以也要扣血槽（漏掉这一步截断会偏大 1~5%）。
 
+助攻只算**敌人**：队友误伤、再由对面补掉时，`player_death` 里也有 `assister`，
+但游戏记分板不算这种助攻（实测 g161 用这条规则后 10 个人的助攻和面板逐一相同）。
+
 新指标：首杀 / 先手开枪 / 侧背身 / 穿烟
 --------------------------------------
 除了 K / D / A / 伤害，面板还要五个「事件级」的指标。它们的共同前提是**一场对枪**
@@ -45,10 +48,12 @@
 * 自杀（``a == v``）、世界伤害致死（``a == -1``）、队友击杀（两人同一队）**都不算**
   —— 这些没有对手，"谁先打谁"无从谈起；
 * 只收**落在本回合采样范围内**的事件（外加回合结束那一枪 ``ticks[-1] + 1``，和
-  ``app/ai/service.py::_round_kills`` 同一件事）。``events`` 是按「上一回合结束 →
-  本回合结束」分桶的，round 0 里还混着赛前热身的几十条击杀（5E 这类平台会把热身
-  整段录进 demo）；K / D 那几列同样**不收热身**（判据就是「tick 早于本回合第一个
-  采样点」），被丢掉的条数记在 ``warmup_kills`` / ``warmup_damage`` 里。
+  ``app/ai/service.py::_round_kills`` 同一件事）。``events`` 里还混着 round 0 的
+  赛前热身（5E 这类平台会把热身整段录进 demo），以及 extract 归到上一回合的
+  ``post`` 事件（两个回合之间的有效交火）；K / D 那几列要收 ``post``（记分板就算它），
+  但对枪指标只收采样范围内的 —— 那些 tick 没有帧，谈不上"哪一帧先开枪"。
+  热身同样**不收**（判据就是「tick 早于本回合第一个采样点」），被丢掉的条数记在
+  ``warmup_kills`` / ``warmup_damage`` 里。自杀（``a == v``）只算死亡，不算击杀。
 
 于是每个选手每回合有四个分母（前端把比例显示成 "7/14"，四个数都给了）：
 
@@ -611,7 +616,9 @@ def build_stats(data: dict, *, smoke: bool = True) -> dict:
                 warmup["kills"] += 1
                 continue
             a, v, s = _idx(k.get("a")), _idx(k.get("v")), _idx(k.get("as"))
-            if 0 <= a < n:
+            # 自杀（a == v）在记分板上只算死亡、不算击杀。两个回合之间的
+            # `post` 击杀（extract 归到上一回合）照常计入 KDA。
+            if 0 <= a < n and a != v:
                 kills[a] += 1
                 rk[a] += 1
                 if k.get("hs"):
@@ -619,9 +626,12 @@ def build_stats(data: dict, *, smoke: bool = True) -> dict:
             if 0 <= v < n:
                 deaths[v] += 1
                 rd[v] += 1
-            # 自杀时 extract 已经把 as 写成 -1，这里不需要再排一次
-            if 0 <= s < n:
-                assists[s] += 1
+            # 助攻只算"敌人"：队友误伤、再由对面补掉时事件里也有 assister，
+            # 但游戏记分板不算这种助攻。
+            if 0 <= s < n and s != v:
+                sa, sv = _side(rnd, s), _side(rnd, v)
+                if sa != "?" and sa != sv:
+                    assists[s] += 1
 
         for d in events.get("damage") or []:
             if before_round(d):

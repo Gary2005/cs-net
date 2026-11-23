@@ -1024,6 +1024,76 @@ def test_full_pipeline() -> None:
     check("burn normals are unit length", worst < 1e-3, f"max deviation {worst:.2e}")
 
 
+def test_round_event_tail() -> None:
+    """Post-round kills belong to the round that just ended (not the next one)."""
+    print("events / post-round tail")
+    import pandas as pd
+
+    df = pd.DataFrame([
+        {"tick": 50, "total_rounds_played": 0},    # warmup
+        {"tick": 100, "total_rounds_played": 0},   # this round's freeze_end
+        {"tick": 101, "total_rounds_played": 0},   # first sampled tick
+        {"tick": 500, "total_rounds_played": 1},   # round_end tick, next bucket
+        {"tick": 550, "total_rounds_played": 1},   # tail
+        {"tick": 599, "total_rounds_played": 1},   # last tail tick
+        {"tick": 600, "total_rounds_played": 1},   # next round's freeze_end
+        {"tick": 700, "total_rounds_played": 2},   # next-next
+    ])
+    base = extract_mod._round_events(df, 0, 100)
+    check("main window keeps t > freeze_end only",
+          base is not None and sorted(int(t) for t in base["tick"]) == [101])
+    tail = extract_mod._round_events(df, 0, 100, (1, 500, 600))
+    check("tail adds [round_end, next_freeze_end)",
+          tail is not None
+          and sorted(int(t) for t in tail["tick"]) == [101, 500, 550, 599])
+
+    # Only the gap between two rounds gets a tail; the last round has no next
+    # round, and warmup is never part of round 0.
+    ends = pd.DataFrame({"tick": [500, 700]})
+    groups = {0: np.array([101, 500]), 1: np.array([601, 700])}
+    starts = {0: 100, 1: 600}
+    check("round 0's tail ends at the next freeze_end",
+          extract_mod._tail_window(0, starts, groups, ends, last_rid=1) == (1, 500, 600))
+    check("the last round gets no tail (no next round)",
+          extract_mod._tail_window(1, starts, groups, ends, last_rid=1) is None)
+
+    # `_kills`: tail events carry `post`; a world/self death in an inter-round
+    # gap is still a death (only the *kill* credit is skipped by the KDA code).
+    kills_df = pd.DataFrame([
+        {"tick": 120, "total_rounds_played": 0, "attacker_steamid": 1,
+         "user_steamid": 2, "assister_steamid": None, "weapon": "ak47",
+         "headshot": False, "dmg_health": 100},
+        {"tick": 550, "total_rounds_played": 1, "attacker_steamid": 3,
+         "user_steamid": 2, "assister_steamid": 1, "weapon": "ak47",
+         "headshot": True, "dmg_health": 100},
+        {"tick": 560, "total_rounds_played": 1, "attacker_steamid": 2,
+         "user_steamid": 2, "assister_steamid": None, "weapon": "world",
+         "headshot": False, "dmg_health": 100},
+    ])
+    pmap = {"1": 0, "2": 1, "3": 2}
+    normal = extract_mod._kills(kills_df, 0, pmap, {}, 100, (1, 500, 600))
+    check("tail keeps every event, ordered by tick",
+          [k["t"] for k in normal] == [120, 550, 560])
+    check("only tail events are marked post",
+          [k.get("post", False) for k in normal] == [False, True, True])
+    check("a real post-round kill keeps its attacker/victim/headshot",
+          normal[1]["a"] == 2 and normal[1]["v"] == 1 and normal[1]["hs"] is True)
+
+    damage_df = pd.DataFrame([
+        {"tick": 130, "total_rounds_played": 0, "attacker_steamid": 1,
+         "user_steamid": 2, "dmg_health": 20, "weapon": "ak47"},
+        {"tick": 570, "total_rounds_played": 1, "attacker_steamid": 3,
+         "user_steamid": 2, "dmg_health": 40, "weapon": "ak47"},
+        {"tick": 580, "total_rounds_played": 1, "attacker_steamid": 2,
+         "user_steamid": 2, "dmg_health": 10, "weapon": "world"},
+    ])
+    dmg = extract_mod._damage(damage_df, 0, pmap, {}, 100, (1, 500, 600))
+    check("post-round damage is attached to the ended round",
+          [d["t"] for d in dmg] == [130, 570, 580])
+    check("only the tail damage is marked post",
+          [d.get("post", False) for d in dmg] == [False, True, True])
+
+
 def test_voxel_hull_backend() -> None:
     """Qhull 和纯 Python 后备必须算出同一个凸包（两者差 ~40×，容易悄悄漂移）。
 

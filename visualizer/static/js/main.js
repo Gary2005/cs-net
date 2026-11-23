@@ -1778,6 +1778,8 @@ function drawTimeline() {
 
   // 击杀
   for (const k of (currentRound.events.kills || [])) {
+    // post = 回合结束后、下一回合开始前的有效交火：只进 KDA，不在本回合时间轴上
+    if (k.post) continue;
     const kt = secForTick(k.t);
     ctx.fillStyle = '#ff5c7a';
     ctx.beginPath();

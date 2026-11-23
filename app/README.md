@@ -190,12 +190,14 @@ aim 只在死前 2 秒的窗口里有值。
 第一个点晚 1 tick）。
 
 **回合结束那一枪也算一场对枪**（`app/ai/service.py::_round_kills`）：`end_reason ∈
-{t_killed, ct_killed}` 的回合，最后一枪落在 `ticks[-1] + 1` —— 引擎在死亡那一 tick
-就把 `total_rounds_played` 加一，所以那一帧的采样已经归到下一个回合了，
+{t_killed, ct_killed}` 的回合，最后一枪落在 `ticks[-1] + 1`，在采样轴之外
+（同一 tick 的 `player_death` 在 `round_end` 之前发出，通常还带着刚结束回合的
+`total_rounds_played`；如果某份 demo 把它记到下一回合，extract 现在会归回上一回合）。
 `round_events()` 的 `t <= ticks[-1]` 会把它整条滤掉。不补的话，"打死最后一个敌人、
 回合立刻结束"的回合就永远没有最后一场对枪的弧线（实测 4 份 demo / 78 个回合里有
 49 个，63%）。补法是把它挂到**最后一帧**上：受害者那一帧还活着、下一个 tick 才死，
-和训练样本里"受害者最后一个活帧"是同一种情形。结果 JSON 的版本跟着升到 `v3`
+和训练样本里"受害者最后一个活帧"是同一种情形。两个回合之间更晚的有效交火
+（`post: True`）没有帧可挂，只进传统 KDA，不进 AI。结果 JSON 的版本跟着升到 `v3`
 （`CACHE_VERSION`），旧缓存自动作废。造数据那侧是同一件事：
 `tasks/_util.py::late_kills()` 把这一枪补进 `aim`（多一条样本）和
 `spatial_prediction`（`alive_end` / `next_death` 指向它）—— 但**已经造好的数据集里
