@@ -7,6 +7,7 @@
 
     for batch in dl:
         # batch["ctx_player"] (B,10,20) / batch["ctx_player_mask"] (B,10)
+        # batch["ctx_player_inv"] (B,10,43) uint8   背包多热（0/1，下标 = WEAPON_NAMES）
         # batch["next_death"]  (B,) long     11 类，10 = 之后没有人死
         ...
 
@@ -29,6 +30,7 @@
     __getitem__   ctx_player (10,20)   obstruction (10,10)   ctx_projectile (32,4)
                   ctx_player_mask (10) ctx_player_team (10)   ctx_projectile_id (32)
                   ctx_player_weapon (10)  global_feat (5)     seconds () / frame_index ()
+                  ctx_player_inv (10,43) uint8   ← 背包（0/1，下标 = WEAPON_NAMES）
                   ct_win ()  alive_end (10)  can_kill (10)  next_death ()  next_kill ()
 
 **为什么不按回合取**：这个任务的标签本来就是单帧的（「这一帧之后会发生什么」），模型
@@ -105,6 +107,9 @@
    / 队伍未知"**，和 `next_*` 的 `10`（没有下一次）完全是两件事。做 id embedding 时
    `-1` 要单独一个下标（`-1 → 0`，真实 id 往后挪），别直接 `nn.Embedding(...)`——负下标
   在 `nn.Embedding` 里是"从尾部算"，**不会报错**，会静默错位。
+   `ctx_player_inv` 相反：它是 **0/1 多热**，没有 `-1`，而**下标 0 是 Desert Eagle**
+   （真实武器），所以那张 embedding **不能**给 `padding_idx=0` —— 模型侧是整表
+   `inv @ weight` 的矩阵乘，根本不按下标查，绕开了这个坑。
 4. **槽位（0..9）是 demo 内固定的玩家身份，不是随机标签** —— 同一场 demo 里每个槽位
    对应同一个人（上下半场换边，所以每个槽位的队伍是 ~50/50 的 CT/T）。这带来两个后果：
 
@@ -187,12 +192,14 @@ aim 不同，写 collate / 采样器时别按"每次都不一样"来设计）。
 （绝对秒数会随机器负载抖动 1~2 倍，看**行级 μs**更稳：命中约 25 μs/行、miss 约 1.3 ms/
 文件。）
 
-解压后一帧约 1.5 KB（`ctx_player` 800 B + `ctx_projectile` 512 B + `obstruction` 100 B +
-其余约 90 B），所以一个回合文件 ≈ `K × 1.5 KB`。和 `codec.load()`（11–15 s/demo）不是一个
-量级，**现在不值得为它换存储**。⚠ 真实规模（282,888 个文件 / 24.2M 行）上这两个数是：
-盘上 **8.6 GB**、解压后 **~36 GB**、平均 **30.8 KB / 文件**（K 中位 86）—— 36 GB 装不进
-内存，所以"整个数据集全缓存"只在几万个回合以下成立。`ShuffleBufferSampler` 把"取一行"
-的代价从"解压一个文件"摊回"解压该文件的 1/86"，是这一档数据量下最省事的解；再往上
+解压后一帧约 **1.9 KB**（`ctx_player` 800 B + `ctx_projectile` 512 B + `ctx_player_inv`
+430 B + `obstruction` 100 B + 其余约 90 B），所以一个回合文件 ≈ `K × 1.9 KB`。和
+`codec.load()`（11–15 s/demo）不是一个量级，**现在不值得为它换存储**。⚠ 下面这些真实
+规模（282,888 个文件 / 24.2M 行）是**加 `ctx_player_inv` 之前**量的：盘上 **8.6 GB**、
+解压后 **~36 GB**、平均 **30.8 KB / 文件**（K 中位 86）—— 加多热之后按 +29% 估，解压
+后约 46 GB，装不进内存的结论不变，所以"整个数据集全缓存"只在几万个回合以下成立。
+`ShuffleBufferSampler` 把"取一行"的代价从"解压一个文件"摊回"解压该文件的 1/86"，是这
+一档数据量下最省事的解；再往上
 （文件数 > 1M、每 epoch 要读好几遍）才值得换成 `.npy` + 每回合一个目录 / 一个 split 一列
 一个 mmap 文件，让随机取行不再碰 zlib。
 
@@ -236,6 +243,12 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 #: 玩家数 = 一行特征 / 一个标签列的数量。
 N_PLAYERS = 10
 
+#: 装备词表长度（`scripts/training_data/constants.py::WEAPON_NAMES`，43 件）。
+#:
+#: 和 aim 一样**不 import** 那边（那个模块挂着 `demo_extract` / numba，训练进程不该
+#: 被拖进来），所以这里抄一个数；`_ROW_FIELDS` 的形状校验会在磁盘字段对不上时立刻炸。
+N_WEAPONS = 43
+
 #: `next_death` / `next_kill` 的"这一帧之后没有下一次事件"。
 NO_EVENT = N_PLAYERS          # 10，所以是 11 类（0..9 是人，10 = 无）
 
@@ -252,6 +265,7 @@ _ROW_FIELDS: tuple[tuple[str, tuple[int, ...], torch.dtype], ...] = (
     ("ctx_player_mask", (N_PLAYERS,), torch.bool),
     ("ctx_player_team", (N_PLAYERS,), torch.int8),
     ("ctx_player_weapon", (N_PLAYERS,), torch.int8),
+    ("ctx_player_inv", (N_PLAYERS, N_WEAPONS), torch.uint8),
     ("obstruction", (N_PLAYERS, N_PLAYERS), torch.int8),
     ("ctx_projectile", (32, 4), torch.float32),
     ("ctx_projectile_id", (32,), torch.int8),
@@ -274,6 +288,7 @@ _FILE_FIELDS: tuple[tuple[str, torch.dtype], ...] = (
 #: 喂模型的输入列（模型不会用到下面那 5 个标签）。
 FEATURE_KEYS: tuple[str, ...] = (
     "ctx_player", "ctx_player_mask", "ctx_player_team", "ctx_player_weapon",
+    "ctx_player_inv",
     "obstruction", "ctx_projectile", "ctx_projectile_id", "global_feat",
     "seconds", "frame_index", "map_id",
 )

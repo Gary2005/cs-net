@@ -145,7 +145,7 @@ from typing import Any
 
 import numpy as np
 
-from ..constants import MAP_TO_IDX, N_PLAYERS, TEAM_TO_IDX, TEAM_UNKNOWN
+from ..constants import MAP_TO_IDX, N_PLAYERS, N_WEAPONS, TEAM_TO_IDX, TEAM_UNKNOWN
 from ..features import normalize_xyz
 from ..obstruction import Occluder
 from ..obstruction_cache import ensure as ensure_obstruction
@@ -575,6 +575,36 @@ class _Round:
             out[t_out, : len(keep), 3] = np.clip(elapsed / _PROJ_TIME_SPAN, 0.0, 1.0)
             out_id[t_out, : len(keep)] = [ids[q] for q in keep]
         return out, out_id
+
+    def inventory_at(self, idx) -> np.ndarray:
+        """任意帧下标集合 → `(K, N_PLAYERS, N_WEAPONS)` uint8 的**背包多热**。
+
+        下标是 `constants.WEAPON_NAMES` 的**全局**下标（和 `ctx_player_weapon` 同一张
+        表），所以同一件东西在"手里"和"背包里"是对得上的。`rnd["players"][p]["inventory"]`
+        存的是**本文件**的武器下标（每个 csz 一张表），这里过一遍 `self.lut`。
+
+        三件事值得知道：
+
+        * **死人的背包本来就是空的**（实测 225,836 行死人里 0 行带东西），所以不需要
+          像 `weapon` 那样按 `alive` 再清一遍。
+        * **手里那把一定也在背包里**（实测 476,274 行"活着且有武器"里 0 例外），所以
+          想去重的话按 `ctx_player_weapon` 那一列扣掉就行，不用再判空。
+        * ⚠ 这张表是**去重**的（`extract.py` 写盘时 `set()` 过），所以"2 颗闪"和
+          "1 颗闪"在这里是同一个 1。要计数得重抽 demo，不是重造 npz。
+        """
+        idx = np.asarray(idx, dtype=np.int64).reshape(-1)
+        out = np.zeros((idx.size, N_PLAYERS, N_WEAPONS), dtype=np.uint8)
+        for p in range(self.n_pl):
+            per_tick = self.rnd["players"][p].get("inventory") or ()
+            for row, i in enumerate(idx):
+                if i >= len(per_tick):
+                    continue
+                for li in per_tick[i]:
+                    if 0 <= li < len(self.lut):
+                        g = int(self.lut[li])
+                        if g >= 0:
+                            out[row, p, g] = 1
+        return out
 
     def global_feat(self, sl: slice) -> np.ndarray:
         """`(T, 5)` **逐帧**全局状态：炸弹位置 + 已安放多久 + 回合时间。

@@ -37,6 +37,7 @@ aim 的帧内只有两个查询（A、B），答案是"这两个人里谁死"，
     global         1     `global_proj(Fourier(global_feat[5]))`           炸弹 xyz / 安放秒 / 回合秒
     player        10     `player_proj(Fourier(ctx_player[20]))`           轨迹 / 朝向 / 速度 / 血量
                           `+ weapon_emb(+1) + team_emb(+1)`               / 武器 / 队伍
+                          `+ Σ item_emb(背包里的每一件)`                    / 背包
     projectile     P     `proj_proj(Fourier(ctx_projectile[4]))`           道具 xyz + 已飞/已生效秒数
                           `+ proj_type(+1)`
 
@@ -58,6 +59,42 @@ aim 的帧内只有两个查询（A、B），答案是"这两个人里谁死"，
 `P` 取**本 batch 内**的最大占用数（`_projectile_tokens` 把非空槽挤到前面再切），所以同一帧
 的表示和 batch 里别的样本带多少道具无关。数据里道具槽本来就是前缀排布的（25,224 行里
 0 例外），挤一次只是给"以后乱序写盘"兜底。
+
+## 背包：`weapon` 是"手里那把"，`inv` 是"他还剩什么"
+
+`ctx_player_weapon` 来自 `weapon_name`，是**当前手持 / 激活**的那一把：切刀的时候它就是
+`Knife`，拿着手雷的时候就是那颗雷。实测（g161 / de_inferno，47.6 万存活人次）：
+**26.6% 的存活样本手里是刀、9.0% 手里是雷**，而这些人里 **69% / 76% 其实背着主武器**
+（6.3% / 8.0% 背的是 AWP）。也就是说只看这一列的话，约 1/3 的样本对"这个人还能打什么"
+是一无所知的。
+
+这个任务的时间尺度是**整个回合剩下的部分**（不像 aim 只看击杀前 4 秒，投掷物出手后还会
+变成 projectile token 补回来），"还剩几颗烟 / 他是 AWP 还是手枪"直接决定 `ct_win` /
+`can_kill` / `next_kill` 的先验，所以背包必须进。这也是 aim 不加、这里加的原因：**手里
+那把握的是"意图"（这一秒他在不在开枪），背包握的是"能力"（这回合他还剩什么资源）**。
+
+怎么进：**多热求和，不加 token**
+
+    bag = Σ_{x ∈ 背包, x ≠ 手里那把} item_emb(x)
+
+* 数学上等于对 43 维多热做一层 `Linear(43 → d, bias=False)`（`Σ m_j E_j = W·m`），
+  所以它和白送的一样便宜；写成 embedding 只是让"同一件东西同一个向量"这件事在代码里
+  看得见。
+* **和 `weapon_emb` 是两张表**（`item_emb` 43 行、**没有** `padding_idx`）。共用一张表
+  再配一个"拿着 / 装着"的角色向量，等于强制"手里 → 包里"的差值对所有 43 件装备**同向**；
+  而现实里"正拿着 AK"和"包里还有一把 AK"的语义偏移，和别的装备并不一样。
+* **手里那把要扣掉**（`keep` 那一行）：实测它一定也在背包里（476,274 行"活着且有武器"
+  0 例外），不扣就是同一件东西在同一个 token 里出现两次 —— 那不是新增信息，只是给
+  `weapon_emb` 加了个副本。
+* 背包里**没有** `armor` / `helmet` / `defuser`：那是独立的 prop（`ctx_player` 第 13/14
+  列 + `defuser` 列），所以不存在重复计数；`C4 Explosive` 在 43 件里，所以"谁带着包"
+  自动进来了。
+* 死人的背包在数据里**恒为空**（实测 225,836 行死人 0 例外），所以这里不用再乘 mask。
+* 初始化 `std=0.02`：求和会叠 2~5 个向量，用 `nn.Embedding` 默认的 `N(0,1)` 会让背包在
+  第一步就淹没 player token（其余分量是 `Linear` 的 1/√320 量级）。
+
+⚠ csz 里这张表是**去重**的（`extract.py` 写盘时 `set()` 过），所以"闪光 2 颗"和"1 颗"
+在这里是同一个 1。要计数只能重抽 demo（源数据里确实有，实测 5.2% 的采样行是 2 颗）。
 
 ## mask：谁参与注意力
 
@@ -174,9 +211,13 @@ loss 才只奖励"对活人的判断"。实测（全库 24.2M 行 / 242M 人次�
         每层 12 d² × S  MAC（注意力 4d² + MLP 8d²），乘 L
         一帧 ≈ L × S × 12 d² = 6 × 17 × 12 × 512² ≈ 0.32 G MAC（前向）
 
-`d_model=512` / `layers=6` 时 **20.12 M 参数**（`train.py` 启动时打真实值）。它比 aim 的
+`d_model=512` / `layers=6` 时 **20.14 M 参数**（`train.py` 启动时打真实值）。它比 aim 的
 67 M 小，是因为这里没有 257 个时间步：**一个样本就是一个 token 序列**，而 aim 一个样本是
 257 个这样的序列。
+
+背包那张表只占 **43 × 512 = 22 k**（+0.11%），而且**不增加 token 数**，所以上面那行
+"一帧 ≈ 0.32 G MAC" 和下面的实测步时都不受影响：每帧多出来的只有一次
+`(B,10,43) @ (43,d)` 的小矩阵乘（B=512 时约 0.4 M MAC，和前向 0.32 G 差三个数量级）。
 
 实测（RTX 3090 24 G，bf16，数据已经在显存里，纯前向+反传+`AdamW.step`）：
 
@@ -397,6 +438,11 @@ class SpatialModel(nn.Module):
         self.proj_type = nn.Embedding(N_PROJ_TYPE + 1, d)
         #: 武器：`-1`（无武器 / 已死）落到槽位 0，`padding_idx=0` 让它恒为 0 向量。
         self.weapon_emb = nn.Embedding(N_WEAPONS + 1, d, padding_idx=0)
+        #: **背包**里的物品向量表：**和上面那张分开**（见文件头"背包"一节）。
+        #: 下标直接是 `WEAPON_NAMES`（43 件），没有 +1 偏移，也**不能**加 `padding_idx`
+        #: —— 0 号是 Desert Eagle 这把握在手里的枪，不是"空"。
+        self.item_emb = nn.Embedding(N_WEAPONS, d)
+        nn.init.normal_(self.item_emb.weight, std=0.02)
         #: 队伍：`-1`（未知）→ 0，CT → 1，T → 2。
         self.team_emb = nn.Embedding(N_TEAMS, d)
         #: token 类型。4 个可学习向量，用 `weight[i]` 直接取（不建新的 index tensor）。
@@ -463,10 +509,19 @@ class SpatialModel(nn.Module):
         d = self.cfg.d_model
         alive = batch["ctx_player_mask"].bool()                       # (B,10)
 
-        # 玩家：自己的 20 列 + 武器 + 队伍 + 类型。
+        # 背包：`(B,10,43)` 多热 → `Σ item_emb`（= 对多热做一层线性，见文件头"背包"）。
+        # 手里那把**也在**背包里（实测 0 例外），这里按 `weapon` 那一列把它清零，得到
+        # "手里 + 其余装备"这个不重叠的拆法。`held = -1`（死人 / 空手）时整行都不排除。
+        inv = batch["ctx_player_inv"].to(self.item_emb.weight.dtype)   # (B,10,43) 0/1
+        held = batch["ctx_player_weapon"].long()                       # (B,10) -1 = 没有
+        keep = torch.arange(N_WEAPONS, device=inv.device) != held.unsqueeze(-1)
+        bag = (inv * keep) @ self.item_emb.weight                      # (B,10,d)
+
+        # 玩家：自己的 20 列 + 武器 + 队伍 + 背包 + 类型。
         pv = (
             self.player_proj(self.fourier_player(batch["ctx_player"]))
-            + self.weapon_emb(batch["ctx_player_weapon"].long() + 1)
+            + self.weapon_emb(held + 1)
+            + bag
             + self.team_emb(batch["ctx_player_team"].long() + 1)
             + self.type_emb.weight[T_PLAYER]
         )                                                             # (B,10,d)

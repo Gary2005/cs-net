@@ -91,6 +91,7 @@ def _round(frames: int = 600, deaths: dict[int, int] | None = None):
         feat=np.zeros((frames, 10, 20), np.float32),
         alive=alive,
         weapon=np.full((frames, 10), 3, np.int8),
+        inv=np.zeros((frames, 10, 43), np.uint8),
         team=np.array([0] * 5 + [1] * 5, np.int8),
         obstruction=np.zeros((frames, 10, 10), np.int8),
         projectiles=np.zeros((frames, N_PROJ, 4), np.float32),
@@ -311,6 +312,8 @@ def test_spatial_arrays() -> None:
     eq("ctx_player_mask 是 bool", a["ctx_player_mask"].dtype, bool)
     eq("队伍列 broadcast 到 10 个槽位", a["ctx_player_team"].shape, (3, 10))
     eq("队伍列的值", a["ctx_player_team"][0].tolist(), [0] * 5 + [1] * 5)
+    eq("背包多热形状", a["ctx_player_inv"].shape, (3, 10, 43))
+    eq("背包多热是 uint8", a["ctx_player_inv"].dtype, np.uint8)
     eq("map_id 每行一个", a["map_id"].tolist(), [0, 0, 0])
 
 

@@ -9,7 +9,8 @@
 #     [CLS_WIN, CLS_KILL, map, global, player×10, projectile×P]
 #
 # 做全连接自注意力（player↔player 之间加遮挡 bias，死人和空道具槽 mask 掉），5 个 head
-# 各自读 CLS 或 player token。
+# 各自读 CLS 或 player token。player token 上除了 20 列特征，还叠了武器 / 队伍 / **背包**
+# 三张 embedding（背包 = `Σ item_emb(身上每一件)`，见 model.py 的"背包"一节）。
 #
 # 数据规模（本机实测）：train 282,888 个回合 / **24,248,254 行**，valid 16,517 / 1,405,653，
 # test 16,017 / ~1.4M。一行 = 一帧，`DENSITY=1 s` 抽的。
@@ -22,6 +23,9 @@
 #      768    12      8   58.5 M   130.2   3,932   4.34 GiB   1.71 / 1.07 h
 #     1024    16      6   78.0 M   147.7   3,467   4.62 GiB   1.94 / 1.21 h
 #     1024    16      8  103.2 M   198.8   2,575   6.07 GiB   2.62 / 1.64 h   ← 当前
+#
+# 表里的参数量是**加背包表之前**量的：`item_emb` 是 43 × d（d=512 时 22 k / d=1024 时
+# 44 k），对这五档都不到 0.05%，步时和显存都不变（背包不增加 token 数）。
 #
 # 一个 epoch = 47,359 步（B=512）。真实训练循环还要叠上 loader：`buffer_rows: 8192` + 8
 # worker 在本机（Windows / 28 万个文件）能供 7.4k 行/s —— 所以 d=512/L=6 是 **loader 卡住**

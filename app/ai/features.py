@@ -100,6 +100,7 @@ class RoundTensors:
     feat: np.ndarray           # (T, 10, 20) float32，AIM_FEATURES，全在 [0,1]
     alive: np.ndarray          # (T, 10) bool
     weapon: np.ndarray         # (T, 10) int8，全局武器下标，-1 = 无/死
+    inv: np.ndarray            # (T, 10, 43) uint8，背包多热（0/1，下标 = WEAPON_NAMES）
     team: np.ndarray           # (10,)   int8，0=CT 1=T -1=未知
     obstruction: np.ndarray    # (T, 10, 10) int8，0 通 / 1 烟 / 2 墙
     projectiles: np.ndarray    # (T, 32, 4) float32，xyz 全 [0,1]，第 4 列 = 已存在秒数/100
@@ -124,6 +125,7 @@ class RoundTensors:
                 self.team[None, :], (b, N_PLAYERS)
             ).astype(np.int8),
             "ctx_player_weapon": np.ascontiguousarray(self.weapon[idx], dtype=np.int8),
+            "ctx_player_inv": np.ascontiguousarray(self.inv[idx], dtype=np.uint8),
             "obstruction": np.ascontiguousarray(self.obstruction[idx], dtype=np.int8),
             "ctx_projectile": np.ascontiguousarray(self.projectiles[idx], dtype=np.float32),
             "ctx_projectile_id": np.ascontiguousarray(self.proj_id[idx], dtype=np.int8),
@@ -308,6 +310,8 @@ def build_round_tensors(
         feat=rr.feat[:, :n].transpose(1, 0, 2).copy(),   # (T,10,20)：窗口切片要连续内存
         alive=np.ascontiguousarray(rr.alive[:, :n].T),
         weapon=np.ascontiguousarray(rr.weapon[:, :n].T),
+        # 背包：和造训练数据走**同一个** `_Round.inventory_at`，所以两边不可能错开。
+        inv=rr.inventory_at(np.arange(n)),
         team=np.asarray(rr.team, dtype=np.int8),
         obstruction=obstruction,
         projectiles=projectiles,

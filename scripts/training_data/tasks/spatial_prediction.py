@@ -120,6 +120,15 @@ Python 的 `hash()`**（`PYTHONHASHSEED` 一换就变），也不吃 `--seed`（
                                          "谁是哪队的"和"他死没死"是两个正交的量。
     ctx_player_weapon (K,10)    int8     逐帧武器（`constants.WEAPON_NAMES` 全局下标），
                                          -1 = 没有武器 / 已死亡
+    ctx_player_inv    (K,10,43) uint8    **背包**多热，下标同样落在 `WEAPON_NAMES`：
+                                         这一帧这个人身上带着哪些东西（枪 / 投掷物 /
+                                         C4 / 刀）。死人的行恒全 0（实测 225,836 行
+                                         死人里 0 行带东西）。
+                                         `ctx_player_weapon` 是**当前手持**的那一把
+                                         （切刀 / 拿着雷时会变成 Knife / 那颗雷，实测
+                                         占存活样本的 26.6% / 9.0%），这张表才是
+                                         "他接下来还能用什么"。
+                                         ⚠ csz 里这张表是**去重**的，闪光 2 颗 = 1 颗。
     obstruction       (K,10,10) int8     当帧两两遮挡 0 通 / 1 烟 / 2 墙，有方向，
                                          死人的行 / 列全 0（语义见 `obstruction.py`）
     ctx_projectile    (K,32,4)  float32  当帧道具 `[x y z t]`，四列都在 [0,1]
@@ -148,15 +157,18 @@ Python 的 `hash()`**（`PYTHONHASHSEED` 一换就变），也不吃 `--seed`（
 
 ## 存储与代价
 
-一帧样本解压后约 **1.5 KB**：`ctx_player` 800 B（10×20×4）、`ctx_projectile` 512 B
-（32×4×4）、`obstruction` 100 B、`global_feat` 20 B、武器 10 B、道具 id 32 B，
-再加上标签 / `seconds` / `frame_index` 约 30 B。压缩后按 aim 的经验（~5×，`ctx_projectile`
-这种大片 0 压得最狠）约 **0.3 KB**。density=1 s 时一个 30 分钟的 demo ≈ 1800 帧 ≈
-**0.5 MB**。想更省就调大 `DENSITY`，样本数和体积都是线性缩的。
+一帧样本解压后约 **1.9 KB**：`ctx_player` 800 B（10×20×4）、`ctx_projectile` 512 B
+（32×4×4）、`ctx_player_inv` 430 B（10×43×1，绝大多数是 0）、`obstruction` 100 B、
+`global_feat` 20 B、武器 10 B、道具 id 32 B，再加上标签 / `seconds` / `frame_index`
+约 30 B。压缩后按 aim 的经验（~5×，`ctx_projectile` / `ctx_player_inv` 这种大片 0
+压得最狠）约 **0.35 KB**。density=1 s 时一个 30 分钟的 demo ≈ 1800 帧 ≈
+**0.6 MB**。想更省就调大 `DENSITY`，样本数和体积都是线性缩的。
 
 实测（本仓库 4 个 demo / 78 回合 / 7135 样本，`DENSITY=1.0`）：平均 **0.36 KB/样本**、
 **33 KB/文件**（K≈91 行）、一局约 **0.6 MB**、**0.42 MB/分钟 demo**。抽一帧的遮挡
 开销混在 `codec.load()`（11–15 s）里，4 进程并行时每个 demo 22–40 s 造完。
+（这几个数是**加 `ctx_player_inv` 之前**量的；多热本身按 +29% 估，但压缩率会把它吃掉
+一部分，真要报数就重造一批再量。）
 
 读样本：`read_sample` 实测 **2.3 ms/样本**（K≈91）—— 解的是**整个 npz**，所以和 K 成
 正比（见上）。单进程一个 epoch 7135 个样本约 **16 s**，4 个 worker 约 4 s。数据量再
@@ -180,6 +192,9 @@ Python 的 `hash()`**（`PYTHONHASHSEED` 一换就变），也不吃 `--seed`（
 * 训练侧**不要**把 `next_death` / `next_kill` 当 10 类问题：它们是 **11 类**，第 11 类
   （下标 10）就是"这一帧之后不会再有人死 / 拿到击杀"，是**有信息量的标签**，别掩掉。
   也不要用 `alive_end` 反推 `can_kill` —— 两者是独立的监督信号。
+* **`ctx_player_inv` 是去重的**（csz 里 `extract.py` 写盘那一步就 `set()` 过了），所以
+  闪光 2 颗 = 1 颗。想拿到计数只能重抽 demo，重造 npz 拿不回来。这不是这里省掉的：
+  源数据里确实有重复（实测整局粗扫 5.2% 的采样行是 `Flashbang ×2`），是提取层折掉的。
 """
 
 from __future__ import annotations
@@ -236,7 +251,8 @@ TEAM_NAMES: dict[int, str] = {TEAM_CT: "CT", TEAM_T: "T", TEAM_UNKNOWN: "?"}
 
 #: `read_sample()` 返回的**逐行** key（0 维标量和 K 维数组都在这里）。
 ROW_KEYS: tuple[str, ...] = (
-    "ctx_player", "ctx_player_mask", "ctx_player_team", "ctx_player_weapon", "obstruction",
+    "ctx_player", "ctx_player_mask", "ctx_player_team", "ctx_player_weapon",
+    "ctx_player_inv", "obstruction",
     "ctx_projectile", "ctx_projectile_id", "global_feat",
     "seconds", "frame_index",
     "ct_win", "alive_end", "can_kill", "next_death", "next_kill",
@@ -557,6 +573,8 @@ class SpatialPrediction(Task):
             ctx_player_mask=alive_here.astype(bool),                             # (K,10) True=活
             ctx_player_team=np.tile(team, (k, 1)),                               # (K,10) 0/1/-1
             ctx_player_weapon=np.ascontiguousarray(rr.weapon[:, idx].T),         # (K,10) -1=无
+            # 背包：**当前手持**那把也在里面（实测 0 例外），模型侧按 `weapon` 那一列扣掉。
+            ctx_player_inv=rr.inventory_at(idx),                                 # (K,10,43) uint8
             obstruction=rr.obstruction_at(idx),                                  # (K,10,10)
             ctx_projectile=proj,                                                 # (K,32,4) [0,1]
             ctx_projectile_id=proj_id,                                           # (K,32)
@@ -604,6 +622,7 @@ if __name__ == "__main__":
     import shutil
 
     from .._paths import REPO_ROOT
+    from ..constants import N_WEAPONS
     from ..dataset import SampleDataset
     from ..prepare import SPLITS, build
     from .aim import _PROJ_MAX
@@ -739,6 +758,8 @@ if __name__ == "__main__":
                 assert a["ctx_player_mask"].dtype == bool, where
                 assert a["ctx_player_team"].shape == (k, N_PLAYERS), where
                 assert a["ctx_player_weapon"].shape == (k, N_PLAYERS), where
+                assert a["ctx_player_inv"].shape == (k, N_PLAYERS, N_WEAPONS), where
+                assert a["ctx_player_inv"].dtype == np.uint8, where
                 assert a["obstruction"].shape == (k, N_PLAYERS, N_PLAYERS), where
                 assert a["ctx_projectile"].shape == (k, _PROJ_MAX, 4), where
                 assert a["ctx_projectile_id"].shape == (k, _PROJ_MAX), where
@@ -756,6 +777,16 @@ if __name__ == "__main__":
                 team = a["ctx_player_team"]
                 assert set(np.unique(team).tolist()) <= {TEAM_CT, TEAM_T, TEAM_UNKNOWN}, where
                 assert (a["ctx_player_weapon"][~mask] == -1).all(), f"{where}: 死人带武器"
+                inv = a["ctx_player_inv"]
+                assert set(np.unique(inv).tolist()) <= {0, 1}, f"{where}: 背包不是 0/1"
+                assert not inv[~mask].any(), f"{where}: 死人背包非空"
+                # 手里那把一定也在背包里（这条是"扣掉 held"的前提，见 `inventory_at`）
+                held = a["ctx_player_weapon"].astype(np.int64)
+                armed = mask & (held >= 0)
+                row_idx = np.arange(k)[:, None]
+                assert inv[row_idx, np.arange(N_PLAYERS)[None, :],
+                           np.where(armed, held, 0)][armed].all(), \
+                    f"{where}: 手里那把不在背包里"
                 assert set(np.unique(a["obstruction"]).tolist()) <= {0, 1, 2}, where
                 proj, pid = a["ctx_projectile"], a["ctx_projectile_id"]
                 assert 0.0 <= proj.min() and proj.max() <= 1.0, (where, proj.min(), proj.max())
