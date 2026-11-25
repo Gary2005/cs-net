@@ -35,6 +35,18 @@ npz 量出来的长度恒是 257（原始窗口是定长），分桶等于没分
 那是以后要加的东西，不是被删掉的那个 —— 被删的版本只按**静态**长度分桶，跟随机截断
 天然冲突。
 
+## 验证：valid 也开随机截断（和训练同一个分布）
+
+`try_split` 不传 `augment=False`，所以 valid 和 train 走**同一条** `__getitem__`：每条
+样本每轮从 `[6, T]` 里摇一个 `T'`、只留最后 `T'` 帧、`seconds` 对零。这是刻意的 ——
+固定 4 秒窗口只是训练分布里 `T' = T` 那一个点（252 个里的 1 个），拿它当 valid 等于
+换个分布评，而且偏乐观（历史最长）。截断是真的会改输入的：`k` 变小（`time_emb[k]` 变）、
+因果注意力能回看的历史也短了，所以不是"同一批输入换个平均方式"。
+
+`best.pt` 因此也按这个 `valid/loss` 选，和训练目标同一个口径。代价是 valid 的 `T'` 每轮
+重摇，同一个 ckpt 评两次的数会差一点 —— 训练那边每轮也重摇，所以这是同一个口径下的
+抽样噪声，不是新引入的偏差。嫌抖就多评几次取平均（或把 valid 做大），别抠小数点后第三位。
+
 ## 一个 epoch 大概多久（24 G 卡 + `d_model: 1024` 的 67 M 参数 + 23 万条）
 
 **已实测**（RTX 3090 24 G，bf16，`d_model=1024` / `rel_layers=2` / `antisym: true` /
@@ -149,13 +161,16 @@ def make_loader(
 def try_split(root: str, split: str) -> AimDataset | None:
     """取一个 split，没有就返回 `None`（现在盘上 valid/test 还是空的）。
 
-    **不截断**（`augment=False`）：评估要看的是完整 4 秒窗口上的 `acc_first` / `acc_last`
-    和跨 run 可比的数，随机截断会让每次评估都在不同的 `T'` 上取平均。
-    **也固定 A/B 方向**（`swap=False`，永远是磁盘上的"1 = 击杀者"）：不然同一个 ckpt
-    评两次拿到的是两个方向上的随机混合，`valid/acc_last` 会跟着抖。
+    **和训练同一个分布**：不传 `augment=False`，所以 valid 也做随机截断（`T' ~ U{6, T}`，
+    每轮重摇）。固定 4 秒窗口只是训练分布里的一个点，拿它当 valid 等于换个分布评 ——
+    见 `dataset.py` 模块 docstring 第 3 条。
+
+    **固定 A/B 方向**（`swap=False`，永远是磁盘上的"1 = 击杀者"）：`antisym` 开着时
+    两个方向的 logit 精确互为相反数，固定方向的 acc 和摇出来的完全一样；关着时摇方向
+    会多一份噪声，而 acc 对这个对称性并不敏感。
     """
     try:
-        return AimDataset(root, split=split, augment=False, swap=False)
+        return AimDataset(root, split=split, swap=False)
     except FileNotFoundError:
         return None
 
@@ -243,23 +258,37 @@ def evaluate(
     device: torch.device,
     amp_dtype: torch.dtype | None,
 ) -> dict[str, float]:
-    """valid/test 上的指标（`valid/loss` + `batch_stats` 那几项）。"""
+    """valid/test 上的指标（`valid/loss` + `batch_stats` 那几项）。
+
+    只负责**跑一遍 loader**。loader 背后是随机截断过的样本（`try_split` 不再传
+    `augment=False`），所以这里的 `acc_first` / `acc_last` 是"随机长度窗口的第 0 列 /
+    击杀那一列"，和训练时 `train/acc_first` / `train/acc_last` 同一个口径。
+    另外多记一个 `valid/ticks`（平均可见帧数）：截断生效时它应该 ≈ `E[T'] ≈ 131`，
+    而不是 257 —— 它是"valid 真的在截断"最直接的一个数。
+    """
     model.eval()
     sums: dict[str, float] = {}
     cnt: dict[str, int] = {}
+    ticks = 0.0
+    rows = 0
     for batch in tqdm(loader, desc="valid", unit="batch", leave=False, disable=None):
         batch = to_device(batch, device)
         with maybe_autocast(amp_dtype, device):
             out = model(batch)
-        stats = batch_stats(out["probs"].float(), out["pred_mask"], batch["label"])
-        stats["loss"] = float(aim_loss(out["logits"], batch["label"], out["pred_mask"]))
+        mask = out["pred_mask"]
+        ticks += float(mask.sum().item())
+        rows += int(mask.shape[0])
+        stats = batch_stats(out["probs"].float(), mask, batch["label"])
+        stats["loss"] = float(aim_loss(out["logits"], batch["label"], mask))
         for k, v in stats.items():
             if v == v:                      # nan 跳过：评估固定方向后 `prob_neg` 恒为 nan
                 sums[k] = sums.get(k, 0.0) + v
                 cnt[k] = cnt.get(k, 0) + 1
 
     model.train()
-    return {f"valid/{k}": v / max(1, cnt[k]) for k, v in sums.items()}
+    metrics = {f"valid/{k}": v / max(1, cnt[k]) for k, v in sums.items()}
+    metrics["valid/ticks"] = ticks / max(1, rows)
+    return metrics
 
 
 def train(cfg: dict) -> dict[str, float]:
@@ -514,11 +543,12 @@ def train(cfg: dict) -> dict[str, float]:
         metrics = {}
         if valid_loader is not None and (epoch + 1) % eval_every == 0:
             metrics = evaluate(model, valid_loader, device, amp_dtype)
-            acc = metrics["valid/acc"]
             print(
                 f"[aim] epoch {epoch + 1} valid: loss {metrics['valid/loss']:.4f} "
-                f"acc {acc:.3f} (first {metrics['valid/acc_first']:.3f} / "
-                f"last {metrics['valid/acc_last']:.3f})"
+                f"acc {metrics['valid/acc']:.3f} "
+                f"(first {metrics['valid/acc_first']:.3f} / "
+                f"last {metrics['valid/acc_last']:.3f}, "
+                f"平均 {metrics['valid/ticks']:.0f} 帧)"
             )
             if wb is not None:
                 wb.log(metrics, step=global_step)

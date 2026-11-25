@@ -119,7 +119,8 @@ train:
   #: 每多少个优化步打一次 wandb / tqdm 更新一次 loss 曲线（每 epoch 25,000 步）。
   #: `train/acc` 是被最多 257 个 tick 摊平的平均、天生贴着 0.5，看 `train/acc_last`。
   log_every: 4
-  #: 每多少个 epoch 验一次 valid。
+  #: 每多少个 epoch 验一次 valid。valid 和训练一样**随机截断**（`T′ ~ U{6, T}`，
+  #: 每轮重摇），所以这个数会有抽样噪声，看趋势而不是小数点后第三位。
   eval_every: 1
   wandb:
     enabled: true

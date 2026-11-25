@@ -133,7 +133,8 @@ def try_split(
     """取一个 split，没有（目录不存在 / 空的）就返回 `None`。
 
     评估**不截断、不换方向**：这里本来就没有 aim 那种随机截断和 A/B 对调，`__getitem__`
-    是纯读取，所以同一个 ckpt 评两次拿到的是同一个数（这点和 aim 不同）。
+    是纯读取，所以同一个 ckpt 评两次拿到的是同一个数（aim 的 valid 也开随机截断，两次
+    评估的数会带一点抽样噪声）。
     """
     try:
         return SpatialDataset(root, split=split, max_cached_files=max_cached_files)

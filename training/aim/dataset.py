@@ -94,8 +94,14 @@ npz 的目录（没有 `train/` 子目录时按"整个目录就是一个 split"�
    `210~257`，`B=64` 约 254），padding 浪费 ≈ `1 - E[T']/Tmax ≈ 48%`。想省掉这半天得把
    摇 `T'` 的位置挪到采样器（按桶摇、桶内排序），训练侧现在做不到 —— 原来的静态长度
    分桶已经被删掉了，它和随机截断天然冲突（扫 npz 量出来的长度恒是 257）。
-3. 评估（valid/test）**必须** `augment=False`：`acc_first` 要的是"整条 4 秒窗口的第 0
-   帧"，不是随机截断之后的第一个可见帧，否则每次评估的 `T'` 都不一样、跨 run 没法比。
+3. 评估（valid/test）**用同一个 `augment=True`**，不再跑什么"整条 4 秒窗口"：截断不是
+   "少看几帧"那么轻 —— `seconds` 对零让同一批帧的 `k` 变小（`time_emb[k]` 跟着变），
+   因果注意力能回看的历史也短了。固定 4 秒窗口只是训练分布里 `T' = T` 那**一个点**
+   （252 个里的 1 个），拿它当 valid 等于换了个分布评（而且是最偏乐观的那档：历史最长）。
+   所以 `train.py` 的 `try_split` 也不传 `augment=False`，valid 和 train 同一条代码路径。
+   代价是 valid 的 `T'` 每轮重摇，同一个 ckpt 评两次的数会差一点 —— 这正是训练的口径，
+   `train/acc_last` 和 `valid/acc_last` 现在可以直接比。要固定长度（比如和旧 run 对比）
+   再显式传 `augment=False`。
 
 ## 变长与 padding
 
@@ -243,7 +249,8 @@ class AimDataset(Dataset):
         split 合并（做推理 / 统计时用）。`root` 本身就是样本目录时忽略这个参数。
     augment
         是否做**随机截断**（保留最后 `T'` 帧，`T' ~ U{min_ticks, T}`），默认开。
-        训练用默认值；评估 / 推理 / 统计**必须**传 `False`，否则指标随每次抽样抖动。
+        训练和评估都用默认值（valid 也走同一个分布，见模块 docstring 第 3 条）；
+        只有"想固定长度 / 和旧 run 对齐"时才传 `False`。
     min_ticks
         截断下限，默认 6。`T <= min_ticks` 的样本不截断。
     swap
