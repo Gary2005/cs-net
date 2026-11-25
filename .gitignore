@@ -16,6 +16,7 @@ __pycache__/
 /packaging/out/
 /.selftest-data/
 /.smoke-data/
+tmp/
 
 # Uncompressed map geometry. The tracked form is
 # maps/optimized_obj_files/*.obj.zip, unpacked by scripts/extract_maps.py
