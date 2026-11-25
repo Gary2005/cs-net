@@ -19,7 +19,7 @@
                 + MLP_1(player_A, map)                                  地图 id 的 embedding
                 + MLP_3(player_A, global)                               炸弹位置/安放时长/回合时间
                 + Σ_{i≠A, i 活} MLP_2(player_A, player_i, ob[A][i], ob[i][A])   每帧最多 9 个活人
-                + Σ_{prop 非空}  MLP_4(player_A, prop)                   每帧 0~12 个道具 )
+                + Σ_{prop 非空}  MLP_4(player_A, prop)                   每帧 0~32 个道具 )
 
 最后两个 `Σ` 是**聚合**：`pool: sum` 就是上面写的求和，`pool: attn` 换成带掩码的注意力
 池化（见下面"聚合"一段）。`map` / `global` 每帧恒一个，没有聚合可言。
@@ -29,7 +29,7 @@
 （`h = h + Dropout(GELU(Linear(h)))`，见 `RelMLP`），输出和 `proj(player_A)` 同维相加；
 `norm_f` 是最后那一层 LayerNorm。`x_B` 用**同一套**参数、同样跑一遍，只是查询换成 B。
 
-* 只有两类项需要**聚合**（其他活人 / 道具）：它们的数量逐帧变（活人 0~9、道具 0~12），
+* 只有两类项需要**聚合**（其他活人 / 道具）：它们的数量逐帧变（活人 0~9、道具 0~32），
   求和天然置换不变 —— 换几个、按什么顺序进来，加出来的向量都一样（`attn` 也一样：
   权重跟着项一起换，输出不变）。map / global 每帧恒一个。
   代价是**和的量级跟着数量走**（只剩 2 个活人时就只有 2 项，满编 9 项），而 `norm_f` 是
@@ -445,7 +445,7 @@ class RelPool(nn.Module):
         x = Σ_i (n · a_i) u_i                    attn，a = softmax_i( w·LN(u_i) + b )
 
     `u` 是 `RelMLP` 的输出 `(n, K, d)`，`ok` 是这一批里真有东西的槽位 `(n, K)`。`K` 取
-    batch 内的最大占用，**真实项数 `n = Σ ok` 逐帧变**（活人 1~9、道具 0~12），而它是这条轴
+    batch 内的最大占用，**真实项数 `n = Σ ok` 逐帧变**（活人 1~9、道具 0~32），而它是这条轴
     唯一携带"有几个"的地方 —— 输入里没有任何计数特征（`AIM_FEATURES` / `global_feat`
     都没有人数）。
 
@@ -600,14 +600,14 @@ class AimModel(nn.Module):
         """`(n, P, d)` 的道具向量 + `(n, P)` 的"这个槽真有东西"标记。
 
         ⚠ 磁盘上的道具槽**不是前缀排布**（449 条里 410 条中间有洞），所以必须先把
-        `id >= 0` 的挤到前面再切，不能直接 `[:, :P]`。`P` 取本 batch 的最大占用数
-        （实测均值 3.7 / p95 9 / max 12）。
+        `id >= 0` 的挤到前面再切，不能直接 `[:, :P]`。`P` 取本 batch 的最大占用数，
+        上限是槽位数 `N_PROJ = 32`（实测均值 3.7 / p95 9 / max 12）。
 
         空槽由调用方用 `ok` 挡在聚合之外 —— 所以**同一帧的表示和 batch 里别的样本带多少
         道具无关**；旧版用注意力时必须靠 key mask 才能做到这件事。
         """
-        pid = batch["ctx_projectile_id"][idx]               # (n,32)
-        feat = batch["ctx_projectile"][idx]                 # (n,32,4)
+        pid = batch["ctx_projectile_id"][idx]               # (n,N_PROJ)
+        feat = batch["ctx_projectile"][idx]                 # (n,N_PROJ,4)
         filled = pid >= 0
         n_prop = max(1, int(filled.sum(-1).max()))          # 本 batch 最多几个
         order = torch.argsort((~filled).to(torch.int8), dim=-1, stable=True)[:, :n_prop]
